@@ -19,7 +19,6 @@ namespace vkjs {
 		bool resizing{ false };
 		void handle_mouse_move(int x, int y);
 		void next_frame();
-		void update_imgui();
 		void create_pipeline_cache();
 		void create_command_pool();
 		void create_synchronization_primitives();
@@ -178,6 +177,8 @@ namespace vkjs {
 
 		bool init();
 		void handle_events();
+
+		virtual void update_imgui();
 
 		/** @brief (Virtual) Creates the application wide Vulkan instance */
 		virtual VkResult create_instance(bool enable_validation);

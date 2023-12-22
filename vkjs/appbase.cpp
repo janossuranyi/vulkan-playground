@@ -64,6 +64,7 @@ namespace vkjs
 		VK_CHECK(vkResetCommandBuffer(draw_cmd_buffers[current_frame], 0));
 		device()->begin_command_buffer(draw_cmd_buffers[current_frame]);
 		render();
+		update_imgui();
 		render_imgui();
 		VK_CHECK(vkEndCommandBuffer(draw_cmd_buffers[current_frame]));
 
@@ -124,6 +125,7 @@ namespace vkjs
 		vkb::SwapchainBuilder builder{device()->vkb_device};
 		auto swap_ret = builder
 			.set_desired_format(format)
+			.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
 			.set_old_swapchain(swapchain.vkb_swapchain).build();
 
 		if (!swap_ret) {

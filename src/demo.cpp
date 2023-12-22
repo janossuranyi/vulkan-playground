@@ -86,6 +86,10 @@ public:
         }
     }
 
+    virtual void update_imgui() override {
+        ImGui::ShowDemoWindow();
+    }
+
     virtual void render() override {        
         if (fb[current_frame]) {
             vkDestroyFramebuffer(d, fb[current_frame], 0);
@@ -114,14 +118,9 @@ public:
         vkCmdBeginRenderPass(cmd, &beginPass, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdEndRenderPass(cmd);
 
-        ImGui::Text("Hello Vulkan");
-
     }
-    virtual void prepare() override {
-        vkjs::AppBase::prepare();
 
-        d = *device_wrapper;
-
+    virtual void setup_render_pass() override {
         VkRenderPassCreateInfo rpci = vks::initializers::renderPassCreateInfo();
 
         VkAttachmentDescription color = {};
@@ -131,7 +130,7 @@ public:
         color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         color.samples = VK_SAMPLE_COUNT_1_BIT;
-        
+
         VkAttachmentReference colorRef = {};
         colorRef.attachment = 0;
         colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -140,7 +139,7 @@ public:
         subpass0.colorAttachmentCount = 1;
         subpass0.pColorAttachments = &colorRef;
         subpass0.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        
+
         VkSubpassDependency dep0 = {};
         dep0.dependencyFlags = 0;
         dep0.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
@@ -159,6 +158,14 @@ public:
         rpci.pSubpasses = &subpass0;
 
         VK_CHECK(vkCreateRenderPass(d, &rpci, nullptr, &renderPass));
+
+    }
+    virtual void prepare() override {
+        vkjs::AppBase::prepare();
+
+        d = *device_wrapper;
+
+        setup_render_pass();
 
         prepared = true;
     }
