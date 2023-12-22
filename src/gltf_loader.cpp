@@ -205,22 +205,22 @@ namespace jsr {
 			const auto& node = model.nodes[nodeIdx];
 			Node3d& myNode = world.scene.nodes[nodeIdx];
 
-			myNode.nodeType = EntityType::Empty;
+			myNode.nodeType = EntityType_Empty;
 
 			if (node.mesh > -1) {
-				myNode.nodeType = EntityType::Mesh;
+				myNode.nodeType = EntityType_Mesh;
 				myNode.setEntity(mesh_primitives[node.mesh]);
-				world.scene.entities[static_cast<size_t>(EntityType::Mesh)].push_back(nodeIdx);
+				world.scene.entities[EntityType_Mesh].push_back(nodeIdx);
 			}
 			else if (node.camera > -1) {
-				myNode.nodeType = EntityType::Camera;
+				myNode.nodeType = EntityType_Camera;
 				myNode.setEntity({ node.camera });
-				world.scene.entities[static_cast<size_t>(EntityType::Camera)].push_back(nodeIdx);
+				world.scene.entities[EntityType_Camera].push_back(nodeIdx);
 			}
 			else if (node.extensions.find("KHR_lights_punctual") != node.extensions.end()) {
-				myNode.nodeType = EntityType::Light;
+				myNode.nodeType = EntityType_Light;
 				myNode.setEntity({ node.extensions.at("KHR_lights_punctual").Get("light").GetNumberAsInt() });
-				world.scene.entities[static_cast<size_t>(EntityType::Light)].push_back(nodeIdx);
+				world.scene.entities[EntityType_Light].push_back(nodeIdx);
 			}
 
 

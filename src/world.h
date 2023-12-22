@@ -7,16 +7,16 @@
 #include "renderer/Frustum.h"
 namespace jsr {
 
-	enum class EntityType { Mesh, Light, Camera, Empty };
+	enum EntityType { EntityType_Mesh, EntityType_Light, EntityType_Camera, EntityType_Empty };
 
 	class Node3d {
 	public:
-		EntityType nodeType = EntityType::Empty;
+		EntityType nodeType = EntityType_Empty;
 		inline EntityType getType() const { return nodeType; }
-		inline bool isEmpty() const { return nodeType == EntityType::Empty; }
-		inline bool isMesh() const { return nodeType == EntityType::Mesh; }
-		inline bool isLight() const { return nodeType == EntityType::Light; }
-		inline bool isCamera() const { return nodeType == EntityType::Camera; }
+		inline bool isEmpty() const { return nodeType == EntityType_Empty; }
+		inline bool isMesh() const { return nodeType == EntityType_Mesh; }
+		inline bool isLight() const { return nodeType == EntityType_Light; }
+		inline bool isCamera() const { return nodeType == EntityType_Camera; }
 		void setPosition(const glm::vec3& v);
 		void setScale(const glm::vec3& v);
 		void setRotation(const glm::quat& v);
@@ -55,7 +55,7 @@ namespace jsr {
 	struct Scene {
 		std::vector<int>			rootNodes;
 		std::vector<Node3d>			nodes;
-		std::vector<int>			entities[static_cast<size_t>(EntityType::Empty)];
+		std::vector<int>			entities[EntityType_Empty];
 	};
 
 	struct RenderEntity {

@@ -141,6 +141,7 @@ namespace vkjs {
 		// Multiplier for speeding up (or slowing down) the global timer
 		float timer_speed = 0.25f;
 		float frame_time = 0.0f, prev_frame_time = 0.0f;
+		float time = 0.0f;
 
 		bool paused = false;
 
@@ -177,8 +178,6 @@ namespace vkjs {
 
 		bool init();
 		void handle_events();
-
-		virtual void update_imgui();
 
 		/** @brief (Virtual) Creates the application wide Vulkan instance */
 		virtual VkResult create_instance(bool enable_validation);

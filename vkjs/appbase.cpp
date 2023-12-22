@@ -37,9 +37,13 @@ namespace vkjs
 	}
 	void AppBase::next_frame()
 	{
-		float now = (float)SDL_GetTicks64();
-		frame_time = now - prev_frame_time;
-		prev_frame_time = now;
+		if (minimized || paused) {
+			return;
+		}
+
+		time = (float)SDL_GetTicks64();
+		frame_time = time - prev_frame_time;
+		prev_frame_time = time;
 
 		current_frame = frame_counter % MAX_CONCURRENT_FRAMES;
 		
@@ -61,17 +65,21 @@ namespace vkjs
 
 		ImGui::NewFrame();
 
-		VK_CHECK(vkResetCommandBuffer(draw_cmd_buffers[current_frame], 0));
-		device()->begin_command_buffer(draw_cmd_buffers[current_frame]);
+		const VkCommandBuffer cmd = draw_cmd_buffers[current_frame];
+
+		VK_CHECK(vkResetCommandBuffer(cmd, 0));
+		device()->begin_command_buffer(cmd);
+		
 		render();
-		update_imgui();
+
+		on_update_gui();
 		render_imgui();
-		VK_CHECK(vkEndCommandBuffer(draw_cmd_buffers[current_frame]));
+		VK_CHECK(vkEndCommandBuffer(cmd));
 
 		VkPipelineStageFlags stageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 		VkSubmitInfo submit = vks::initializers::submitInfo();
 		submit.commandBufferCount = 1;
-		submit.pCommandBuffers = &draw_cmd_buffers[current_frame];
+		submit.pCommandBuffers = &cmd;
 		submit.pSignalSemaphores = &semaphores[current_frame].render_complete;
 		submit.signalSemaphoreCount = 1;
 		submit.waitSemaphoreCount = 1;
@@ -89,9 +97,6 @@ namespace vkjs
 		}
 
 		frame_counter++;
-	}
-	void AppBase::update_imgui()
-	{
 	}
 	void AppBase::create_pipeline_cache()
 	{
@@ -124,7 +129,8 @@ namespace vkjs
 
 		vkb::SwapchainBuilder builder{device()->vkb_device};
 		auto swap_ret = builder
-			.set_desired_format(format)
+			//.set_desired_format(format)
+			.set_old_swapchain(swapchain.vkb_swapchain)
 			.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
 			.set_old_swapchain(swapchain.vkb_swapchain).build();
 
@@ -140,7 +146,9 @@ namespace vkjs
 				vkb::destroy_swapchain(swapchain.vkb_swapchain);
 			}
 			swapchain.vkb_swapchain = swap_ret.value();
-			jsrlib::Info("Swapchain created");
+			jsrlib::Info("Swapchain created [%dx%d]", swapchain.vkb_swapchain.extent.width, swapchain.vkb_swapchain.extent.height);
+			width = swapchain.vkb_swapchain.extent.width;
+			height = swapchain.vkb_swapchain.extent.height;
 			swapchain.images = swapchain.vkb_swapchain.get_images().value();
 			swapchain.views = swapchain.vkb_swapchain.get_image_views().value();
 		}
@@ -268,7 +276,10 @@ namespace vkjs
 
 		// Setup Dear ImGui style
 		ImGui::StyleColorsDark();
-		//ImGui::StyleColorsLight();
+		ImGuiStyle* style = &ImGui::GetStyle();
+		style->FrameRounding = 3.0f;
+		style->Colors[ImGuiCol_WindowBg].w = 240.f / 255.f;
+
 #ifdef VKJS_USE_VOLK
 		ImGui_ImplVulkan_LoadFunctions([](const char* function_name, void* vulkan_instance)
 			{
@@ -308,14 +319,13 @@ namespace vkjs
 	{
 		ImGui::Render();
 		ImDrawData* draw_data = ImGui::GetDrawData();
-		std::vector<VkImageView> schImage = { swapchain.views[current_buffer] };
 
 		VkFramebufferCreateInfo fbCI = vks::initializers::framebufferCreateInfo();
 		fbCI.attachmentCount = 1;
-		fbCI.pAttachments = schImage.data();
+		fbCI.pAttachments = &swapchain.views[current_buffer];
 		fbCI.layers = 1;
-		fbCI.width = swapchain.vkb_swapchain.extent.width;
-		fbCI.height = swapchain.vkb_swapchain.extent.height;
+		fbCI.width = width;
+		fbCI.height = height;
 		fbCI.renderPass = imgui_render_pass;
 		
 		if (imgui_fb[current_frame]) {
@@ -323,16 +333,16 @@ namespace vkjs
 		}
 		VK_CHECK(vkCreateFramebuffer(*device_wrapper, &fbCI, nullptr, &imgui_fb[current_frame]));
 
-		VkRenderPassBeginInfo renderPassInfo = {};
-		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		VkRenderPassBeginInfo renderPassInfo = vks::initializers::renderPassBeginInfo();
 		renderPassInfo.clearValueCount = 0;
 		renderPassInfo.framebuffer = imgui_fb[current_frame];
 		renderPassInfo.renderArea.extent = swapchain.vkb_swapchain.extent;
 		renderPassInfo.renderPass = imgui_render_pass;
 
-		vkCmdBeginRenderPass(draw_cmd_buffers[current_frame], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-		ImGui_ImplVulkan_RenderDrawData(draw_data, draw_cmd_buffers[current_frame]);
-		vkCmdEndRenderPass(draw_cmd_buffers[current_frame]);
+		const auto cmd = draw_cmd_buffers[current_frame];
+		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+		ImGui_ImplVulkan_RenderDrawData(draw_data, cmd);
+		vkCmdEndRenderPass(cmd);
 
 	}
 
@@ -462,10 +472,6 @@ namespace vkjs
 				break;
 			}
 
-			ImGui_ImplSDL2_ProcessEvent(&e);
-			if (io.WantCaptureMouse || io.WantCaptureKeyboard) {
-				continue;
-			}
 
 			if (e.type == SDL_WINDOWEVENT) {
 				switch (e.window.event) {
@@ -481,7 +487,13 @@ namespace vkjs
 					break;
 				}
 			}
-			else if (e.type == SDL_KEYDOWN) {
+			
+			ImGui_ImplSDL2_ProcessEvent(&e);
+			if (io.WantCaptureMouse || io.WantCaptureKeyboard) {
+				continue;
+			}
+
+			if (e.type == SDL_KEYDOWN) {
 				if (e.key.keysym.sym == SDLK_ESCAPE) {
 					quit = true;
 					break;
@@ -667,7 +679,7 @@ namespace vkjs
 	}
 	void AppBase::window_resize()
 	{
-		if (!prepared)
+		if (!prepared || minimized)
 		{
 			return;
 		}
@@ -705,5 +717,6 @@ namespace vkjs
 	}
 	void AppBase::on_update_gui()
 	{
+		ImGui::ShowDemoWindow();
 	}
 }

@@ -47,6 +47,7 @@ std::vector<vkjs::Image> vkjs::SwapChain::create_swapchain_images()
 		ret[i].tiling = VK_IMAGE_TILING_OPTIMAL;
 		ret[i].written = false;
 		ret[i].usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		ret[i].use_in_swapchain = true;
 	}
 	return ret;
 }

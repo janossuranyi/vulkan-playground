@@ -29,6 +29,7 @@ namespace vkjs {
 		uint32_t				faces;
 		bool					written = false;
 		bool					alias = false;
+		bool					use_in_swapchain = false;
 		void*					data = {};
 
 		struct UploadInfo {

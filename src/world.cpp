@@ -147,11 +147,11 @@ namespace jsr {
 	}
 	RenderEntityList World::getVisibleEntities(const Frustum& frustum)
 	{
-		const std::vector<int>& lst = scene.entities[static_cast<size_t>(EntityType::Mesh)];
+		const std::vector<int>& lst = scene.entities[EntityType_Mesh];
 		RenderEntityList result;
 
 		intersectTestCount = 0;
-#if 1
+#if 0
 		IntersectBVH(frustum, bvhRootNodeIdx, result);
 #else
 		for (const int e : lst) {
@@ -176,10 +176,9 @@ namespace jsr {
 	}
 	void World::updateBVH()
 	{
-		constexpr size_t EIDX = static_cast<size_t>(EntityType::Mesh);
-		if (bvhNode.size() < scene.entities[EIDX].size()) {
-			bvhNode.resize(scene.entities[EIDX].size());
-			aabbs.resize(scene.entities[EIDX].size());
+		if (bvhNode.size() < scene.entities[EntityType_Mesh].size()) {
+			bvhNode.resize(scene.entities[EntityType_Mesh].size());
+			aabbs.resize(scene.entities[EntityType_Mesh].size());
 		}
 
 		buildBVH();
@@ -187,12 +186,11 @@ namespace jsr {
 
 	void World::buildBVH()
 	{
-		constexpr size_t EIDX = static_cast<size_t>(EntityType::Mesh);
 		bvhNodesUsed = 2;
 
-		for (size_t i = 0; i < scene.entities[EIDX].size(); ++i)
+		for (size_t i = 0; i < scene.entities[EntityType_Mesh].size(); ++i)
 		{
-			const Node3d& node = scene.nodes[scene.entities[EIDX][i]];
+			const Node3d& node = scene.nodes[scene.entities[EntityType_Mesh][i]];
 			Bounds b;
 			for (int e : node.getEntities())
 			{
@@ -203,7 +201,7 @@ namespace jsr {
 
 		BVHNode& root = bvhNode[0];
 		root.leftFirst = 0;
-		root.primCount = scene.entities[EIDX].size();
+		root.primCount = scene.entities[EntityType_Mesh].size();
 
 		UdateNodeBounds(0);
 		Subdivide(0);
@@ -245,7 +243,6 @@ namespace jsr {
 
 		size_t i = node.leftFirst;
 		size_t j = i + node.primCount - 1;
-		constexpr size_t EIDX = static_cast<size_t>(EntityType::Mesh);
 
 		while (i <= j)
 		{
@@ -255,7 +252,7 @@ namespace jsr {
 			}
 			else 
 			{
-				std::swap(scene.entities[EIDX][i], scene.entities[EIDX][j]);
+				std::swap(scene.entities[EntityType_Mesh][i], scene.entities[EntityType_Mesh][j]);
 				std::swap(aabbs[i], aabbs[j]);
 				--j;
 			}
@@ -301,12 +298,11 @@ namespace jsr {
 			if (!frustum.Intersects2(node.aabb)) {
 				continue;
 			}
-			constexpr size_t MIDX = static_cast<size_t>(EntityType::Mesh);
 
 			if (node.isLeaf())
 			{
 				for (size_t i = 0; i < node.primCount; ++i) {
-					const Node3d& p = scene.nodes[scene.entities[MIDX][node.leftFirst + i]];
+					const Node3d& p = scene.nodes[scene.entities[EntityType_Mesh][node.leftFirst + i]];
 					for (const int e : p.getEntities()) {
 						const MeshData& md = meshes[e];
 						Bounds bbox = md.aabb.Transform(p.getTransform());
