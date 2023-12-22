@@ -1,0 +1,30 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+#include "globals.glsl"
+
+layout(rgba8, set = 2, binding = 0) uniform image2D imgOutput;
+
+void main() {
+    vec4 value = vec4(0.0, 0.0, 0.0, 0.0);
+    ivec2 texelCoord = ivec2(gl_GlobalInvocationID);
+	
+    
+    uint height = gl_NumWorkGroups.y * gl_WorkGroupSize.y;
+    uint width = gl_NumWorkGroups.x * gl_WorkGroupSize.x;
+    float amplitude = height * 3.0 / 8.0;
+
+    uint y = uint(float(height)/2.0 + amplitude * sin(float(gvars.uFramenumber + texelCoord.x) / 128.0));
+    if (abs(texelCoord.y - y) < 10)
+    {
+        value.x = float(texelCoord.x)/(gl_NumWorkGroups.x * gl_WorkGroupSize.x);
+        value.y = float(texelCoord.y)/(gl_NumWorkGroups.y * gl_WorkGroupSize.y);
+    	value.z = clamp(1.0 - 0.5 * value.x + 0.5 * value.y, 0.0, 1.0);
+        value.a = 1.0;
+    }
+
+    imageStore(imgOutput, texelCoord, value);
+}
+
