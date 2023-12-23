@@ -6,7 +6,8 @@ add_compile_definitions(
 
 target_sources(vkjs PRIVATE
     vkjs.h
-    vkcheck.h
+    vkcheck.h 
+    vertex.h
     device.h
     buffer.h
     image.h
@@ -14,12 +15,14 @@ target_sources(vkjs PRIVATE
     input.h
     swapchain.h
     appbase.h
+    pipeline.h
     device.cpp
     buffer.cpp
     image.cpp
     input.cpp
     swapchain.cpp
     appbase.cpp
+    pipeline.cpp
     gli_utils.h
     gli_utils.cpp
     VulkanInitializers.hpp
