@@ -124,8 +124,19 @@ namespace vkjs
 	{
 		VkSurfaceFormatKHR format{};
 		format.colorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-		//format.format = VK_FORMAT_R8G8B8A8_UNORM;
-		format.format = VK_FORMAT_B8G8R8A8_UNORM;
+		format.format = VK_FORMAT_B8G8R8A8_SRGB;
+
+		uint32_t sfc{ 0 };
+		std::vector<VkSurfaceFormatKHR> formats;
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device_wrapper->vkb_physical_device, surface, &sfc, nullptr);	formats.resize(sfc);
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device_wrapper->vkb_physical_device, surface, &sfc, formats.data());
+
+		for (const auto& it : formats) {
+			if (it.format == VK_FORMAT_B8G8R8A8_UNORM || it.format == VK_FORMAT_R8G8B8A8_UNORM) {
+				format = it;
+				break;
+			}
+		}
 
 		vkb::SwapchainBuilder builder{device()->vkb_device};
 		auto swap_ret = builder
@@ -676,6 +687,7 @@ namespace vkjs
 		init_swapchain();
 		create_command_buffers();
 		init_imgui();
+		setup_render_pass();
 	}
 	void AppBase::window_resize()
 	{

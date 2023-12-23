@@ -67,21 +67,30 @@ void setup_lights(const Bounds& worldBounds, std::vector<Light>& lights) {
 #include "vkjs/VulkanInitializers.hpp"
 
 class App : public vkjs::AppBase {
-public:
-
+private:
     VkDevice d;
 
-    VkRenderPass renderPass = {};
+    struct RenderPass {
+        VkRenderPass pass;
+        VkPipelineLayout layout;
+        VkPipeline pipeline;
+    };
     VkFramebuffer fb[MAX_CONCURRENT_FRAMES] = {};
     VkFramebufferCreateInfo fbci;
     World* scene;
+    struct {
+        RenderPass tonemap = {};
+    } passes;
+
+public:
+
 
     App(bool b) : AppBase(b) {
     }
 
     virtual ~App() {
         vkDeviceWaitIdle(d);
-        vkDestroyRenderPass(d, renderPass, nullptr);
+        vkDestroyRenderPass(d, passes.tonemap.pass, nullptr);
         for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
         {
             vkDestroyFramebuffer(d, fb[i], 0);
@@ -103,10 +112,10 @@ public:
 
         VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
         VkClearValue clearVal;
-        clearVal.color = { 0.4f,0.0f,0.4f,1.0f };
+        clearVal.color = { 0.2f,0.0f,0.2f,1.0f };
         beginPass.clearValueCount = 1;
         beginPass.pClearValues = &clearVal;
-        beginPass.renderPass = renderPass;
+        beginPass.renderPass = passes.tonemap.pass;
         beginPass.framebuffer = fb[current_frame];
         beginPass.renderArea.extent = swapchain.vkb_swapchain.extent;
         beginPass.renderArea.offset = { 0,0 };
@@ -117,7 +126,7 @@ public:
 
     }
 
-    virtual void setup_render_pass() override {
+    void init_tonemap_pass() {
         VkRenderPassCreateInfo rpci = vks::initializers::renderPassCreateInfo();
 
         VkAttachmentDescription color = {};
@@ -136,7 +145,7 @@ public:
         subpass0.colorAttachmentCount = 1;
         subpass0.pColorAttachments = &colorRef;
         subpass0.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-
+        
         VkSubpassDependency dep0 = {};
         dep0.dependencyFlags = 0;
         dep0.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
@@ -154,19 +163,21 @@ public:
         rpci.subpassCount = 1;
         rpci.pSubpasses = &subpass0;
 
-        VK_CHECK(vkCreateRenderPass(d, &rpci, nullptr, &renderPass));
+        VK_CHECK(vkCreateRenderPass(*device_wrapper, &rpci, nullptr, &passes.tonemap.pass));
+    }
 
+    virtual void setup_render_pass() override {
+        AppBase::setup_render_pass();
+        init_tonemap_pass();
     }
     virtual void prepare() override {
         vkjs::AppBase::prepare();
 
         d = *device_wrapper;
 
-        setup_render_pass();
-
         fbci = vks::initializers::framebufferCreateInfo();
         fbci.attachmentCount = 1;
-        fbci.renderPass = renderPass;
+        fbci.renderPass = passes.tonemap.pass;
         fbci.layers = 1;
 
         scene = new World();
@@ -202,11 +213,6 @@ public:
         enabled_device_extensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
         enabled_device_extensions.push_back(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
     }
-private:
-    vkjs::Buffer ubo;
-    vkjs::Buffer stg;
-    vkjs::Buffer ssb1;
-    vkjs::Buffer ssb2;
 };
 
 void demo()
