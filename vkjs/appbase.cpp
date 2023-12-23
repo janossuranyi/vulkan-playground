@@ -641,6 +641,10 @@ namespace vkjs
 	}
 	void AppBase::setup_depth_stencil()
 	{
+		if (depth_image.image) {
+			device()->destroy_image(&depth_image);
+		}
+		VK_CHECK(device()->create_depth_stencil_attachment(depth_format, { swapchain.vkb_swapchain.extent.width,swapchain.vkb_swapchain.extent.height,1 }, &depth_image));
 	}
 	void AppBase::setup_framebuffer()
 	{
@@ -685,6 +689,7 @@ namespace vkjs
 	{
 		create_synchronization_primitives();
 		init_swapchain();
+		setup_depth_stencil();
 		create_command_buffers();
 		init_imgui();
 		setup_render_pass();
@@ -704,6 +709,7 @@ namespace vkjs
 		width = dest_width;
 		height = dest_height;
 		init_swapchain();
+		setup_depth_stencil();
 		on_window_resized();
 
 		prepared = true;

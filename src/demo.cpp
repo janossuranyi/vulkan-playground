@@ -40,8 +40,10 @@ private:
 
     vkjs::Buffer vtxbuf;
     vkjs::Buffer idxbuf;
+
     std::array<vkjs::Buffer,MAX_CONCURRENT_FRAMES> uboPassData;
     std::array<vkjs::Buffer,MAX_CONCURRENT_FRAMES> uboDrawData;
+    size_t dynamicAlignment = 0;
 
     struct MeshBinary {
         uint32_t indexCount;
@@ -49,12 +51,21 @@ private:
         uint32_t firstVertex;
     };
 
-    std::vector<MeshBinary> meshes;
+    struct Object {
+        uint32_t mesh;
+        mat4 mtxModel;
+        Bounds aabb;
+    };
 
-    struct drawData_t {
+
+    struct DrawData {
         glm::mat4 mtxModel;
-    } drawData;
-    
+    };
+
+    std::vector<MeshBinary> meshes;
+    std::vector<Object> objects;
+    std::vector<DrawData> drawData;
+
     struct passData_t {
         glm::mat4 mtxView;
         glm::mat4 mtxProjection;
@@ -66,8 +77,11 @@ private:
         VkPipeline pipeline;
         std::vector<VkDescriptorSetLayout> ds_layouts;
     };
+
+    VkDescriptorPool renderDescPool;
+    VkDescriptorSet triangleDescriptors[MAX_CONCURRENT_FRAMES];
+
     VkFramebuffer fb[MAX_CONCURRENT_FRAMES] = {};
-    VkFramebufferCreateInfo fbci;
     fs::path base_path = fs::path("../..");
 
     World* scene;
@@ -79,6 +93,65 @@ private:
 
 public:
 
+    virtual void on_update_gui() override {}
+    void setup_render_desc_pool() {
+        std::vector<VkDescriptorPoolSize> poolSizes = {
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1}
+        };
+        auto poolCI = vks::initializers::descriptorPoolCreateInfo(poolSizes, 2);
+        VK_CHECK(vkCreateDescriptorPool(d, &poolCI, nullptr, &renderDescPool));
+        VkDescriptorSetAllocateInfo ai = vks::initializers::descriptorSetAllocateInfo(
+            renderDescPool,
+            passes.triangle.ds_layouts.data(),
+            1);
+
+        std::array<VkWriteDescriptorSet,2> writes;
+
+        for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i) {
+            VK_CHECK(vkAllocateDescriptorSets(d, &ai, &triangleDescriptors[i]));
+
+            uboDrawData[i].descriptor.range = sizeof(DrawData);
+            uboPassData[i].descriptor.range = sizeof(passData);
+
+            writes[0] = vks::initializers::writeDescriptorSet(triangleDescriptors[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &uboPassData[i].descriptor, 1);
+            writes[1] = vks::initializers::writeDescriptorSet(triangleDescriptors[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, &uboDrawData[i].descriptor, 1);
+            
+            vkUpdateDescriptorSets(d, 2, writes.data(), 0, nullptr);
+        }
+    }
+
+    void setup_objects() {
+        std::vector<mat4> parentMatrices(scene->scene.rootNodes.size(), mat4(1.0f));
+        std::vector<int> nodesToProcess = scene->scene.rootNodes;
+        objects.clear();
+
+        while (nodesToProcess.empty() == false)
+        {
+            int idx = nodesToProcess.back();
+            nodesToProcess.pop_back();
+            mat4 parentMatrix = parentMatrices.back();
+            parentMatrices.pop_back();
+
+            auto& node = scene->scene.nodes[idx];
+            mat4 mtxModel = parentMatrix * node.getTransform();
+            if (node.isMesh()) {
+                for (auto& e : node.getEntities()) {
+                    Object obj;
+                    obj.mesh = e;
+                    obj.mtxModel = mtxModel;
+                    obj.aabb = scene->meshes[e].aabb.Transform(mtxModel);
+                    objects.push_back(obj);
+                    drawData.emplace_back();
+                    drawData.back().mtxModel = mtxModel;
+                }
+            }
+            for (const auto& e : node.getChildren()) {
+                nodesToProcess.push_back(e);
+                parentMatrices.push_back(mtxModel);
+            }
+        }
+    }
 
     App(bool b) : AppBase(b) {
         depth_format = VK_FORMAT_D24_UNORM_S8_UINT;
@@ -102,6 +175,7 @@ public:
         vkDestroyRenderPass(d, passes.preZ.pass, nullptr);
         vkDestroyRenderPass(d, passes.triangle.pass, nullptr);
 
+        vkDestroyDescriptorPool(d, renderDescPool, nullptr);
         for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
         {
             vkDestroyFramebuffer(d, fb[i], 0);
@@ -111,30 +185,63 @@ public:
         delete scene;
     }
 
+    virtual void build_command_buffers() override {
+        VkCommandBuffer cmd = draw_cmd_buffers[current_frame];
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.triangle.pipeline);
+        VkDeviceSize offset = 0;
+        vkCmdBindVertexBuffers(cmd, 0, 1, &vtxbuf.buffer, &offset);
+        vkCmdBindIndexBuffer(cmd, idxbuf.buffer, 0ull, VK_INDEX_TYPE_UINT16);
+        VkViewport viewport{ 0.f,0.f,float(width),float(height),0.0f,1.0f };
+        VkRect2D scissor{ 0,0,width,height };
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+        vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+        uint32_t dynOffset = 0;
+        for (const auto& obj : objects) {
+            const auto& mesh = meshes[obj.mesh];
+
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                passes.triangle.layout, 0, 1, &triangleDescriptors[current_frame], 1, &dynOffset);
+
+            vkCmdDrawIndexed(cmd, mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, 0);
+            dynOffset += sizeof(DrawData);
+        }
+    }
     virtual void render() override {        
 
-        
+        passData.mtxView = camera.GetViewMatrix();
+        passData.mtxProjection = glm::perspective(radians(45.0f), (float)width / height, .01f, 500.f);
+        update_uniforms();
+
         if (fb[current_frame] != VK_NULL_HANDLE) {
             vkDestroyFramebuffer(d, fb[current_frame], 0);
         }
 
-        fbci.pAttachments = &swapchain.views[current_buffer];
+        std::array<VkImageView, 2> targets = { swapchain.views[current_buffer],  depth_image.view};
+        auto fbci = vks::initializers::framebufferCreateInfo();
+        fbci.renderPass = passes.triangle.pass;
+        fbci.layers = 1;
+        fbci.attachmentCount = 2;
+        fbci.pAttachments = targets.data();
         fbci.width = width;
         fbci.height = height;
         VK_CHECK(vkCreateFramebuffer(d, &fbci, 0, &fb[current_frame]));
 
         VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
-        VkClearValue clearVal;
-        clearVal.color = { 0.2f,0.0f,0.2f,1.0f };
-        beginPass.clearValueCount = 1;
-        beginPass.pClearValues = &clearVal;
-        beginPass.renderPass = passes.tonemap.pass;
+        VkClearValue clearVal[2];
+        clearVal[0].color = {0.2f,0.0f,0.2f,1.0f};
+        clearVal[1].depthStencil.depth = 1.0f;
+
+        beginPass.clearValueCount = 2;
+        beginPass.pClearValues = &clearVal[0];
+        beginPass.renderPass = passes.triangle.pass;
         beginPass.framebuffer = fb[current_frame];
         beginPass.renderArea.extent = swapchain.vkb_swapchain.extent;
         beginPass.renderArea.offset = { 0,0 };
 
         VkCommandBuffer cmd = draw_cmd_buffers[current_frame];
         vkCmdBeginRenderPass(cmd, &beginPass, VK_SUBPASS_CONTENTS_INLINE);
+        build_command_buffers();
         vkCmdEndRenderPass(cmd);
 
     }
@@ -269,30 +376,25 @@ public:
         layout:
         set 0
             0: ubo
-        set 1
-            0: dyn. ubo
+            1: dyn. ubo
         */
 
-        std::vector<VkDescriptorSetLayoutBinding> set0bind(1);
-        std::vector<VkDescriptorSetLayoutBinding> set1bind(1);
+        std::vector<VkDescriptorSetLayoutBinding> set0bind(2);
 
         set0bind[0].binding = 0;
         set0bind[0].descriptorCount = 1;
         set0bind[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         set0bind[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        set1bind[0].binding = 0;
-        set1bind[0].descriptorCount = 1;
-        set1bind[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-        set1bind[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        set0bind[1].binding = 1;
+        set0bind[1].descriptorCount = 1;
+        set0bind[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        set0bind[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
         const VkDescriptorSetLayoutCreateInfo ds0ci = vks::initializers::descriptorSetLayoutCreateInfo(set0bind);
-        const VkDescriptorSetLayoutCreateInfo ds1ci = vks::initializers::descriptorSetLayoutCreateInfo(set1bind);
-        std::array<VkDescriptorSetLayout, 2> dsl;
+        std::array<VkDescriptorSetLayout, 1> dsl;
         VK_CHECK(vkCreateDescriptorSetLayout(d, &ds0ci, nullptr, &dsl[0]));
-        VK_CHECK(vkCreateDescriptorSetLayout(d, &ds1ci, nullptr, &dsl[1]));
         passes.triangle.ds_layouts.push_back(dsl[0]);
-        passes.triangle.ds_layouts.push_back(dsl[1]);
-        VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo(2);
+        VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo(1);
         plci.pSetLayouts = dsl.data();
         VK_CHECK(vkCreatePipelineLayout(d, &plci, nullptr, &pass.layout));
         pb._pipelineLayout = pass.layout;
@@ -353,17 +455,17 @@ public:
         VkAttachmentDescription color = {};
         color.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         color.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        color.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+        color.format = swapchain.vkb_swapchain.image_format;
         color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         color.samples = VK_SAMPLE_COUNT_1_BIT;
 
         VkAttachmentDescription depth = {};
-        depth.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        depth.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         depth.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         depth.format = depth_format;
-        depth.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-        depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         depth.samples = VK_SAMPLE_COUNT_1_BIT;
 
         VkAttachmentReference colorRef = {};
@@ -375,7 +477,7 @@ public:
 
         VkSubpassDependency dep0 = {};
         dep0.dependencyFlags = 0;
-        dep0.srcAccessMask = VK_ACCESS_NONE;
+        dep0.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
         dep0.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
         dep0.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         dep0.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -449,38 +551,99 @@ public:
         VK_CHECK(vkCreateRenderPass(*device_wrapper, &rpci, nullptr, &passes.tonemap.pass));
     }
 
+    void update_uniforms() {
+
+        uboPassData[current_frame].copyTo(0, sizeof(passData), &passData);
+
+    }
+
     virtual void prepare() override {
         vkjs::AppBase::prepare();
 
-        d = *device_wrapper;
-        setup_tonemap_pass();
-        setup_preZ_pass();
-        setup_triangle_pass();
+        camera.MovementSpeed = 0.001f;
 
-        setup_preZ_pipeline(passes.preZ);
+        d = *device_wrapper;
+        
+        setup_triangle_pass();
         setup_triangle_pipeline(passes.triangle);
 
-        device()->create_buffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 16ULL * 1024 * 1024, &vtxbuf);
-        device()->create_buffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 16ULL * 1024 * 1024, &idxbuf);
+        device()->create_buffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 32ULL * 1024 * 1024, &vtxbuf);
+        device()->create_buffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 32ULL * 1024 * 1024, &idxbuf);
 
         for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
         {
             device()->create_uniform_buffer(8 * 1024, false, &uboPassData[i]);
-            device()->create_uniform_buffer(8 * 1024 * 1024, false, &uboDrawData[i]);
+            uboPassData[i].map();
         }
-        fbci = vks::initializers::framebufferCreateInfo();
-        fbci.attachmentCount = 1;
-        fbci.renderPass = passes.tonemap.pass;
-        fbci.layers = 1;
 
         scene = new World();
         jsr::gltfLoadWorld(fs::path("../../resources/models/sponza/sponza_j.gltf"), *scene);
 
+        std::vector<vkjs::Vertex> vertices;
+        std::vector<uint16_t> indices;
+
+        uint32_t firstIndex(0);
+        uint32_t firstVertex(0);
+
         for (size_t i(0); i < scene->meshes.size(); ++i)
         {
             auto& mesh = scene->meshes[i];
+            for (size_t i(0); i < mesh.positions.size(); ++i)
+            {
+                vertices.emplace_back();
+                auto& v = vertices.back();
+                v.xyz = mesh.positions[i];
+            }
+            meshes.emplace_back();
+            auto& rmesh = meshes.back();
+            rmesh.firstVertex = firstVertex;
+            firstVertex += mesh.positions.size();
+
+            for (size_t i(0); i < mesh.indices.size(); ++i)
+            {
+                indices.push_back((uint16_t)mesh.indices[i]);
+            }
+            rmesh.firstIndex = firstIndex;
+            rmesh.indexCount = mesh.indices.size();
+            firstIndex += rmesh.indexCount;
             
         }
+
+        VkDeviceSize vertexBytes = sizeof(vertices[0]) * vertices.size();
+        VkDeviceSize indexBytes = sizeof(indices[0]) * indices.size();
+
+        vkjs::Buffer stagingBuffer;
+
+        device()->create_staging_buffer(vertexBytes, &stagingBuffer);
+        stagingBuffer.copyTo(0, vertexBytes, vertices.data());
+        device()->buffer_copy(&stagingBuffer, &vtxbuf, 0, 0, vertexBytes);
+        if (indexBytes > vertexBytes) 
+        {
+            device()->destroy_buffer(&stagingBuffer);
+            device()->create_staging_buffer(indexBytes, &stagingBuffer);
+        }
+        stagingBuffer.copyTo(0, indexBytes, indices.data());
+        device()->buffer_copy(&stagingBuffer, &idxbuf, 0, 0, indexBytes);
+        device()->destroy_buffer(&stagingBuffer);
+
+        setup_objects();
+
+        // Calculate required alignment based on minimum device offset alignment
+        size_t minUboAlignment = device()->vkb_physical_device.properties.limits.minUniformBufferOffsetAlignment;
+        dynamicAlignment = sizeof(DrawData);
+        if (minUboAlignment > 0) {
+            dynamicAlignment = (dynamicAlignment + minUboAlignment - 1) & ~(minUboAlignment - 1);
+        }
+
+        const size_t size = sizeof(DrawData) * drawData.size();
+        for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
+        {
+            device()->create_uniform_buffer(size, false, &uboDrawData[i]);
+            uboDrawData[i].map();
+            uboDrawData[i].copyTo(0, size, drawData.data());
+        }
+        setup_render_desc_pool();
+
 
         prepared = true;
     }

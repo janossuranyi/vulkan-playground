@@ -155,11 +155,7 @@ namespace vkjs {
 		
 		VmaAllocator allocator;
 
-		struct {
-			VkImage image;
-			VmaAllocation mem;
-			VkImageView view;
-		} depth_stencil;
+		Image depth_image;
 
 		struct {
 			bool left = false;
