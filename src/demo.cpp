@@ -38,6 +38,28 @@ class App : public vkjs::AppBase {
 private:
     VkDevice d;
 
+    vkjs::Buffer vtxbuf;
+    vkjs::Buffer idxbuf;
+    std::array<vkjs::Buffer,MAX_CONCURRENT_FRAMES> uboPassData;
+    std::array<vkjs::Buffer,MAX_CONCURRENT_FRAMES> uboDrawData;
+
+    struct MeshBinary {
+        uint32_t indexCount;
+        uint32_t firstIndex;
+        uint32_t firstVertex;
+    };
+
+    std::vector<MeshBinary> meshes;
+
+    struct drawData_t {
+        glm::mat4 mtxModel;
+    } drawData;
+    
+    struct passData_t {
+        glm::mat4 mtxView;
+        glm::mat4 mtxProjection;
+    } passData;
+
     struct RenderPass {
         VkRenderPass pass;
         VkPipelineLayout layout;
@@ -65,6 +87,9 @@ public:
     virtual ~App() {
         vkDeviceWaitIdle(d);
 
+        device()->destroy_buffer(&vtxbuf);
+        device()->destroy_buffer(&idxbuf);
+
         std::array<RenderPass*, 3> rpasses = { &passes.preZ,&passes.tonemap,&passes.triangle };
         for (const auto* pass : rpasses) {
             if (pass->pipeline) vkDestroyPipeline(d, pass->pipeline, nullptr);
@@ -80,6 +105,8 @@ public:
         for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
         {
             vkDestroyFramebuffer(d, fb[i], 0);
+            device()->destroy_buffer(&uboPassData[i]);
+            device()->destroy_buffer(&uboDrawData[i]);
         }
         delete scene;
     }
@@ -112,7 +139,7 @@ public:
 
     }
 
-    void setup_preZ_pipeline() {
+    void setup_preZ_pipeline(RenderPass& pass) {
         auto vertexInput = vkjs::Vertex::vertex_input_description_position_only();
 
         const std::vector<VkDynamicState> dynStates = { VK_DYNAMIC_STATE_SCISSOR,VK_DYNAMIC_STATE_VIEWPORT };
@@ -185,16 +212,16 @@ public:
         passes.preZ.ds_layouts.push_back(dsl[1]);
         VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo(2);
         plci.pSetLayouts = dsl.data();        
-        VK_CHECK(vkCreatePipelineLayout(d, &plci, nullptr, &passes.preZ.layout));
-        pb._pipelineLayout = passes.preZ.layout;
-        passes.preZ.pipeline = pb.build_pipeline(d, passes.preZ.pass);
+        VK_CHECK(vkCreatePipelineLayout(d, &plci, nullptr, &pass.layout));
+        pb._pipelineLayout = pass.layout;
+        pass.pipeline = pb.build_pipeline(d, pass.pass);
         vkDestroyShaderModule(d, vert_module, nullptr);
         vkDestroyShaderModule(d, frag_module, nullptr);
-        assert(passes.preZ.pipeline);
+        assert(pass.pipeline);
 
     }
 
-    void setup_triangle_pipeline() {
+    void setup_triangle_pipeline(RenderPass& pass) {
         auto vertexInput = vkjs::Vertex::vertex_input_description_position_only();
 
         const std::vector<VkDynamicState> dynStates = { VK_DYNAMIC_STATE_SCISSOR,VK_DYNAMIC_STATE_VIEWPORT };
@@ -267,13 +294,17 @@ public:
         passes.triangle.ds_layouts.push_back(dsl[1]);
         VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo(2);
         plci.pSetLayouts = dsl.data();
-        VK_CHECK(vkCreatePipelineLayout(d, &plci, nullptr, &passes.preZ.layout));
-        pb._pipelineLayout = passes.triangle.layout;
+        VK_CHECK(vkCreatePipelineLayout(d, &plci, nullptr, &pass.layout));
+        pb._pipelineLayout = pass.layout;
         
-        passes.triangle.pipeline = pb.build_pipeline(d, passes.triangle.pass);
+        VkPipelineColorBlendAttachmentState blend0 = vks::initializers::pipelineColorBlendAttachmentState(
+            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT, VK_FALSE);
+        pb._colorBlendAttachments.push_back(blend0);
+
+        pass.pipeline = pb.build_pipeline(d, pass.pass);
         vkDestroyShaderModule(d, vert_module, nullptr);
         vkDestroyShaderModule(d, frag_module, nullptr);
-        assert(passes.triangle.pipeline);
+        assert(pass.pipeline);
 
     }
     void setup_preZ_pass() {
@@ -426,8 +457,17 @@ public:
         setup_preZ_pass();
         setup_triangle_pass();
 
-        setup_preZ_pipeline();
+        setup_preZ_pipeline(passes.preZ);
+        setup_triangle_pipeline(passes.triangle);
 
+        device()->create_buffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 16ULL * 1024 * 1024, &vtxbuf);
+        device()->create_buffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 16ULL * 1024 * 1024, &idxbuf);
+
+        for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
+        {
+            device()->create_uniform_buffer(8 * 1024, false, &uboPassData[i]);
+            device()->create_uniform_buffer(8 * 1024 * 1024, false, &uboDrawData[i]);
+        }
         fbci = vks::initializers::framebufferCreateInfo();
         fbci.attachmentCount = 1;
         fbci.renderPass = passes.tonemap.pass;
@@ -435,6 +475,12 @@ public:
 
         scene = new World();
         jsr::gltfLoadWorld(fs::path("../../resources/models/sponza/sponza_j.gltf"), *scene);
+
+        for (size_t i(0); i < scene->meshes.size(); ++i)
+        {
+            auto& mesh = scene->meshes[i];
+            
+        }
 
         prepared = true;
     }
