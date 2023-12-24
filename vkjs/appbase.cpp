@@ -538,7 +538,7 @@ namespace vkjs
 			{
 				float r = (float)e.wheel.y;
 				if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) r = -r;
-				camera.ProcessMouseScroll((float)e.wheel.y);
+				camera.ProcessMouseScroll((float)r);
 			}
 
 		}

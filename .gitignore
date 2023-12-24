@@ -34,3 +34,4 @@
 # Directories
 resources
 build
+*.spv

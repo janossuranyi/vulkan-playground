@@ -40,6 +40,7 @@ private:
 
     vkjs::Buffer vtxbuf;
     vkjs::Buffer idxbuf;
+    size_t minUboAlignment = 0;
 
     std::array<vkjs::Buffer,MAX_CONCURRENT_FRAMES> uboPassData;
     std::array<vkjs::Buffer,MAX_CONCURRENT_FRAMES> uboDrawData;
@@ -60,13 +61,14 @@ private:
 
     struct DrawData {
         glm::mat4 mtxModel;
+        glm::vec4 color;
     };
 
     std::vector<MeshBinary> meshes;
     std::vector<Object> objects;
-    std::vector<DrawData> drawData;
+    std::vector<uint8_t> drawData;
 
-    struct passData_t {
+    struct PassData {
         glm::mat4 mtxView;
         glm::mat4 mtxProjection;
     } passData;
@@ -94,31 +96,37 @@ private:
 public:
 
     virtual void on_update_gui() override {}
-    void setup_render_desc_pool() {
+
+    void setup_descriptor_sets() {
+    
+        std::array<VkWriteDescriptorSet, 2> writes;
+        VkDescriptorSetAllocateInfo ai = vks::initializers::descriptorSetAllocateInfo(
+            renderDescPool,
+            passes.triangle.ds_layouts.data(),
+            1);
+
+        for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
+        {
+            VK_CHECK(vkAllocateDescriptorSets(d, &ai, &triangleDescriptors[i]));
+
+            uboDrawData[i].descriptor.range = sizeof(DrawData);
+            uboPassData[i].descriptor.range = sizeof(PassData);
+
+            writes[0] = vks::initializers::writeDescriptorSet(triangleDescriptors[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &uboPassData[i].descriptor, 1);
+            writes[1] = vks::initializers::writeDescriptorSet(triangleDescriptors[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, &uboDrawData[i].descriptor, 1);
+
+            vkUpdateDescriptorSets(d, 2, writes.data(), 0, nullptr);
+        }
+    }
+
+    void setup_descriptor_pools() {
         std::vector<VkDescriptorPoolSize> poolSizes = {
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1}
         };
         auto poolCI = vks::initializers::descriptorPoolCreateInfo(poolSizes, 2);
         VK_CHECK(vkCreateDescriptorPool(d, &poolCI, nullptr, &renderDescPool));
-        VkDescriptorSetAllocateInfo ai = vks::initializers::descriptorSetAllocateInfo(
-            renderDescPool,
-            passes.triangle.ds_layouts.data(),
-            1);
 
-        std::array<VkWriteDescriptorSet,2> writes;
-
-        for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i) {
-            VK_CHECK(vkAllocateDescriptorSets(d, &ai, &triangleDescriptors[i]));
-
-            uboDrawData[i].descriptor.range = sizeof(DrawData);
-            uboPassData[i].descriptor.range = sizeof(passData);
-
-            writes[0] = vks::initializers::writeDescriptorSet(triangleDescriptors[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &uboPassData[i].descriptor, 1);
-            writes[1] = vks::initializers::writeDescriptorSet(triangleDescriptors[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, &uboDrawData[i].descriptor, 1);
-            
-            vkUpdateDescriptorSets(d, 2, writes.data(), 0, nullptr);
-        }
     }
 
     void setup_objects() {
@@ -126,6 +134,16 @@ public:
         std::vector<int> nodesToProcess = scene->scene.rootNodes;
         objects.clear();
 
+        std::random_device rdev;
+        std::default_random_engine reng(rdev());
+        std::uniform_real_distribution<float> range(0.0f, 0.25f);
+
+        dynamicAlignment = sizeof(DrawData);
+        if (minUboAlignment > 0) {
+            dynamicAlignment = (dynamicAlignment + minUboAlignment - 1) & ~(minUboAlignment - 1);
+        }
+
+        std::vector<DrawData> ddlst;
         while (nodesToProcess.empty() == false)
         {
             int idx = nodesToProcess.back();
@@ -141,15 +159,23 @@ public:
                     obj.mesh = e;
                     obj.mtxModel = mtxModel;
                     obj.aabb = scene->meshes[e].aabb.Transform(mtxModel);
+                    DrawData dd;
+                    dd.mtxModel = mtxModel;
+                    dd.color = vec4(range(reng), range(reng), range(reng), 1.0f);
+                    ddlst.push_back(dd);
                     objects.push_back(obj);
-                    drawData.emplace_back();
-                    drawData.back().mtxModel = mtxModel;
                 }
             }
             for (const auto& e : node.getChildren()) {
                 nodesToProcess.push_back(e);
                 parentMatrices.push_back(mtxModel);
             }
+        }
+        drawData.resize(ddlst.size() * dynamicAlignment);
+        size_t offset = 0;
+        for (size_t i(0); i < ddlst.size(); ++i) {
+            memcpy(&drawData[offset], &ddlst[i], sizeof(DrawData));
+            offset += dynamicAlignment;
         }
     }
 
@@ -204,15 +230,15 @@ public:
                 passes.triangle.layout, 0, 1, &triangleDescriptors[current_frame], 1, &dynOffset);
 
             vkCmdDrawIndexed(cmd, mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, 0);
-            dynOffset += sizeof(DrawData);
+            dynOffset += dynamicAlignment;
         }
     }
     virtual void render() override {        
 
         passData.mtxView = camera.GetViewMatrix();
-        passData.mtxProjection = glm::perspective(radians(45.0f), (float)width / height, .01f, 500.f);
+        passData.mtxProjection = glm::perspective(radians(camera.Zoom), (float)width / height, .01f, 500.f);
         update_uniforms();
-
+        
         if (fb[current_frame] != VK_NULL_HANDLE) {
             vkDestroyFramebuffer(d, fb[current_frame], 0);
         }
@@ -229,7 +255,7 @@ public:
 
         VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
         VkClearValue clearVal[2];
-        clearVal[0].color = {0.2f,0.0f,0.2f,1.0f};
+        clearVal[0].color = {0.8f,0.8f,0.8f,1.0f};
         clearVal[1].depthStencil.depth = 1.0f;
 
         beginPass.clearValueCount = 2;
@@ -334,7 +360,7 @@ public:
         const std::vector<VkDynamicState> dynStates = { VK_DYNAMIC_STATE_SCISSOR,VK_DYNAMIC_STATE_VIEWPORT };
         vkjs::PipelineBuilder pb = {};
         pb._rasterizer = vks::initializers::pipelineRasterizationStateCreateInfo(
-            VK_POLYGON_MODE_LINE, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
+            VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
         pb._depthStencil = vks::initializers::pipelineDepthStencilStateCreateInfo(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
         pb._dynamicStates = vks::initializers::pipelineDynamicStateCreateInfo(dynStates);
         pb._inputAssembly = vks::initializers::pipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
@@ -560,6 +586,9 @@ public:
     virtual void prepare() override {
         vkjs::AppBase::prepare();
 
+        // Calculate required alignment based on minimum device offset alignment
+        minUboAlignment = device()->vkb_physical_device.properties.limits.minUniformBufferOffsetAlignment;
+
         camera.MovementSpeed = 0.001f;
 
         d = *device_wrapper;
@@ -628,22 +657,15 @@ public:
 
         setup_objects();
 
-        // Calculate required alignment based on minimum device offset alignment
-        size_t minUboAlignment = device()->vkb_physical_device.properties.limits.minUniformBufferOffsetAlignment;
-        dynamicAlignment = sizeof(DrawData);
-        if (minUboAlignment > 0) {
-            dynamicAlignment = (dynamicAlignment + minUboAlignment - 1) & ~(minUboAlignment - 1);
-        }
-
-        const size_t size = sizeof(DrawData) * drawData.size();
+        const size_t size = drawData.size();
         for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
         {
             device()->create_uniform_buffer(size, false, &uboDrawData[i]);
             uboDrawData[i].map();
             uboDrawData[i].copyTo(0, size, drawData.data());
         }
-        setup_render_desc_pool();
-
+        setup_descriptor_pools();
+        setup_descriptor_sets();
 
         prepared = true;
     }
