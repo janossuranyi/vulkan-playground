@@ -26,6 +26,7 @@
 #include "vkjs/pipeline.h"
 #include "vkjs/vkcheck.h"
 #include "vkjs/vertex.h"
+#include "vkjs/vk_descriptors.h"
 
 namespace fs = std::filesystem;
 using namespace glm;
@@ -37,6 +38,10 @@ using namespace jsr;
 class App : public vkjs::AppBase {
 private:
     VkDevice d;
+
+    vkutil::DescriptorAllocator descAllocator;
+    vkutil::DescriptorLayoutCache descLayoutCache;
+    vkutil::DescriptorBuilder staticDescriptorBuilder;
 
     vkjs::Buffer vtxbuf;
     vkjs::Buffer idxbuf;
@@ -77,16 +82,15 @@ private:
         VkRenderPass pass;
         VkPipelineLayout layout;
         VkPipeline pipeline;
-        std::vector<VkDescriptorSetLayout> ds_layouts;
     };
 
-    VkDescriptorPool renderDescPool;
     VkDescriptorSet triangleDescriptors[MAX_CONCURRENT_FRAMES];
 
     VkFramebuffer fb[MAX_CONCURRENT_FRAMES] = {};
     fs::path base_path = fs::path("../..");
 
-    World* scene;
+    std::unique_ptr<World> scene;
+
     struct {
         RenderPass tonemap = {};
         RenderPass preZ = {};
@@ -98,35 +102,22 @@ public:
     virtual void on_update_gui() override {}
 
     void setup_descriptor_sets() {
-    
-        std::array<VkWriteDescriptorSet, 2> writes;
-        VkDescriptorSetAllocateInfo ai = vks::initializers::descriptorSetAllocateInfo(
-            renderDescPool,
-            passes.triangle.ds_layouts.data(),
-            1);
+
 
         for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
         {
-            VK_CHECK(vkAllocateDescriptorSets(d, &ai, &triangleDescriptors[i]));
-
             uboDrawData[i].descriptor.range = sizeof(DrawData);
             uboPassData[i].descriptor.range = sizeof(PassData);
-
-            writes[0] = vks::initializers::writeDescriptorSet(triangleDescriptors[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &uboPassData[i].descriptor, 1);
-            writes[1] = vks::initializers::writeDescriptorSet(triangleDescriptors[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, &uboDrawData[i].descriptor, 1);
-
-            vkUpdateDescriptorSets(d, 2, writes.data(), 0, nullptr);
+            vkutil::DescriptorBuilder::begin(&descLayoutCache, &descAllocator)
+            .bind_buffer(0, &uboPassData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
+            .bind_buffer(1, &uboDrawData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT)
+            .build(triangleDescriptors[i]);
         }
     }
 
-    void setup_descriptor_pools() {
-        std::vector<VkDescriptorPoolSize> poolSizes = {
-            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
-            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1}
-        };
-        auto poolCI = vks::initializers::descriptorPoolCreateInfo(poolSizes, 2);
-        VK_CHECK(vkCreateDescriptorPool(d, &poolCI, nullptr, &renderDescPool));
-
+    void setup_descriptor_pools() {        
+        descAllocator.init(*device);
+        descLayoutCache.init(*device);
     }
 
     void setup_objects() {
@@ -186,29 +177,27 @@ public:
     virtual ~App() {
         vkDeviceWaitIdle(d);
 
-        device()->destroy_buffer(&vtxbuf);
-        device()->destroy_buffer(&idxbuf);
+        device->destroy_buffer(&vtxbuf);
+        device->destroy_buffer(&idxbuf);
 
         std::array<RenderPass*, 3> rpasses = { &passes.preZ,&passes.tonemap,&passes.triangle };
         for (const auto* pass : rpasses) {
             if (pass->pipeline) vkDestroyPipeline(d, pass->pipeline, nullptr);
             if (pass->layout) vkDestroyPipelineLayout(d, pass->layout, nullptr);
-            for (auto& dset : pass->ds_layouts) {
-                vkDestroyDescriptorSetLayout(d, dset, nullptr);
-            }
         }
         vkDestroyRenderPass(d, passes.tonemap.pass, nullptr);
         vkDestroyRenderPass(d, passes.preZ.pass, nullptr);
         vkDestroyRenderPass(d, passes.triangle.pass, nullptr);
 
-        vkDestroyDescriptorPool(d, renderDescPool, nullptr);
+        descLayoutCache.cleanup();
+        descAllocator.cleanup();
+
         for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
         {
             vkDestroyFramebuffer(d, fb[i], 0);
-            device()->destroy_buffer(&uboPassData[i]);
-            device()->destroy_buffer(&uboDrawData[i]);
+            device->destroy_buffer(&uboPassData[i]);
+            device->destroy_buffer(&uboDrawData[i]);
         }
-        delete scene;
     }
 
     virtual void build_command_buffers() override {
@@ -336,13 +325,13 @@ public:
         set1bind[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
         set1bind[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-        const VkDescriptorSetLayoutCreateInfo ds0ci = vks::initializers::descriptorSetLayoutCreateInfo(set0bind);
-        const VkDescriptorSetLayoutCreateInfo ds1ci = vks::initializers::descriptorSetLayoutCreateInfo(set1bind);
+        VkDescriptorSetLayoutCreateInfo ds0ci = vks::initializers::descriptorSetLayoutCreateInfo(set0bind);
+        VkDescriptorSetLayoutCreateInfo ds1ci = vks::initializers::descriptorSetLayoutCreateInfo(set1bind);
         std::array<VkDescriptorSetLayout, 2> dsl;
-        VK_CHECK(vkCreateDescriptorSetLayout(d, &ds0ci, nullptr, &dsl[0]));
-        VK_CHECK(vkCreateDescriptorSetLayout(d, &ds1ci, nullptr, &dsl[1]));
-        passes.preZ.ds_layouts.push_back(dsl[0]);
-        passes.preZ.ds_layouts.push_back(dsl[1]);
+        dsl[0] = descLayoutCache.create_descriptor_layout(&ds0ci);
+        dsl[1] = descLayoutCache.create_descriptor_layout(&ds1ci);
+        assert(dsl[0] && dsl[1]);
+
         VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo(2);
         plci.pSetLayouts = dsl.data();        
         VK_CHECK(vkCreatePipelineLayout(d, &plci, nullptr, &pass.layout));
@@ -416,10 +405,11 @@ public:
         set0bind[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
         set0bind[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-        const VkDescriptorSetLayoutCreateInfo ds0ci = vks::initializers::descriptorSetLayoutCreateInfo(set0bind);
+        VkDescriptorSetLayoutCreateInfo ds0ci = vks::initializers::descriptorSetLayoutCreateInfo(set0bind);
         std::array<VkDescriptorSetLayout, 1> dsl;
-        VK_CHECK(vkCreateDescriptorSetLayout(d, &ds0ci, nullptr, &dsl[0]));
-        passes.triangle.ds_layouts.push_back(dsl[0]);
+        dsl[0] = descLayoutCache.create_descriptor_layout(&ds0ci);
+        assert(dsl[0]);
+
         VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo(1);
         plci.pSetLayouts = dsl.data();
         VK_CHECK(vkCreatePipelineLayout(d, &plci, nullptr, &pass.layout));
@@ -471,7 +461,7 @@ public:
         rpci.subpassCount = 1;
         rpci.pSubpasses = &subpass0;
 
-        VK_CHECK(vkCreateRenderPass(*device_wrapper, &rpci, nullptr, &passes.preZ.pass));
+        VK_CHECK(vkCreateRenderPass(*device, &rpci, nullptr, &passes.preZ.pass));
 
     }
 
@@ -535,7 +525,7 @@ public:
         rpci.subpassCount = 1;
         rpci.pSubpasses = &subpass0;
 
-        VK_CHECK(vkCreateRenderPass(*device_wrapper, &rpci, nullptr, &passes.triangle.pass));
+        VK_CHECK(vkCreateRenderPass(*device, &rpci, nullptr, &passes.triangle.pass));
     }
     void setup_tonemap_pass() {
         VkRenderPassCreateInfo rpci = vks::initializers::renderPassCreateInfo();
@@ -574,7 +564,7 @@ public:
         rpci.subpassCount = 1;
         rpci.pSubpasses = &subpass0;
 
-        VK_CHECK(vkCreateRenderPass(*device_wrapper, &rpci, nullptr, &passes.tonemap.pass));
+        VK_CHECK(vkCreateRenderPass(*device, &rpci, nullptr, &passes.tonemap.pass));
     }
 
     void update_uniforms() {
@@ -586,26 +576,29 @@ public:
     virtual void prepare() override {
         vkjs::AppBase::prepare();
 
+        setup_descriptor_pools();
+
         // Calculate required alignment based on minimum device offset alignment
-        minUboAlignment = device()->vkb_physical_device.properties.limits.minUniformBufferOffsetAlignment;
+        minUboAlignment = device->vkb_physical_device.properties.limits.minUniformBufferOffsetAlignment;
 
         camera.MovementSpeed = 0.001f;
 
-        d = *device_wrapper;
+        d = *device;
         
         setup_triangle_pass();
         setup_triangle_pipeline(passes.triangle);
 
-        device()->create_buffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 32ULL * 1024 * 1024, &vtxbuf);
-        device()->create_buffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 32ULL * 1024 * 1024, &idxbuf);
+        device->create_buffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 32ULL * 1024 * 1024, &vtxbuf);
+        device->create_buffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 32ULL * 1024 * 1024, &idxbuf);
 
         for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
         {
-            device()->create_uniform_buffer(8 * 1024, false, &uboPassData[i]);
+            device->create_uniform_buffer(8 * 1024, false, &uboPassData[i]);
             uboPassData[i].map();
         }
 
-        scene = new World();
+        scene = std::make_unique<World>();
+
         jsr::gltfLoadWorld(fs::path("../../resources/models/sponza/sponza_j.gltf"), *scene);
 
         std::vector<vkjs::Vertex> vertices;
@@ -643,28 +636,27 @@ public:
 
         vkjs::Buffer stagingBuffer;
 
-        device()->create_staging_buffer(vertexBytes, &stagingBuffer);
+        device->create_staging_buffer(vertexBytes, &stagingBuffer);
         stagingBuffer.copyTo(0, vertexBytes, vertices.data());
-        device()->buffer_copy(&stagingBuffer, &vtxbuf, 0, 0, vertexBytes);
+        device->buffer_copy(&stagingBuffer, &vtxbuf, 0, 0, vertexBytes);
         if (indexBytes > vertexBytes) 
         {
-            device()->destroy_buffer(&stagingBuffer);
-            device()->create_staging_buffer(indexBytes, &stagingBuffer);
+            device->destroy_buffer(&stagingBuffer);
+            device->create_staging_buffer(indexBytes, &stagingBuffer);
         }
         stagingBuffer.copyTo(0, indexBytes, indices.data());
-        device()->buffer_copy(&stagingBuffer, &idxbuf, 0, 0, indexBytes);
-        device()->destroy_buffer(&stagingBuffer);
+        device->buffer_copy(&stagingBuffer, &idxbuf, 0, 0, indexBytes);
+        device->destroy_buffer(&stagingBuffer);
 
         setup_objects();
 
         const size_t size = drawData.size();
         for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
         {
-            device()->create_uniform_buffer(size, false, &uboDrawData[i]);
+            device->create_uniform_buffer(size, false, &uboDrawData[i]);
             uboDrawData[i].map();
             uboDrawData[i].copyTo(0, size, drawData.data());
         }
-        setup_descriptor_pools();
         setup_descriptor_sets();
 
         prepared = true;

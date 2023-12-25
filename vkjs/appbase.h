@@ -15,7 +15,7 @@ namespace vkjs {
 	class AppBase {
 	private:
 		std::string window_title() const;
-		uint32_t dest_width, dest_height;
+		uint32_t destWidth, destHeight;
 		bool resizing{ false };
 		void handle_mouse_move(int x, int y);
 		void next_frame();
@@ -30,12 +30,12 @@ namespace vkjs {
 		void init_imgui();
 		void render_imgui();
 
-		std::string shader_dir = "shaders";
+		std::string shaderDir = "shaders";
 		/** @brief Encapsulated physical and logical vulkan device */
 	protected:
 		bool minimized = false;
 		bool quit = false;
-		Device* device_wrapper;
+		Device* device;
 
 		std::string shader_path() const;
 		uint32_t frame_counter;
@@ -168,10 +168,6 @@ namespace vkjs {
 		AppBase(bool enable_validation = false);
 		virtual ~AppBase() noexcept;
 		
-		constexpr Device* device() {
-			return device_wrapper;
-		}
-
 		bool init();
 		void handle_events();
 

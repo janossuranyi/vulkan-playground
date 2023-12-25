@@ -15,6 +15,8 @@ target_sources(vkjs PRIVATE
     input.h
     swapchain.h
     appbase.h
+    vk_descriptors.h
+    vk_types.h
     pipeline.h
     device.cpp
     buffer.cpp
@@ -26,6 +28,7 @@ target_sources(vkjs PRIVATE
     gli_utils.h
     gli_utils.cpp
     VulkanInitializers.hpp
+    vk_descriptors.cpp
 )
 
 target_link_libraries(vkjs 

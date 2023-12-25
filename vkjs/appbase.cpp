@@ -47,7 +47,7 @@ namespace vkjs
 
 		current_frame = frame_counter % MAX_CONCURRENT_FRAMES;
 		
-		vkWaitForFences(*device_wrapper, 1, &wait_fences[current_frame], VK_TRUE, UINT64_MAX);
+		vkWaitForFences(*device, 1, &wait_fences[current_frame], VK_TRUE, UINT64_MAX);
 
 		VkResult result = swapchain.acquire_next_image(semaphores[current_frame].present_complete, &current_buffer);
 		if (result == VK_ERROR_OUT_OF_DATE_KHR) {
@@ -58,7 +58,7 @@ namespace vkjs
 			throw "Could not acquire the next swap chain image!";
 		}
 
-		VK_CHECK(vkResetFences(*device_wrapper, 1, &wait_fences[current_frame]));
+		VK_CHECK(vkResetFences(*device, 1, &wait_fences[current_frame]));
 		
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplSDL2_NewFrame();
@@ -68,7 +68,7 @@ namespace vkjs
 		const VkCommandBuffer cmd = draw_cmd_buffers[current_frame];
 
 		VK_CHECK(vkResetCommandBuffer(cmd, 0));
-		device()->begin_command_buffer(cmd);
+		device->begin_command_buffer(cmd);
 		
 		render();
 
@@ -112,12 +112,12 @@ namespace vkjs
 		{
 			// create wait/signal semphores
 			VkSemaphoreCreateInfo sci = initializers::semaphoreCreateInfo();
-			VK_CHECK(vkCreateSemaphore(*device_wrapper, &sci, nullptr, &semaphores[i].present_complete));
-			VK_CHECK(vkCreateSemaphore(*device_wrapper, &sci, nullptr, &semaphores[i].render_complete));
+			VK_CHECK(vkCreateSemaphore(*device, &sci, nullptr, &semaphores[i].present_complete));
+			VK_CHECK(vkCreateSemaphore(*device, &sci, nullptr, &semaphores[i].render_complete));
 
 			// create wait fences
 			VkFenceCreateInfo fci = initializers::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
-			vkCreateFence(*device_wrapper, &fci, nullptr, &wait_fences[i]);
+			vkCreateFence(*device, &fci, nullptr, &wait_fences[i]);
 		}
 	}
 	void AppBase::init_swapchain()
@@ -128,8 +128,8 @@ namespace vkjs
 
 		uint32_t sfc{ 0 };
 		std::vector<VkSurfaceFormatKHR> formats;
-		vkGetPhysicalDeviceSurfaceFormatsKHR(device_wrapper->vkb_physical_device, surface, &sfc, nullptr);	formats.resize(sfc);
-		vkGetPhysicalDeviceSurfaceFormatsKHR(device_wrapper->vkb_physical_device, surface, &sfc, formats.data());
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device->vkb_physical_device, surface, &sfc, nullptr);	formats.resize(sfc);
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device->vkb_physical_device, surface, &sfc, formats.data());
 
 		for (const auto& it : formats) {
 			if (it.format == VK_FORMAT_B8G8R8A8_UNORM || it.format == VK_FORMAT_R8G8B8A8_UNORM) {
@@ -138,7 +138,7 @@ namespace vkjs
 			}
 		}
 
-		vkb::SwapchainBuilder builder{device()->vkb_device};
+		vkb::SwapchainBuilder builder{device->vkb_device};
 		auto swap_ret = builder
 			//.set_desired_format(format)
 			.set_old_swapchain(swapchain.vkb_swapchain)
@@ -171,16 +171,16 @@ namespace vkjs
 	{
 		VkCommandPoolCreateInfo cpci = vks::initializers::commandPoolCreateInfo();
 		cpci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-		cpci.queueFamilyIndex = device()->queue_family_indices.graphics;
-		VK_CHECK(vkCreateCommandPool(*device_wrapper, &cpci, nullptr, &cmd_pool));
+		cpci.queueFamilyIndex = device->queue_family_indices.graphics;
+		VK_CHECK(vkCreateCommandPool(*device, &cpci, nullptr, &cmd_pool));
 
 		VkCommandBufferAllocateInfo cbai = vks::initializers::commandBufferAllocateInfo(cmd_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 2);
 
-		vkAllocateCommandBuffers(*device_wrapper, &cbai, draw_cmd_buffers.data());
+		vkAllocateCommandBuffers(*device, &cbai, draw_cmd_buffers.data());
 	}
 	void AppBase::destroy_command_buffers()
 	{
-		vkDestroyCommandPool(*device_wrapper, cmd_pool, nullptr);
+		vkDestroyCommandPool(*device, cmd_pool, nullptr);
 	}
 	void AppBase::init_window()
 	{
@@ -240,7 +240,7 @@ namespace vkjs
 
 		VkDescriptorPoolCreateInfo dpci = vks::initializers::descriptorPoolCreateInfo(poolsize, 1000);
 
-		VK_CHECK(vkCreateDescriptorPool(*device_wrapper, &dpci, nullptr, &imgui_descriptor_pool));
+		VK_CHECK(vkCreateDescriptorPool(*device, &dpci, nullptr, &imgui_descriptor_pool));
 
 		VkAttachmentDescription color = {};
 		color.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -277,7 +277,7 @@ namespace vkjs
 		imguiRenderPassCI.pDependencies = &dep;
 		imguiRenderPassCI.pSubpasses = &subpass;
 
-		VK_CHECK(vkCreateRenderPass(device_wrapper->logical_device, &imguiRenderPassCI, nullptr, &imgui_render_pass));
+		VK_CHECK(vkCreateRenderPass(device->logical_device, &imguiRenderPassCI, nullptr, &imgui_render_pass));
 		// Setup Dear ImGui context
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
@@ -301,10 +301,10 @@ namespace vkjs
 		ImGui_ImplSDL2_InitForVulkan(window);
 		ImGui_ImplVulkan_InitInfo init_info = {};
 		init_info.Instance = instance;
-		init_info.PhysicalDevice = device()->vkb_physical_device;
-		init_info.Device = device()->logical_device;
-		init_info.QueueFamily = device()->queue_family_indices.graphics;
-		init_info.Queue = device()->graphics_queue;
+		init_info.PhysicalDevice = device->vkb_physical_device;
+		init_info.Device = device->logical_device;
+		init_info.QueueFamily = device->queue_family_indices.graphics;
+		init_info.Queue = device->graphics_queue;
 		init_info.PipelineCache = VK_NULL_HANDLE;
 		init_info.DescriptorPool = imgui_descriptor_pool;
 		init_info.Subpass = 0;
@@ -315,7 +315,7 @@ namespace vkjs
 		init_info.CheckVkResultFn = check_vk_result;
 		ImGui_ImplVulkan_Init(&init_info, imgui_render_pass);
 
-		device()->execute_commands([&](VkCommandBuffer cmd)
+		device->execute_commands([&](VkCommandBuffer cmd)
 			{
 				ImGui_ImplVulkan_CreateFontsTexture(cmd);
 			});
@@ -340,9 +340,9 @@ namespace vkjs
 		fbCI.renderPass = imgui_render_pass;
 		
 		if (imgui_fb[current_frame]) {
-			vkDestroyFramebuffer(*device_wrapper, imgui_fb[current_frame], nullptr);
+			vkDestroyFramebuffer(*device, imgui_fb[current_frame], nullptr);
 		}
-		VK_CHECK(vkCreateFramebuffer(*device_wrapper, &fbCI, nullptr, &imgui_fb[current_frame]));
+		VK_CHECK(vkCreateFramebuffer(*device, &fbCI, nullptr, &imgui_fb[current_frame]));
 
 		VkRenderPassBeginInfo renderPassInfo = vks::initializers::renderPassBeginInfo();
 		renderPassInfo.clearValueCount = 0;
@@ -359,7 +359,7 @@ namespace vkjs
 
 	std::string AppBase::shader_path() const
 	{
-		return shader_dir;
+		return shaderDir;
 	}
 	AppBase::AppBase(bool enable_validation)
 	{
@@ -367,29 +367,29 @@ namespace vkjs
 	}
 	AppBase::~AppBase() noexcept
 	{
-		vkDeviceWaitIdle(*device_wrapper);
+		vkDeviceWaitIdle(*device);
 
 		ImGui_ImplVulkan_Shutdown();
 		ImGui_ImplSDL2_Shutdown();
 		ImGui::DestroyContext();
 
-		vkDestroyDescriptorPool(*device_wrapper, imgui_descriptor_pool, nullptr);
-		vkDestroyRenderPass(*device_wrapper, imgui_render_pass, nullptr);
+		vkDestroyDescriptorPool(*device, imgui_descriptor_pool, nullptr);
+		vkDestroyRenderPass(*device, imgui_render_pass, nullptr);
 		destroy_command_buffers();
 
 		for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
 		{
 			// create wait/signal semphores
-			vkDestroySemaphore(*device_wrapper, semaphores[i].present_complete, 0);
-			vkDestroySemaphore(*device_wrapper, semaphores[i].render_complete, 0);
-			vkDestroyFence(*device_wrapper, wait_fences[i], 0);
-			vkDestroyFramebuffer(*device_wrapper, imgui_fb[i], nullptr);
+			vkDestroySemaphore(*device, semaphores[i].present_complete, 0);
+			vkDestroySemaphore(*device, semaphores[i].render_complete, 0);
+			vkDestroyFence(*device, wait_fences[i], 0);
+			vkDestroyFramebuffer(*device, imgui_fb[i], nullptr);
 		}
 
 		swapchain.vkb_swapchain.destroy_image_views(swapchain.views);
 		vkb::destroy_swapchain(swapchain.vkb_swapchain);
 
-		if (device_wrapper) { delete device_wrapper; }
+		if (device) { delete device; }
 		vkDestroySurfaceKHR(instance, surface, nullptr);
 		vkb::destroy_instance(vkb_instance);
 		if (window) SDL_DestroyWindow(window);
@@ -465,8 +465,8 @@ namespace vkjs
 			VK_API_VERSION_MINOR(physicalDevice.properties.apiVersion),
 			VK_API_VERSION_PATCH(physicalDevice.properties.apiVersion));
 
-		device_wrapper = new Device(physicalDevice, instance);
-		queue = device_wrapper->get_graphics_queue();
+		device = new Device(physicalDevice, instance);
+		queue = device->get_graphics_queue();
 		
 		return true;
 	}
@@ -493,7 +493,7 @@ namespace vkjs
 					minimized = false;
 					break;
 				case SDL_WINDOWEVENT_RESIZED:
-					SDL_GetWindowSize(window, (int*)&dest_width, (int*)&dest_height);
+					SDL_GetWindowSize(window, (int*)&destWidth, (int*)&destHeight);
 					window_resize();
 					break;
 				}
@@ -642,9 +642,9 @@ namespace vkjs
 	void AppBase::setup_depth_stencil()
 	{
 		if (depth_image.image) {
-			device()->destroy_image(&depth_image);
+			device->destroy_image(&depth_image);
 		}
-		VK_CHECK(device()->create_depth_stencil_attachment(depth_format, { swapchain.vkb_swapchain.extent.width,swapchain.vkb_swapchain.extent.height,1 }, &depth_image));
+		VK_CHECK(device->create_depth_stencil_attachment(depth_format, { swapchain.vkb_swapchain.extent.width,swapchain.vkb_swapchain.extent.height,1 }, &depth_image));
 	}
 	void AppBase::setup_framebuffer()
 	{
@@ -704,10 +704,10 @@ namespace vkjs
 		prepared = false;
 
 		// Ensure all operations on the device have been finished before destroying resources
-		vkDeviceWaitIdle(device()->logical_device);
+		vkDeviceWaitIdle(*device);
 
-		width = dest_width;
-		height = dest_height;
+		width = destWidth;
+		height = destHeight;
 		init_swapchain();
 		setup_depth_stencil();
 		on_window_resized();
