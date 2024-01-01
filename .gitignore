@@ -34,4 +34,7 @@
 # Directories
 resources
 build
+
+# etc
+*.zip
 *.spv
