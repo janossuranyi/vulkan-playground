@@ -38,17 +38,17 @@ namespace vkjs {
 		Device* device;
 
 		std::string shader_path() const;
-		uint32_t frame_counter;
-		uint32_t current_frame;
-		uint32_t last_fps;
+		u32 frameCounter;
+		u32 currentFrame;
+		u32 lastFPS;
 		VkSurfaceKHR surface;
-		VkRenderPass imgui_render_pass = VK_NULL_HANDLE;
-		VkDescriptorPool imgui_descriptor_pool = VK_NULL_HANDLE;
-		VkFramebuffer imgui_fb[MAX_CONCURRENT_FRAMES]{};
+		VkRenderPass imguiRenderPass = VK_NULL_HANDLE;
+		VkDescriptorPool imguiDescriptorPool = VK_NULL_HANDLE;
+		VkFramebuffer imguiFranebuffer[MAX_CONCURRENT_FRAMES]{};
 
 		// Vulkan instance, stores all per-application states
 		VkInstance instance;
-		vkb::Instance vkb_instance;
+		vkb::Instance vkbInstance;
 
 		std::vector<std::string> supported_instance_extensions;
 		
@@ -126,11 +126,19 @@ namespace vkjs {
 			bool validation = false;
 			/** @brief Set to true if fullscreen mode has been requested via command line */
 			bool fullscreen = false;
+			/** @brief Set to true if exclusive fullscreen needed */
+			bool exclusive = false;
 			/** @brief Set to true if v-sync will be forced for the swapchain */
 			bool vsync = false;
 			/** @brief Enable UI overlay */
 			bool overlay = true;
 		} settings;
+
+		struct window_data
+		{
+			SDL_Rect bounds;
+			SDL_Window* window;
+		};
 
 		VkClearColorValue default_clear_color = { { 0.025f, 0.025f, 0.025f, 1.0f } };
 		static std::vector<const char*> args;

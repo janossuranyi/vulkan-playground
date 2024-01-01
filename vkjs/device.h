@@ -32,6 +32,9 @@ namespace vkjs {
 			VmaAllocation mem;
 			VkImageView view;
 		};
+		struct SamplerInfo {
+			VkSampler sampler;
+		};
 
 		constexpr operator VkDevice() const
 		{
@@ -61,6 +64,7 @@ namespace vkjs {
 		VkResult create_texture2d_cube(VkFormat format, const VkExtent3D& extent, bool withMips, Image* result);
 		VkResult create_color_attachment(VkFormat format, const VkExtent3D& extent, Image* result);
 		VkResult create_depth_stencil_attachment(VkFormat format, const VkExtent3D& extent, Image* result);
+		VkResult create_sampler(const VkSamplerCreateInfo& samplerCreateInfo, VkSampler *out);
 
 		void destroy_buffer(Buffer* b);
 		void destroy_image(Image* i);
@@ -77,6 +81,7 @@ namespace vkjs {
 
 		std::vector<BufferInfo> buffers;
 		std::vector<ImageInfo> images;
+		std::vector<SamplerInfo> samplers;
 		std::mutex submit_queue_mutex;
 	};
 }

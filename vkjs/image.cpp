@@ -20,6 +20,7 @@ namespace vkjs {
 		region.bufferOffset = offset;
 
 		change_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
 		device_->execute_commands([&](VkCommandBuffer cmd)
 			{
@@ -77,6 +78,7 @@ namespace vkjs {
 
 
 		record_change_layout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+		layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
 		vkCmdCopyBufferToImage(
 			cmd,
@@ -108,6 +110,13 @@ namespace vkjs {
 		ibar.newLayout = newLayout;
 		
 		return ibar;
+	}
+
+	void Image::setup_descriptor()
+	{
+		descriptor.imageLayout = layout;
+		descriptor.imageView = view;
+		descriptor.sampler = VK_NULL_HANDLE;
 	}
 
 

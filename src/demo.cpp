@@ -19,7 +19,7 @@
 #include "world.h"
 #include "gltf_loader.h"
 #include <thread>
-
+#include "stb_image.h"
 #include "vkjs/vkjs.h"
 #include "vkjs/appbase.h"
 #include "vkjs/VulkanInitializers.hpp"
@@ -27,6 +27,8 @@
 #include "vkjs/vkcheck.h"
 #include "vkjs/vertex.h"
 #include "vkjs/vk_descriptors.h"
+#include "vkjs/shader_module.h"
+#include <gli/generate_mipmaps.hpp>
 
 namespace fs = std::filesystem;
 using namespace glm;
@@ -37,18 +39,26 @@ using namespace jsr;
 
 class App : public vkjs::AppBase {
 private:
+
     VkDevice d;
+
+    vkjs::Image uvChecker;
+    VkSampler sampLinearRepeat;
 
     vkutil::DescriptorAllocator descAllocator;
     vkutil::DescriptorLayoutCache descLayoutCache;
     vkutil::DescriptorBuilder staticDescriptorBuilder;
+    std::unordered_map<std::string, vkjs::Image> imageCache;
 
     vkjs::Buffer vtxbuf;
     vkjs::Buffer idxbuf;
     size_t minUboAlignment = 0;
 
     std::array<vkjs::Buffer,MAX_CONCURRENT_FRAMES> uboPassData;
-    std::array<vkjs::Buffer,MAX_CONCURRENT_FRAMES> uboDrawData;
+
+    size_t drawDataBufferSize = 32 * 1024;
+    vkjs::Buffer uboDrawData;
+
     size_t dynamicAlignment = 0;
 
     struct MeshBinary {
@@ -57,15 +67,22 @@ private:
         uint32_t firstVertex;
     };
 
+    struct Material {
+        VkDescriptorSet resources;
+    };
+    std::vector<Material> materials;
+
     struct Object {
         uint32_t mesh;
         mat4 mtxModel;
         Bounds aabb;
+        VkDescriptorSet vkResources;
     };
 
 
     struct DrawData {
         glm::mat4 mtxModel;
+        glm::mat4 mtxNormal;
         glm::vec4 color;
     };
 
@@ -87,7 +104,7 @@ private:
     VkDescriptorSet triangleDescriptors[MAX_CONCURRENT_FRAMES];
 
     VkFramebuffer fb[MAX_CONCURRENT_FRAMES] = {};
-    fs::path base_path = fs::path("../..");
+    fs::path basePath = fs::path("../..");
 
     std::unique_ptr<World> scene;
 
@@ -106,11 +123,16 @@ public:
 
         for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
         {
-            uboDrawData[i].descriptor.range = sizeof(DrawData);
+            uboDrawData.descriptor.range = sizeof(DrawData);
+            uboDrawData.descriptor.offset = i * drawDataBufferSize;
+
             uboPassData[i].descriptor.range = sizeof(PassData);
+            uboPassData[i].descriptor.offset = 0;
+
             vkutil::DescriptorBuilder::begin(&descLayoutCache, &descAllocator)
             .bind_buffer(0, &uboPassData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
-            .bind_buffer(1, &uboDrawData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT)
+            .bind_buffer(1, &uboDrawData.descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT)
+            .bind_image(2, &uvChecker.descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .build(triangleDescriptors[i]);
         }
     }
@@ -150,10 +172,11 @@ public:
                     obj.mesh = e;
                     obj.mtxModel = mtxModel;
                     obj.aabb = scene->meshes[e].aabb.Transform(mtxModel);
-                    DrawData dd;
-                    dd.mtxModel = mtxModel;
-                    dd.color = vec4(range(reng), range(reng), range(reng), 1.0f);
-                    ddlst.push_back(dd);
+                    obj.vkResources = materials[ scene->meshes[e].material ].resources;
+
+                    ddlst.emplace_back(DrawData{mtxModel,
+                        mat4(transpose(inverse(mat3(mtxModel)))),
+                        vec4(range(reng), range(reng), range(reng), 1.0f) });
                     objects.push_back(obj);
                 }
             }
@@ -177,9 +200,6 @@ public:
     virtual ~App() {
         vkDeviceWaitIdle(d);
 
-        device->destroy_buffer(&vtxbuf);
-        device->destroy_buffer(&idxbuf);
-
         std::array<RenderPass*, 3> rpasses = { &passes.preZ,&passes.tonemap,&passes.triangle };
         for (const auto* pass : rpasses) {
             if (pass->pipeline) vkDestroyPipeline(d, pass->pipeline, nullptr);
@@ -195,13 +215,11 @@ public:
         for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
         {
             vkDestroyFramebuffer(d, fb[i], 0);
-            device->destroy_buffer(&uboPassData[i]);
-            device->destroy_buffer(&uboDrawData[i]);
         }
     }
 
     virtual void build_command_buffers() override {
-        VkCommandBuffer cmd = draw_cmd_buffers[current_frame];
+        VkCommandBuffer cmd = draw_cmd_buffers[currentFrame];
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.triangle.pipeline);
         VkDeviceSize offset = 0;
         vkCmdBindVertexBuffers(cmd, 0, 1, &vtxbuf.buffer, &offset);
@@ -214,9 +232,9 @@ public:
         uint32_t dynOffset = 0;
         for (const auto& obj : objects) {
             const auto& mesh = meshes[obj.mesh];
-
+            const VkDescriptorSet dsets[2] = { triangleDescriptors[currentFrame], obj.vkResources };
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, 
-                passes.triangle.layout, 0, 1, &triangleDescriptors[current_frame], 1, &dynOffset);
+                passes.triangle.layout, 0, 2, dsets, 1, &dynOffset);
 
             vkCmdDrawIndexed(cmd, mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, 0);
             dynOffset += dynamicAlignment;
@@ -228,8 +246,8 @@ public:
         passData.mtxProjection = glm::perspective(radians(camera.Zoom), (float)width / height, .01f, 500.f);
         update_uniforms();
         
-        if (fb[current_frame] != VK_NULL_HANDLE) {
-            vkDestroyFramebuffer(d, fb[current_frame], 0);
+        if (fb[currentFrame] != VK_NULL_HANDLE) {
+            vkDestroyFramebuffer(d, fb[currentFrame], 0);
         }
 
         std::array<VkImageView, 2> targets = { swapchain.views[current_buffer],  depth_image.view};
@@ -240,7 +258,7 @@ public:
         fbci.pAttachments = targets.data();
         fbci.width = width;
         fbci.height = height;
-        VK_CHECK(vkCreateFramebuffer(d, &fbci, 0, &fb[current_frame]));
+        VK_CHECK(vkCreateFramebuffer(d, &fbci, 0, &fb[currentFrame]));
 
         VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
         VkClearValue clearVal[2];
@@ -250,11 +268,11 @@ public:
         beginPass.clearValueCount = 2;
         beginPass.pClearValues = &clearVal[0];
         beginPass.renderPass = passes.triangle.pass;
-        beginPass.framebuffer = fb[current_frame];
+        beginPass.framebuffer = fb[currentFrame];
         beginPass.renderArea.extent = swapchain.vkb_swapchain.extent;
         beginPass.renderArea.offset = { 0,0 };
 
-        VkCommandBuffer cmd = draw_cmd_buffers[current_frame];
+        VkCommandBuffer cmd = draw_cmd_buffers[currentFrame];
         vkCmdBeginRenderPass(cmd, &beginPass, VK_SUBPASS_CONTENTS_INLINE);
         build_command_buffers();
         vkCmdEndRenderPass(cmd);
@@ -275,35 +293,27 @@ public:
         pb._vertexInputInfo = vks::initializers::pipelineVertexInputStateCreateInfo(
             vertexInput.bindings,
             vertexInput.attributes);
-        
-        VkShaderModule vert_module;
-        VkShaderModule frag_module;
-        fs::path vert_spirv_filename = base_path / "shaders/depthpass_v2.vert.spv";
-        fs::path frag_spirv_filename = base_path / "shaders/depthpass_v2.frag.spv";
 
-        const std::vector<uint8_t> vert_spirv = jsrlib::Filesystem::root.ReadFile(vert_spirv_filename.u8string());
-        const std::vector<uint8_t> frag_spirv = jsrlib::Filesystem::root.ReadFile(frag_spirv_filename.u8string());
-        VkShaderModuleCreateInfo smci = {};
-        smci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        smci.codeSize = vert_spirv.size();
-        smci.pCode = (uint32_t*)vert_spirv.data();
-        VK_CHECK(vkCreateShaderModule(d, &smci, nullptr, &vert_module));
-        smci.codeSize = frag_spirv.size();
-        smci.pCode = (uint32_t*)frag_spirv.data();
-        VK_CHECK(vkCreateShaderModule(d, &smci, nullptr, &frag_module));
+
+        vkjs::ShaderModule vert_module(*device);
+        vkjs::ShaderModule frag_module(*device);
+        fs::path vert_spirv_filename = basePath / "shaders/depthpass_v2.vert.spv";
+        fs::path frag_spirv_filename = basePath / "shaders/depthpass_v2.frag.spv";
+        VK_CHECK(vert_module.create(vert_spirv_filename));
+        VK_CHECK(frag_module.create(frag_spirv_filename));
 
         pb._shaderStages.emplace_back();
         auto& vert_stage = pb._shaderStages.back();
         vert_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         vert_stage.stage = VK_SHADER_STAGE_VERTEX_BIT;
         vert_stage.pName = "main";
-        vert_stage.module = vert_module;
+        vert_stage.module = vert_module.module();
         pb._shaderStages.emplace_back();
         auto& frag_stage = pb._shaderStages.back();
         frag_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         frag_stage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
         frag_stage.pName = "main";
-        frag_stage.module = frag_module;
+        frag_stage.module = frag_module.module();
 
         /*
         layout:
@@ -337,64 +347,50 @@ public:
         VK_CHECK(vkCreatePipelineLayout(d, &plci, nullptr, &pass.layout));
         pb._pipelineLayout = pass.layout;
         pass.pipeline = pb.build_pipeline(d, pass.pass);
-        vkDestroyShaderModule(d, vert_module, nullptr);
-        vkDestroyShaderModule(d, frag_module, nullptr);
         assert(pass.pipeline);
 
     }
 
     void setup_triangle_pipeline(RenderPass& pass) {
-        auto vertexInput = vkjs::Vertex::vertex_input_description_position_only();
-
-        const std::vector<VkDynamicState> dynStates = { VK_DYNAMIC_STATE_SCISSOR,VK_DYNAMIC_STATE_VIEWPORT };
+        auto vertexInput = vkjs::Vertex::vertex_input_description();
+        const std::vector<VkDynamicState> dynamicStates = { VK_DYNAMIC_STATE_SCISSOR,VK_DYNAMIC_STATE_VIEWPORT };
+        
         vkjs::PipelineBuilder pb = {};
-        pb._rasterizer = vks::initializers::pipelineRasterizationStateCreateInfo(
-            VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
+        pb._rasterizer = vks::initializers::pipelineRasterizationStateCreateInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
         pb._depthStencil = vks::initializers::pipelineDepthStencilStateCreateInfo(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
-        pb._dynamicStates = vks::initializers::pipelineDynamicStateCreateInfo(dynStates);
+        pb._dynamicStates = vks::initializers::pipelineDynamicStateCreateInfo(dynamicStates);
         pb._inputAssembly = vks::initializers::pipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
         pb._multisampling = vks::initializers::pipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT, 0);
-        pb._vertexInputInfo = vks::initializers::pipelineVertexInputStateCreateInfo(
-            vertexInput.bindings,
-            vertexInput.attributes);
+        pb._vertexInputInfo = vks::initializers::pipelineVertexInputStateCreateInfo(vertexInput.bindings, vertexInput.attributes);
 
-        VkShaderModule vert_module;
-        VkShaderModule frag_module;
-        fs::path vert_spirv_filename = base_path / "shaders/triangle_v2.vert.spv";
-        fs::path frag_spirv_filename = base_path / "shaders/triangle_v2.frag.spv";
-
-        const std::vector<uint8_t> vert_spirv = jsrlib::Filesystem::root.ReadFile(vert_spirv_filename.u8string());
-        const std::vector<uint8_t> frag_spirv = jsrlib::Filesystem::root.ReadFile(frag_spirv_filename.u8string());
-        VkShaderModuleCreateInfo smci = {};
-        smci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        smci.codeSize = vert_spirv.size();
-        smci.pCode = (uint32_t*)vert_spirv.data();
-        VK_CHECK(vkCreateShaderModule(d, &smci, nullptr, &vert_module));
-        smci.codeSize = frag_spirv.size();
-        smci.pCode = (uint32_t*)frag_spirv.data();
-        VK_CHECK(vkCreateShaderModule(d, &smci, nullptr, &frag_module));
+        vkjs::ShaderModule vert_module(*device);
+        vkjs::ShaderModule frag_module(*device);
+        VK_CHECK(vert_module.create(basePath / "shaders/triangle_v2.vert.spv"));
+        VK_CHECK(frag_module.create(basePath / "shaders/triangle_v2.frag.spv"));
 
         pb._shaderStages.emplace_back();
         auto& vert_stage = pb._shaderStages.back();
         vert_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         vert_stage.stage = VK_SHADER_STAGE_VERTEX_BIT;
         vert_stage.pName = "main";
-        vert_stage.module = vert_module;
+        vert_stage.module = vert_module.module();
         pb._shaderStages.emplace_back();
         auto& frag_stage = pb._shaderStages.back();
         frag_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         frag_stage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
         frag_stage.pName = "main";
-        frag_stage.module = frag_module;
+        frag_stage.module = frag_module.module();
 
         /*
         layout:
         set 0
             0: ubo
             1: dyn. ubo
+            2: combined image
         */
 
-        std::vector<VkDescriptorSetLayoutBinding> set0bind(2);
+        std::vector<VkDescriptorSetLayoutBinding> set0bind(3);
+        std::vector<VkDescriptorSetLayoutBinding> set1bind(3);
 
         set0bind[0].binding = 0;
         set0bind[0].descriptorCount = 1;
@@ -404,13 +400,33 @@ public:
         set0bind[1].descriptorCount = 1;
         set0bind[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
         set0bind[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        set0bind[2].binding = 2;
+        set0bind[2].descriptorCount = 1;
+        set0bind[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        set0bind[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+
+        set1bind[0].binding = 0;
+        set1bind[0].descriptorCount = 1;
+        set1bind[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        set1bind[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        set1bind[1].binding = 1;
+        set1bind[1].descriptorCount = 1;
+        set1bind[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        set1bind[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        set1bind[2].binding = 2;
+        set1bind[2].descriptorCount = 1;
+        set1bind[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        set1bind[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
         VkDescriptorSetLayoutCreateInfo ds0ci = vks::initializers::descriptorSetLayoutCreateInfo(set0bind);
-        std::array<VkDescriptorSetLayout, 1> dsl;
+        VkDescriptorSetLayoutCreateInfo ds1ci = vks::initializers::descriptorSetLayoutCreateInfo(set1bind);
+        std::array<VkDescriptorSetLayout, 2> dsl;
         dsl[0] = descLayoutCache.create_descriptor_layout(&ds0ci);
-        assert(dsl[0]);
+        dsl[1] = descLayoutCache.create_descriptor_layout(&ds1ci);
+        assert(dsl[0] && dsl[1]);
 
-        VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo(1);
+        VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo((uint32_t)dsl.size());
         plci.pSetLayouts = dsl.data();
         VK_CHECK(vkCreatePipelineLayout(d, &plci, nullptr, &pass.layout));
         pb._pipelineLayout = pass.layout;
@@ -420,8 +436,6 @@ public:
         pb._colorBlendAttachments.push_back(blend0);
 
         pass.pipeline = pb.build_pipeline(d, pass.pass);
-        vkDestroyShaderModule(d, vert_module, nullptr);
-        vkDestroyShaderModule(d, frag_module, nullptr);
         assert(pass.pipeline);
 
     }
@@ -569,7 +583,7 @@ public:
 
     void update_uniforms() {
 
-        uboPassData[current_frame].copyTo(0, sizeof(passData), &passData);
+        uboPassData[currentFrame].copyTo(0, sizeof(passData), &passData);
 
     }
 
@@ -581,15 +595,38 @@ public:
         // Calculate required alignment based on minimum device offset alignment
         minUboAlignment = device->vkb_physical_device.properties.limits.minUniformBufferOffsetAlignment;
 
-        camera.MovementSpeed = 0.001f;
+        camera.MovementSpeed = 0.005f;
 
         d = *device;
-        
+        int w, h, nc;
+
         setup_triangle_pass();
         setup_triangle_pipeline(passes.triangle);
 
+        auto samplerCI = vks::initializers::samplerCreateInfo();
+        samplerCI.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        samplerCI.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        samplerCI.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        samplerCI.anisotropyEnable = VK_TRUE;
+        samplerCI.maxAnisotropy = 8.f;
+        samplerCI.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+        samplerCI.compareEnable = VK_FALSE;
+        samplerCI.compareOp = VK_COMPARE_OP_ALWAYS;
+        samplerCI.magFilter = VK_FILTER_LINEAR;
+        samplerCI.minFilter = VK_FILTER_LINEAR;
+        samplerCI.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        samplerCI.maxLod = 16.f;
+        VK_CHECK(device->create_sampler(samplerCI, &sampLinearRepeat));
+
         device->create_buffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 32ULL * 1024 * 1024, &vtxbuf);
         device->create_buffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 32ULL * 1024 * 1024, &idxbuf);
+
+        if (!load_texture2d("../../resources/images/uv_checker_large.png", &uvChecker, true, w, h, nc))
+        {
+            device->create_texture2d(VK_FORMAT_R8G8B8A8_SRGB, { 1,1,1 }, &uvChecker);
+        }
+        uvChecker.setup_descriptor();
+        uvChecker.descriptor.sampler = sampLinearRepeat;
 
         for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
         {
@@ -599,13 +636,34 @@ public:
 
         scene = std::make_unique<World>();
 
-        jsr::gltfLoadWorld(fs::path("../../resources/models/sponza/sponza_j.gltf"), *scene);
+        auto scenePath = fs::path("../../resources/models/sponza");
+        jsr::gltfLoadWorld(scenePath / "sponza_j.gltf", *scene);
 
         std::vector<vkjs::Vertex> vertices;
         std::vector<uint16_t> indices;
 
         uint32_t firstIndex(0);
         uint32_t firstVertex(0);
+        
+        materials.resize(scene->materials.size());
+
+        int i = 0;
+        jsrlib::Info("Loading images...");
+        for (auto& it : scene->materials)
+        {
+            std::string fname1 = (scenePath / it.texturePaths.albedoTexturePath).u8string();
+            std::string fname2 = (scenePath / it.texturePaths.normalTexturePath).u8string();
+            std::string fname3 = (scenePath / it.texturePaths.specularTexturePath).u8string();
+            create_material_texture(fname1);
+            create_material_texture(fname2);
+            create_material_texture(fname3);
+
+            vkutil::DescriptorBuilder::begin(&descLayoutCache, &descAllocator)
+                .bind_image(0, &imageCache.at(fname1).descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+                .bind_image(1, &imageCache.at(fname2).descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+                .bind_image(2, &imageCache.at(fname3).descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+                .build(materials[i++].resources);
+        }
 
         for (size_t i(0); i < scene->meshes.size(); ++i)
         {
@@ -615,6 +673,10 @@ public:
                 vertices.emplace_back();
                 auto& v = vertices.back();
                 v.xyz = mesh.positions[i];
+                v.uv = mesh.uvs[i];
+                v.pack_normal(mesh.normals[i]);
+                v.pack_tangent(mesh.tangents[i]);
+                v.pack_color(vec4(1.0f));
             }
             meshes.emplace_back();
             auto& rmesh = meshes.back();
@@ -650,12 +712,12 @@ public:
 
         setup_objects();
 
-        const size_t size = drawData.size();
+        const size_t size = drawDataBufferSize * 2;
+        device->create_uniform_buffer(size, false, &uboDrawData);
+        uboDrawData.map();
         for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
         {
-            device->create_uniform_buffer(size, false, &uboDrawData[i]);
-            uboDrawData[i].map();
-            uboDrawData[i].copyTo(0, size, drawData.data());
+            uboDrawData.copyTo(i * drawDataBufferSize, drawData.size(), drawData.data());
         }
         setup_descriptor_sets();
 
@@ -689,12 +751,86 @@ public:
         enabled_device_extensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
         enabled_device_extensions.push_back(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
     }
+
+    void create_material_texture(std::string filename) {
+        if (imageCache.find(filename) == imageCache.end())
+        {
+            int w, h, nc;
+            // load image
+            vkjs::Image newImage;
+            if (!load_texture2d(filename, &newImage, false, w, h, nc))
+            {
+                jsrlib::Error("%s notfund", filename.c_str());
+                device->create_texture2d(VK_FORMAT_R8G8B8A8_UNORM, { 1,1,1 }, &newImage);
+                device->execute_commands([&newImage](VkCommandBuffer cmd) {
+                    
+                    newImage.record_change_layout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+                    newImage.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                    });
+            }
+            else
+            {
+                jsrlib::Info("%s Loaded", filename.c_str());
+            }
+            newImage.setup_descriptor();
+            newImage.descriptor.sampler = sampLinearRepeat;
+            imageCache.insert({ filename,newImage });
+        }
+    }
+    bool load_texture2d(std::string filename, vkjs::Image* dest, bool autoMipmap, int& w, int& h, int &nchannel) {
+
+        auto* data = stbi_load(filename.c_str(), &w, &h, &nchannel, STBI_rgb_alpha);
+        if (!data)
+        {
+            return false;
+        }
+
+        gli::texture2d tex;
+        if (autoMipmap) {
+            tex = gli::texture2d(gli::format::FORMAT_RGBA8_UNORM_PACK8, gli::extent2d{ w,h });
+        }
+        else {
+            tex = gli::texture2d(gli::format::FORMAT_RGBA8_UNORM_PACK8, gli::extent2d{ w,h },1);
+        }
+        
+        memcpy(tex.data(0, 0, 0), data, w * h * 4);
+        stbi_image_free(data);
+
+        if (autoMipmap) {
+            tex = gli::generate_mipmaps(tex, gli::FILTER_LINEAR);
+        }
+
+        vkjs::Buffer stage;
+        device->create_staging_buffer(tex.size(), &stage);
+        stage.copyTo(0, tex.size(), tex.data());
+
+        if (autoMipmap) {
+            device->create_texture2d_with_mips(VK_FORMAT_R8G8B8A8_UNORM, { (uint32_t)w,(uint32_t)h,1 }, dest);
+        }
+        else {
+            device->create_texture2d(VK_FORMAT_R8G8B8A8_UNORM, { (uint32_t)w,(uint32_t)h,1 }, dest);
+        }
+
+        dest->upload([&tex](uint32_t layer, uint32_t face, uint32_t level, vkjs::Image::UploadInfo* uinf)
+            {
+                auto extent = tex.extent(level);
+                uinf->extent = { (uint32_t)extent.x,(uint32_t)extent.y,1 };
+                uinf->offset = (size_t)tex.data(layer, face, level) - (size_t)tex.data();
+            }, &stage);
+        device->destroy_buffer(&stage);
+        
+        return true;
+    }
 };
 
 void demo()
 {
     jsrlib::gLogWriter.SetFileName("vulkan_engine.log");
     App* app = new App(true);
+    app->settings.fullscreen = false;
+    app->settings.vsync = false;
+    app->width = 1900;
+    app->height = 1000;
     app->init();
     app->prepare();
     app->run();

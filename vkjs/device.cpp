@@ -104,6 +104,8 @@ namespace vkjs {
 
 	Device::~Device()
 	{
+		vkDeviceWaitIdle(logical_device);
+
 		vkDestroyCommandPool(vkb_device, command_pool, nullptr);
 		
 		for (const auto& it : buffers) {
@@ -119,7 +121,9 @@ namespace vkjs {
 			vkDestroyImageView(vkb_device, it.view, nullptr);
 			vmaDestroyImage(allocator, it.image, it.mem);
 		}
-
+		for (const auto& it : samplers) {
+			vkDestroySampler(logical_device, it.sampler, nullptr);
+		}
 		vmaDestroyAllocator(allocator);
 		vkb::destroy_device(vkb_device);
 	}
@@ -371,6 +375,7 @@ namespace vkjs {
 		}
 
 		images.push_back({ result->image,result->mem,result->view });
+		result->setup_descriptor();
 
 		return err;
 	}
@@ -487,6 +492,15 @@ namespace vkjs {
 		);
 
 		result->final_layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		return err;
+	}
+
+	VkResult Device::create_sampler(const VkSamplerCreateInfo& samplerCreateInfo,  VkSampler *out)
+	{
+		auto err = vkCreateSampler(logical_device, &samplerCreateInfo, nullptr, out);
+		if (err == VK_SUCCESS) {
+			samplers.emplace_back(SamplerInfo{ *out });
+		}
 		return err;
 	}
 

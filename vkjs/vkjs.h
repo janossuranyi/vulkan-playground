@@ -39,6 +39,7 @@
 #include <vma/vk_mem_alloc.h>
 #include <VkBootstrap.h>
 
+#include "types.h"
 #include "buffer.h"
 #include "image.h"
 #include "device.h"

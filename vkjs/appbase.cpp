@@ -10,6 +10,74 @@
 #include "jsrlib/jsr_camera.h"
 #include "jsrlib/jsr_logger.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#include <ShellScalingAPI.h>
+#ifndef DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+#define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2  ((DPI_AWARENESS_CONTEXT)-4)
+#endif
+
+/*
+https://handmade.network/p/58/seabird/blog/p/2460-be_aware_of_high_dpi
+*/
+static void handle_dpi_awareness() {
+	//NOTE: SetProcessDpiAwarenessContext isn't available on targets older than win10-1703
+	//      and will therefore crash at startup on those systems if we call it normally,
+	//      so we load the function pointer manually to make it fail silently instead
+	HMODULE user32_dll = LoadLibraryA("User32.dll");
+	if (user32_dll) {
+		DPI_AWARENESS_CONTEXT(WINAPI * Loaded_SetProcessDpiAwarenessContext) (DPI_AWARENESS_CONTEXT) =
+			(DPI_AWARENESS_CONTEXT(WINAPI*) (DPI_AWARENESS_CONTEXT))
+			GetProcAddress(user32_dll, "SetProcessDpiAwarenessContext");
+		if (Loaded_SetProcessDpiAwarenessContext) {
+			if (!Loaded_SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)) {
+				printf("WARNING: SetProcessDpiAwarenessContext failed!\n");
+			}
+		}
+		else {
+			printf("WARNING: Could not load SetProcessDpiAwarenessContext!\n");
+			bool should_try_setprocessdpiaware = false;
+			//OK, let's try to load `SetProcessDpiAwareness` then,
+			//that way we get at least *some* DPI awareness as far back as win8.1
+			HMODULE shcore_dll = LoadLibraryA("Shcore.dll");
+			if (shcore_dll) {
+				HRESULT(WINAPI * Loaded_SetProcessDpiAwareness) (PROCESS_DPI_AWARENESS) =
+					(HRESULT(WINAPI*) (PROCESS_DPI_AWARENESS)) GetProcAddress(shcore_dll, "SetProcessDpiAwareness");
+				if (Loaded_SetProcessDpiAwareness) {
+					if (Loaded_SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE) != S_OK) {
+						printf("WARNING: SetProcessDpiAwareness failed! (fallback)\n");
+					}
+				}
+				else {
+					printf("WARNING: Could not load SetProcessDpiAwareness! (fallback)\n");
+					should_try_setprocessdpiaware = true;
+				}
+				FreeLibrary(shcore_dll);
+			}
+			else {
+				printf("WARNING: Could not load Shcore.dll! (fallback)\n");
+				should_try_setprocessdpiaware = true;
+			}
+			if (should_try_setprocessdpiaware) {
+				BOOL(WINAPI * Loaded_SetProcessDPIAware)(void) =
+					(BOOL(WINAPI*) (void)) GetProcAddress(user32_dll, "SetProcessDPIAware");
+				if (Loaded_SetProcessDPIAware) {
+					if (!Loaded_SetProcessDPIAware()) {
+						printf("WARNING: SetProcessDPIAware failed! (fallback 2)");
+					}
+				}
+				else {
+					printf("WARNING: Could not load SetProcessDPIAware! (fallback 2)\n");
+				}
+			}
+		}
+		FreeLibrary(user32_dll);
+	}
+	else {
+		printf("WARNING: Could not load User32.dll!\n");
+	}
+}
+#endif
 namespace vkjs
 {
 	static void check_vk_result(VkResult err)
@@ -45,11 +113,11 @@ namespace vkjs
 		frame_time = time - prev_frame_time;
 		prev_frame_time = time;
 
-		current_frame = frame_counter % MAX_CONCURRENT_FRAMES;
+		currentFrame = frameCounter % MAX_CONCURRENT_FRAMES;
 		
-		vkWaitForFences(*device, 1, &wait_fences[current_frame], VK_TRUE, UINT64_MAX);
+		vkWaitForFences(*device, 1, &wait_fences[currentFrame], VK_TRUE, UINT64_MAX);
 
-		VkResult result = swapchain.acquire_next_image(semaphores[current_frame].present_complete, &current_buffer);
+		VkResult result = swapchain.acquire_next_image(semaphores[currentFrame].present_complete, &current_buffer);
 		if (result == VK_ERROR_OUT_OF_DATE_KHR) {
 			window_resize();
 			return;
@@ -58,14 +126,14 @@ namespace vkjs
 			throw "Could not acquire the next swap chain image!";
 		}
 
-		VK_CHECK(vkResetFences(*device, 1, &wait_fences[current_frame]));
+		VK_CHECK(vkResetFences(*device, 1, &wait_fences[currentFrame]));
 		
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplSDL2_NewFrame();
 
 		ImGui::NewFrame();
 
-		const VkCommandBuffer cmd = draw_cmd_buffers[current_frame];
+		const VkCommandBuffer cmd = draw_cmd_buffers[currentFrame];
 
 		VK_CHECK(vkResetCommandBuffer(cmd, 0));
 		device->begin_command_buffer(cmd);
@@ -80,14 +148,14 @@ namespace vkjs
 		VkSubmitInfo submit = vks::initializers::submitInfo();
 		submit.commandBufferCount = 1;
 		submit.pCommandBuffers = &cmd;
-		submit.pSignalSemaphores = &semaphores[current_frame].render_complete;
+		submit.pSignalSemaphores = &semaphores[currentFrame].render_complete;
 		submit.signalSemaphoreCount = 1;
 		submit.waitSemaphoreCount = 1;
-		submit.pWaitSemaphores = &semaphores[current_frame].present_complete;
+		submit.pWaitSemaphores = &semaphores[currentFrame].present_complete;
 		submit.pWaitDstStageMask = &stageMask;
-		VK_CHECK(vkQueueSubmit(queue, 1, &submit, wait_fences[current_frame]));
+		VK_CHECK(vkQueueSubmit(queue, 1, &submit, wait_fences[currentFrame]));
 
-		result = swapchain.present_image(queue, current_buffer, semaphores[current_frame].render_complete);
+		result = swapchain.present_image(queue, current_buffer, semaphores[currentFrame].render_complete);
 
 		if ((result == VK_ERROR_OUT_OF_DATE_KHR) || (result == VK_SUBOPTIMAL_KHR)) {
 			window_resize();
@@ -96,7 +164,7 @@ namespace vkjs
 			throw "Could not present the image to the swap chain!";
 		}
 
-		frame_counter++;
+		frameCounter++;
 	}
 	void AppBase::create_pipeline_cache()
 	{
@@ -132,17 +200,22 @@ namespace vkjs
 		vkGetPhysicalDeviceSurfaceFormatsKHR(device->vkb_physical_device, surface, &sfc, formats.data());
 
 		for (const auto& it : formats) {
-			if (it.format == VK_FORMAT_B8G8R8A8_UNORM || it.format == VK_FORMAT_R8G8B8A8_UNORM) {
+			/*if (it.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 && VK_COLOR_SPACE_HDR10_ST2084_EXT) {
 				format = it;
 				break;
 			}
+			if (it.format == VK_FORMAT_B8G8R8A8_UNORM || it.format == VK_FORMAT_R8G8B8A8_UNORM) {
+				format = it;
+				break;
+			}*/
 		}
+
+		VkPresentModeKHR presentMode = settings.vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_MAILBOX_KHR;
 
 		vkb::SwapchainBuilder builder{device->vkb_device};
 		auto swap_ret = builder
-			//.set_desired_format(format)
-			.set_old_swapchain(swapchain.vkb_swapchain)
-			.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
+			.set_desired_format(format)
+			.set_desired_present_mode(presentMode)
 			.set_old_swapchain(swapchain.vkb_swapchain).build();
 
 		if (!swap_ret) {
@@ -184,12 +257,22 @@ namespace vkjs
 	}
 	void AppBase::init_window()
 	{
+#ifdef _WIN32
+		handle_dpi_awareness();
+#endif
 		SDL_Init(SDL_INIT_VIDEO);
+		
+		int numdisplays = SDL_GetNumVideoDisplays();
+		std::vector< window_data > screens(numdisplays);
+		for (int i = 0; i < numdisplays; ++i)
+		{
+			SDL_GetDisplayBounds(i, &(screens[i].bounds));
+		}
 
-		SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+		SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
 		if (settings.fullscreen)
 		{
-			if (width == 0 && height == 0)
+			if (!settings.exclusive)
 			{
 				// borderless desktop resolution
 				window_flags = (SDL_WindowFlags)(window_flags | SDL_WINDOW_FULLSCREEN_DESKTOP);
@@ -214,7 +297,6 @@ namespace vkjs
 		}
 
 		int x, y;
-		
 		SDL_GetWindowSize(window, &x, &y);
 		width = uint32_t(x);
 		height = uint32_t(y);
@@ -240,7 +322,7 @@ namespace vkjs
 
 		VkDescriptorPoolCreateInfo dpci = vks::initializers::descriptorPoolCreateInfo(poolsize, 1000);
 
-		VK_CHECK(vkCreateDescriptorPool(*device, &dpci, nullptr, &imgui_descriptor_pool));
+		VK_CHECK(vkCreateDescriptorPool(*device, &dpci, nullptr, &imguiDescriptorPool));
 
 		VkAttachmentDescription color = {};
 		color.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -277,7 +359,7 @@ namespace vkjs
 		imguiRenderPassCI.pDependencies = &dep;
 		imguiRenderPassCI.pSubpasses = &subpass;
 
-		VK_CHECK(vkCreateRenderPass(device->logical_device, &imguiRenderPassCI, nullptr, &imgui_render_pass));
+		VK_CHECK(vkCreateRenderPass(device->logical_device, &imguiRenderPassCI, nullptr, &imguiRenderPass));
 		// Setup Dear ImGui context
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
@@ -306,14 +388,14 @@ namespace vkjs
 		init_info.QueueFamily = device->queue_family_indices.graphics;
 		init_info.Queue = device->graphics_queue;
 		init_info.PipelineCache = VK_NULL_HANDLE;
-		init_info.DescriptorPool = imgui_descriptor_pool;
+		init_info.DescriptorPool = imguiDescriptorPool;
 		init_info.Subpass = 0;
 		init_info.MinImageCount = 2;
 		init_info.ImageCount = swapchain.vkb_swapchain.image_count;
 		init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 		init_info.Allocator = nullptr;
 		init_info.CheckVkResultFn = check_vk_result;
-		ImGui_ImplVulkan_Init(&init_info, imgui_render_pass);
+		ImGui_ImplVulkan_Init(&init_info, imguiRenderPass);
 
 		device->execute_commands([&](VkCommandBuffer cmd)
 			{
@@ -337,20 +419,20 @@ namespace vkjs
 		fbCI.layers = 1;
 		fbCI.width = width;
 		fbCI.height = height;
-		fbCI.renderPass = imgui_render_pass;
+		fbCI.renderPass = imguiRenderPass;
 		
-		if (imgui_fb[current_frame]) {
-			vkDestroyFramebuffer(*device, imgui_fb[current_frame], nullptr);
+		if (imguiFranebuffer[currentFrame]) {
+			vkDestroyFramebuffer(*device, imguiFranebuffer[currentFrame], nullptr);
 		}
-		VK_CHECK(vkCreateFramebuffer(*device, &fbCI, nullptr, &imgui_fb[current_frame]));
+		VK_CHECK(vkCreateFramebuffer(*device, &fbCI, nullptr, &imguiFranebuffer[currentFrame]));
 
 		VkRenderPassBeginInfo renderPassInfo = vks::initializers::renderPassBeginInfo();
 		renderPassInfo.clearValueCount = 0;
-		renderPassInfo.framebuffer = imgui_fb[current_frame];
+		renderPassInfo.framebuffer = imguiFranebuffer[currentFrame];
 		renderPassInfo.renderArea.extent = swapchain.vkb_swapchain.extent;
-		renderPassInfo.renderPass = imgui_render_pass;
+		renderPassInfo.renderPass = imguiRenderPass;
 
-		const auto cmd = draw_cmd_buffers[current_frame];
+		const auto cmd = draw_cmd_buffers[currentFrame];
 		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 		ImGui_ImplVulkan_RenderDrawData(draw_data, cmd);
 		vkCmdEndRenderPass(cmd);
@@ -373,8 +455,8 @@ namespace vkjs
 		ImGui_ImplSDL2_Shutdown();
 		ImGui::DestroyContext();
 
-		vkDestroyDescriptorPool(*device, imgui_descriptor_pool, nullptr);
-		vkDestroyRenderPass(*device, imgui_render_pass, nullptr);
+		vkDestroyDescriptorPool(*device, imguiDescriptorPool, nullptr);
+		vkDestroyRenderPass(*device, imguiRenderPass, nullptr);
 		destroy_command_buffers();
 
 		for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
@@ -383,7 +465,7 @@ namespace vkjs
 			vkDestroySemaphore(*device, semaphores[i].present_complete, 0);
 			vkDestroySemaphore(*device, semaphores[i].render_complete, 0);
 			vkDestroyFence(*device, wait_fences[i], 0);
-			vkDestroyFramebuffer(*device, imgui_fb[i], nullptr);
+			vkDestroyFramebuffer(*device, imguiFranebuffer[i], nullptr);
 		}
 
 		swapchain.vkb_swapchain.destroy_image_views(swapchain.views);
@@ -391,7 +473,7 @@ namespace vkjs
 
 		if (device) { delete device; }
 		vkDestroySurfaceKHR(instance, surface, nullptr);
-		vkb::destroy_instance(vkb_instance);
+		vkb::destroy_instance(vkbInstance);
 		if (window) SDL_DestroyWindow(window);
 		SDL_Quit();
 	}
@@ -429,7 +511,7 @@ namespace vkjs
 
 		//use vkbootstrap to select a GPU.
 		//We want a GPU that can write to the SDL surface and supports Vulkan 1.2
-		vkb::PhysicalDeviceSelector selector(vkb_instance);
+		vkb::PhysicalDeviceSelector selector(vkbInstance);
 		selector
 			.set_minimum_version(1, 2)
 			.set_surface(surface)
@@ -619,8 +701,8 @@ namespace vkjs
 			return instance_builder_result.full_error().vk_result;
 		}
 
-		vkb_instance = instance_builder_result.value();
-		instance = vkb_instance.instance;
+		vkbInstance = instance_builder_result.value();
+		instance = vkbInstance.instance;
 
 		return VK_SUCCESS;
 	}

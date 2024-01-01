@@ -97,7 +97,7 @@ namespace vkutil {
 		std::vector<VkWriteDescriptorSet> writes;
 		std::vector<VkDescriptorSetLayoutBinding> bindings;
 		
-
+		VkDescriptorSetLayout dsetLayout;
 		DescriptorLayoutCache* cache;
 		DescriptorAllocator* alloc;
 	};

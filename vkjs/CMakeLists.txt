@@ -6,6 +6,7 @@ add_compile_definitions(
 
 target_sources(vkjs PRIVATE
     vkjs.h
+    types.h
     vkcheck.h 
     vertex.h
     device.h
@@ -17,6 +18,7 @@ target_sources(vkjs PRIVATE
     appbase.h
     vk_descriptors.h
     vk_types.h
+    shader_module.h
     pipeline.h
     device.cpp
     buffer.cpp
@@ -29,6 +31,7 @@ target_sources(vkjs PRIVATE
     gli_utils.cpp
     VulkanInitializers.hpp
     vk_descriptors.cpp
+    shader_module.cpp
 )
 
 target_link_libraries(vkjs 
