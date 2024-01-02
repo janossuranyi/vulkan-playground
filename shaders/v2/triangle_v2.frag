@@ -67,9 +67,9 @@ void main() {
     float intensity = max(dot(N, L),0.0);
     vec3 lightColor = vec3(15,15,15) * vec3(intensity);
 
-    vec3 ambient = 0.05 * albedoColor.rgb;
+    vec3 ambient = 0.2 * albedoColor.rgb;
     const vec3 fr = diffuseColor / pi;
-    outColor0 = vec4((diffuseColor + specColor) * lightColor + ambient, albedoColor.a);
+    outColor0 = vec4((fr + specColor) * lightColor + ambient, albedoColor.a);
     //outColor0 = vec4(vec3(spec), albedoColor.a);
     outColor0.rgb = tonemap_Uncharted2( outColor0.rgb );
 }

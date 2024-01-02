@@ -29,6 +29,7 @@
 #include "vkjs/vk_descriptors.h"
 #include "vkjs/shader_module.h"
 #include <gli/generate_mipmaps.hpp>
+#include "renderer/gli_utils.h"
 
 namespace fs = std::filesystem;
 using namespace glm;
@@ -607,7 +608,7 @@ public:
         samplerCI.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         samplerCI.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         samplerCI.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        samplerCI.anisotropyEnable = VK_TRUE;
+        samplerCI.anisotropyEnable = VK_FALSE;
         samplerCI.maxAnisotropy = 8.f;
         samplerCI.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
         samplerCI.compareEnable = VK_FALSE;
@@ -624,7 +625,11 @@ public:
         if (!load_texture2d("../../resources/images/uv_checker_large.png", &uvChecker, true, w, h, nc))
         {
             device->create_texture2d(VK_FORMAT_R8G8B8A8_SRGB, { 1,1,1 }, &uvChecker);
+            uvChecker.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
         }
+
+        //uvChecker.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         uvChecker.setup_descriptor();
         uvChecker.descriptor.sampler = sampLinearRepeat;
 
@@ -758,15 +763,33 @@ public:
             int w, h, nc;
             // load image
             vkjs::Image newImage;
-            if (!load_texture2d(filename, &newImage, false, w, h, nc))
+            fs::path base = fs::path(filename).parent_path();
+            fs::path name = fs::path(filename).filename();
+            name.replace_extension("dds");
+            auto dds = base / "dds" / name;
+
+            bool bOk = false;
+            gli::texture tex = gli::load(dds.u8string());
+            if (!tex.empty())
+            {
+                device->create_texture2d_with_mips(gliutils::convert_format(tex.format()), gliutils::convert_extent(tex.extent()), &newImage);
+                vkjs::Buffer stagebuf;
+                device->create_staging_buffer(tex.size(), &stagebuf);
+                stagebuf.copyTo(0, tex.size(), tex.data());
+                newImage.upload([&tex](uint32_t layer, uint32_t face, uint32_t level, vkjs::Image::UploadInfo* inf)
+                    {
+                        inf->extent = gliutils::convert_extent(tex.extent(level));
+                        inf->offset =  (size_t)tex.data(layer, face, level) - (size_t)tex.data();
+                    }, &stagebuf);
+                newImage.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                device->destroy_buffer(&stagebuf);
+                jsrlib::Info("%s Loaded", dds.u8string().c_str());
+            }
+            else if (!load_texture2d(filename, &newImage, true, w, h, nc))
             {
                 jsrlib::Error("%s notfund", filename.c_str());
                 device->create_texture2d(VK_FORMAT_R8G8B8A8_UNORM, { 1,1,1 }, &newImage);
-                device->execute_commands([&newImage](VkCommandBuffer cmd) {
-                    
-                    newImage.record_change_layout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-                    newImage.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                    });
+                newImage.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
             }
             else
             {
@@ -779,30 +802,20 @@ public:
     }
     bool load_texture2d(std::string filename, vkjs::Image* dest, bool autoMipmap, int& w, int& h, int &nchannel) {
 
+        //int err = stbi_info(filename.c_str(), &w, &h, &nchannel);
+
         auto* data = stbi_load(filename.c_str(), &w, &h, &nchannel, STBI_rgb_alpha);
         if (!data)
         {
             return false;
         }
 
-        gli::texture2d tex;
-        if (autoMipmap) {
-            tex = gli::texture2d(gli::format::FORMAT_RGBA8_UNORM_PACK8, gli::extent2d{ w,h });
-        }
-        else {
-            tex = gli::texture2d(gli::format::FORMAT_RGBA8_UNORM_PACK8, gli::extent2d{ w,h },1);
-        }
-        
-        memcpy(tex.data(0, 0, 0), data, w * h * 4);
-        stbi_image_free(data);
 
-        if (autoMipmap) {
-            tex = gli::generate_mipmaps(tex, gli::FILTER_LINEAR);
-        }
-
+        size_t size = w * h * 4;
         vkjs::Buffer stage;
-        device->create_staging_buffer(tex.size(), &stage);
-        stage.copyTo(0, tex.size(), tex.data());
+        device->create_staging_buffer(size, &stage);
+        stage.copyTo(0, size, data);
+        stbi_image_free(data);
 
         if (autoMipmap) {
             device->create_texture2d_with_mips(VK_FORMAT_R8G8B8A8_UNORM, { (uint32_t)w,(uint32_t)h,1 }, dest);
@@ -811,12 +824,14 @@ public:
             device->create_texture2d(VK_FORMAT_R8G8B8A8_UNORM, { (uint32_t)w,(uint32_t)h,1 }, dest);
         }
 
-        dest->upload([&tex](uint32_t layer, uint32_t face, uint32_t level, vkjs::Image::UploadInfo* uinf)
-            {
-                auto extent = tex.extent(level);
-                uinf->extent = { (uint32_t)extent.x,(uint32_t)extent.y,1 };
-                uinf->offset = (size_t)tex.data(layer, face, level) - (size_t)tex.data();
-            }, &stage);
+        dest->upload({ (uint32_t)w,(uint32_t)h,1 }, 0, 0, 0, 0ull, &stage);
+        if (autoMipmap) {
+            dest->generate_mipmaps();
+        }
+        else {
+            dest->change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        }
+
         device->destroy_buffer(&stage);
         
         return true;
@@ -828,9 +843,9 @@ void demo()
     jsrlib::gLogWriter.SetFileName("vulkan_engine.log");
     App* app = new App(true);
     app->settings.fullscreen = false;
-    app->settings.vsync = false;
-    app->width = 1900;
-    app->height = 1000;
+    app->settings.vsync = true;
+    app->width = 1200;
+    app->height = 900;
     app->init();
     app->prepare();
     app->run();

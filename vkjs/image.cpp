@@ -1,5 +1,7 @@
 #include "image.h"
 #include "gli_utils.h"
+#include "VulkanInitializers.hpp"
+#include "vkcheck.h"
 
 namespace vkjs {
 	
@@ -19,11 +21,9 @@ namespace vkjs {
 		region.imageExtent = extent;
 		region.bufferOffset = offset;
 
-		change_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-		layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-
 		device_->execute_commands([&](VkCommandBuffer cmd)
 			{
+				record_change_layout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_HOST_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT);
 				vkCmdCopyBufferToImage(
 					cmd,
 					buffer->buffer,
@@ -32,7 +32,9 @@ namespace vkjs {
 					1u,
 					&region
 				);
+				//record_change_layout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 			});
+		layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 	}
 
 	void Image::upload(upload_callback&& callback, Buffer* buffer)
@@ -77,7 +79,7 @@ namespace vkjs {
 		subresourceRange.layerCount = face_total;
 
 
-		record_change_layout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+		record_change_layout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 		layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
 		vkCmdCopyBufferToImage(
@@ -89,8 +91,8 @@ namespace vkjs {
 			bufferCopyRegions.data()
 		);
 
-		record_change_layout(cmd, final_layout, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
-		layout = final_layout;
+		//record_change_layout(cmd, final_layout, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+		//layout = final_layout;
 	}
 
 	VkImageMemoryBarrier Image::get_layout_transition_barrier(VkImageLayout newLayout)
@@ -112,6 +114,91 @@ namespace vkjs {
 		return ibar;
 	}
 
+	void Image::generate_mipmaps(VkFilter filter)
+	{
+		assert(image && (usage & (VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)));
+		VkImageMemoryBarrier barrier = vks::initializers::imageMemoryBarrier();
+		barrier.image = image;
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange.baseArrayLayer = 0;
+		barrier.subresourceRange.layerCount = 1;
+		barrier.subresourceRange.levelCount = 1;
+
+
+		device_->execute_commands([&](VkCommandBuffer cmd)
+			{
+				int32_t mipWidth = extent.width;
+				int32_t mipHeight = extent.height;
+
+				record_change_layout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+				for (uint32_t i = 1; i < levels; i++) 
+				{
+					barrier.subresourceRange.baseMipLevel = i - 1;
+					barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+					barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+					barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+					barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+					vkCmdPipelineBarrier(cmd,
+						VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+						0, nullptr,
+						0, nullptr,
+						1, &barrier);
+
+					VkImageBlit blit{};
+					blit.srcOffsets[0] = { 0, 0, 0 };
+					blit.srcOffsets[1] = { mipWidth, mipHeight, 1 };
+					blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+					blit.srcSubresource.mipLevel = i - 1;
+					blit.srcSubresource.baseArrayLayer = 0;
+					blit.srcSubresource.layerCount = 1;
+					blit.dstOffsets[0] = { 0, 0, 0 };
+					blit.dstOffsets[1] = { mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1 };
+					blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+					blit.dstSubresource.mipLevel = i;
+					blit.dstSubresource.baseArrayLayer = 0;
+					blit.dstSubresource.layerCount = 1;
+
+					vkCmdBlitImage(cmd,
+						image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+						image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+						1, &blit,
+						filter);
+
+					barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+					barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+					barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+					barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+					vkCmdPipelineBarrier(cmd,
+						VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+						0, nullptr,
+						0, nullptr,
+						1, &barrier);
+
+
+					if (mipWidth > 1) mipWidth /= 2;
+					if (mipHeight > 1) mipHeight /= 2;
+				}
+
+				barrier.subresourceRange.baseMipLevel = levels - 1;
+				barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+				barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+				barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+				vkCmdPipelineBarrier(cmd,
+					VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+					0, nullptr,
+					0, nullptr,
+					1, &barrier);
+
+				layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			});
+
+	}
+
 	void Image::setup_descriptor()
 	{
 		descriptor.imageLayout = layout;
@@ -120,14 +207,14 @@ namespace vkjs {
 	}
 
 
-	void Image::change_layout(VkImageLayout newLayout)
+	void Image::change_layout(VkImageLayout newLayout, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask)
 	{
 		assert(image);
 		if (layout == newLayout) return;
 
 		device_->execute_commands([&](VkCommandBuffer cmd)
 			{
-				record_change_layout(cmd, newLayout);
+				record_change_layout(cmd, newLayout, srcStageMask, dstStageMask);
 			});
 
 		layout = newLayout;

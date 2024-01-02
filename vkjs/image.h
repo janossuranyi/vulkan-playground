@@ -44,11 +44,13 @@ namespace vkjs {
 
 		void upload(const VkExtent3D& extent, uint32_t layer, uint32_t face, uint32_t level, VkDeviceSize offset, Buffer* buffer);
 		void upload(upload_callback&& callback, Buffer* buffer);
-		void change_layout(VkImageLayout newLayout);
+		void change_layout(VkImageLayout newLayout, VkPipelineStageFlags srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
 
 		void record_change_layout(VkCommandBuffer cmd, VkImageLayout newLayout, VkPipelineStageFlags srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
 		void record_upload(VkCommandBuffer cmd, upload_callback callback, Buffer* buffer);
 		VkImageMemoryBarrier get_layout_transition_barrier(VkImageLayout newLayout);
+		void generate_mipmaps(VkFilter filter = VK_FILTER_LINEAR);
+
 		void setup_descriptor();
 
 		void destroy();
