@@ -490,13 +490,15 @@ public:
         color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         color.samples = VK_SAMPLE_COUNT_1_BIT;
-
+        
         VkAttachmentDescription depth = {};
         depth.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         depth.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         depth.format = depth_format;
         depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        depth.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        depth.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         depth.samples = VK_SAMPLE_COUNT_1_BIT;
 
         VkAttachmentReference colorRef = {};
@@ -608,7 +610,7 @@ public:
         samplerCI.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         samplerCI.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         samplerCI.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        samplerCI.anisotropyEnable = VK_FALSE;
+        samplerCI.anisotropyEnable = VK_TRUE;
         samplerCI.maxAnisotropy = 8.f;
         samplerCI.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
         samplerCI.compareEnable = VK_FALSE;
@@ -769,7 +771,7 @@ public:
             auto dds = base / "dds" / name;
 
             bool bOk = false;
-            gli::texture tex = gli::load(dds.u8string());
+            gli::texture tex= gli::load(dds.u8string());
             if (!tex.empty())
             {
                 device->create_texture2d_with_mips(gliutils::convert_format(tex.format()), gliutils::convert_extent(tex.extent()), &newImage);
@@ -843,6 +845,7 @@ void demo()
     jsrlib::gLogWriter.SetFileName("vulkan_engine.log");
     App* app = new App(true);
     app->settings.fullscreen = false;
+    app->settings.exclusive = false;
     app->settings.vsync = true;
     app->width = 1200;
     app->height = 900;
