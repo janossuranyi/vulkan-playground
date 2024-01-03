@@ -16,6 +16,7 @@ layout(location = 0) in INTERFACE {
     vec4 Color;
     vec3 FragCoordVS;
     vec3 LightVS;
+    vec3 LightDir;
     vec2 UV;
     vec3 NormalVS;
     vec3 TangentVS;
@@ -65,11 +66,15 @@ void main() {
     vec3 H = normalize(V + L);
     
     S_LIGHT light;
-    light.range = 10.0;
+    light.position = In.LightVS;
+    light.direction = In.LightDir;;
+    light.innerConeCos = cos(40 * pi/180.0);
+    light.outerConeCos = cos(45 * pi/180.0);
+    light.range = 30.0;
     light.color = vec3(1.0);
-    light.intensity = 35.0;
-    light.type = LightType_Point;
-    vec3 Attn = getLighIntensity(light, In.LightVS - In.FragCoordVS);
+    light.intensity = 200.0;
+    light.type = LightType_Spot;
+    vec3 Attn = getLighIntensity( light, In.LightVS - In.FragCoordVS  );
 
     if(albedoColor.a < 0.5) discard;
     albedoColor.rgb = sRGBToLinear(albedoColor.rgb);
@@ -82,7 +87,7 @@ void main() {
     float NoV = saturate(dot(N,V));
     float VoH = saturate(dot(V,H));
     vec3 specColor;
-    specColor = GGXSingleScattering(max(alphaRoughness,0.2), F0, NoH, NoV, VoH, NoL);
+    specColor = GGXSingleScattering(max(perceptualRoughness,0.2), F0, NoH, NoV, VoH, NoL);
     diffuseColor = CoDWWIIDiffuse(diffuseColor, NoL, VoH, NoV, NoH, alphaRoughness);
     
 /*
@@ -93,5 +98,5 @@ void main() {
     vec3 ambient = 0.02 * albedoColor.rgb;
     outColor0 = vec4((diffuseColor + specColor) * Attn * NoL + ambient, albedoColor.a);
     //outColor0 = vec4(vec3(spec), albedoColor.a);
-    outColor0.rgb = toSRGB( ACESFilmApproximate ( outColor0.rgb ) );
+    outColor0.rgb = toSRGB( ACESFitted ( outColor0.rgb ) );
 }

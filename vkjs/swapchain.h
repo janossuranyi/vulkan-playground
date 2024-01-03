@@ -9,7 +9,12 @@ namespace vkjs {
 		std::vector<VkImage> images;
 		std::vector<VkImageView> views;
 		uint32_t current_image = 0;
-
+		VkExtent3D extent() const {
+			return VkExtent3D{ vkb_swapchain.extent.width,vkb_swapchain.extent.height,1 };
+		}
+		VkExtent2D extent2d() const {
+			return vkb_swapchain.extent;
+		}
 		/**
 		* Acquires the next image in the swap chain
 		*

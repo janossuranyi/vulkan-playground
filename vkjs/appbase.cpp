@@ -212,7 +212,7 @@ namespace vkjs
 
 		VkPresentModeKHR presentMode = settings.vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_MAILBOX_KHR;
 
-		vkb::SwapchainBuilder builder{device->vkb_device};
+		vkb::SwapchainBuilder builder{ device->vkb_device };
 		auto swap_ret = builder
 			.set_desired_format(format)
 			.set_desired_present_mode(presentMode)

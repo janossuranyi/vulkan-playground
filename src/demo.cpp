@@ -44,6 +44,9 @@ private:
     VkDevice d;
 
     vkjs::Image uvChecker;
+    std::array<vkjs::Image, MAX_CONCURRENT_FRAMES> HDRImage{};
+    std::array<VkFramebuffer, MAX_CONCURRENT_FRAMES> HDRFramebuffer{};
+
     VkSampler sampLinearRepeat;
 
     vkutil::DescriptorAllocator descAllocator;
@@ -118,6 +121,7 @@ private:
 public:
 
     virtual void on_update_gui() override {}
+    virtual void on_window_resized() override;
 
     void setup_descriptor_sets();
 
@@ -135,13 +139,14 @@ public:
 
     virtual void render() override;
 
-    void setup_preZ_pipeline(RenderPass& pass);
+    void setup_tonemap_pipeline(RenderPass& pass);
 
     void setup_triangle_pipeline(RenderPass& pass);
     void setup_preZ_pass();
 
     void setup_triangle_pass();
     void setup_tonemap_pass();
+    void setup_images();
 
     void update_uniforms() {
 
@@ -180,6 +185,11 @@ int main(int argc, char* argv[])
     demo();
 
     return 0;
+}
+
+void App::on_window_resized()
+{
+    setup_images();
 }
 
 void App::setup_descriptor_sets()
@@ -297,11 +307,17 @@ void App::build_command_buffers()
     uint32_t dynOffset = 0;
     for (const auto& obj : objects) {
         const auto& mesh = meshes[obj.mesh];
-        const VkDescriptorSet dsets[2] = { triangleDescriptors[currentFrame], obj.vkResources };
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-            passes.triangle.layout, 0, 2, dsets, 1, &dynOffset);
+        const int materialIndex = scene->meshes[obj.mesh].material;
+        const auto& material = scene->materials[materialIndex];
+        
+        if (material.alphaMode != ALPHA_MODE_BLEND) {
 
-        vkCmdDrawIndexed(cmd, mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, 0);
+            const VkDescriptorSet dsets[2] = { triangleDescriptors[currentFrame], obj.vkResources };
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                passes.triangle.layout, 0, 2, dsets, 1, &dynOffset);
+
+            vkCmdDrawIndexed(cmd, mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, 0);
+        }
         dynOffset += dynamicAlignment;
     }
 }
@@ -320,7 +336,7 @@ void App::render()
     auto fbci = vks::initializers::framebufferCreateInfo();
     fbci.renderPass = passes.triangle.pass;
     fbci.layers = 1;
-    fbci.attachmentCount = 2;
+    fbci.attachmentCount = (uint32_t) targets.size();
     fbci.pAttachments = targets.data();
     fbci.width = width;
     fbci.height = height;
@@ -344,7 +360,7 @@ void App::render()
     vkCmdEndRenderPass(cmd);
 }
 
-void App::setup_preZ_pipeline(RenderPass& pass)
+void App::setup_tonemap_pipeline(RenderPass& pass)
 {
     auto vertexInput = vkjs::Vertex::vertex_input_description_position_only();
 
@@ -352,7 +368,7 @@ void App::setup_preZ_pipeline(RenderPass& pass)
     vkjs::PipelineBuilder pb = {};
     pb._rasterizer = vks::initializers::pipelineRasterizationStateCreateInfo(
         VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
-    pb._depthStencil = vks::initializers::pipelineDepthStencilStateCreateInfo(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
+    pb._depthStencil = vks::initializers::pipelineDepthStencilStateCreateInfo(VK_FALSE, VK_FALSE, VK_COMPARE_OP_ALWAYS);
     pb._dynamicStates = vks::initializers::pipelineDynamicStateCreateInfo(dynStates);
     pb._inputAssembly = vks::initializers::pipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
     pb._multisampling = vks::initializers::pipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT, 0);
@@ -363,8 +379,8 @@ void App::setup_preZ_pipeline(RenderPass& pass)
 
     vkjs::ShaderModule vert_module(*device);
     vkjs::ShaderModule frag_module(*device);
-    fs::path vert_spirv_filename = basePath / "shaders/depthpass_v2.vert.spv";
-    fs::path frag_spirv_filename = basePath / "shaders/depthpass_v2.frag.spv";
+    fs::path vert_spirv_filename = basePath / "shaders/triquad.vert.spv";
+    fs::path frag_spirv_filename = basePath / "shaders/post.frag.spv";
     VK_CHECK(vert_module.create(vert_spirv_filename));
     VK_CHECK(frag_module.create(frag_spirv_filename));
 
@@ -390,25 +406,18 @@ void App::setup_preZ_pipeline(RenderPass& pass)
     */
 
     std::vector<VkDescriptorSetLayoutBinding> set0bind(1);
-    std::vector<VkDescriptorSetLayoutBinding> set1bind(1);
 
     set0bind[0].binding = 0;
     set0bind[0].descriptorCount = 1;
-    set0bind[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    set0bind[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    set1bind[0].binding = 0;
-    set1bind[0].descriptorCount = 1;
-    set1bind[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-    set1bind[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    set0bind[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    set0bind[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     VkDescriptorSetLayoutCreateInfo ds0ci = vks::initializers::descriptorSetLayoutCreateInfo(set0bind);
-    VkDescriptorSetLayoutCreateInfo ds1ci = vks::initializers::descriptorSetLayoutCreateInfo(set1bind);
-    std::array<VkDescriptorSetLayout, 2> dsl;
+    std::array<VkDescriptorSetLayout, 1> dsl;
     dsl[0] = descLayoutCache.create_descriptor_layout(&ds0ci);
-    dsl[1] = descLayoutCache.create_descriptor_layout(&ds1ci);
-    assert(dsl[0] && dsl[1]);
+    assert(dsl[0]);
 
-    VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo(2);
+    VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo(1);
     plci.pSetLayouts = dsl.data();
     VK_CHECK(vkCreatePipelineLayout(d, &plci, nullptr, &pass.layout));
     pb._pipelineLayout = pass.layout;
@@ -654,11 +663,38 @@ void App::setup_tonemap_pass()
     VK_CHECK(vkCreateRenderPass(*device, &rpci, nullptr, &passes.tonemap.pass));
 }
 
+void App::setup_images()
+{
+    for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
+    {
+        if (HDRImage[i].image != VK_NULL_HANDLE) {
+            device->destroy_image(&HDRImage[i]);
+        }
+        if (HDRFramebuffer[i] != VK_NULL_HANDLE) {
+            vkDestroyFramebuffer(*device, HDRFramebuffer[i], nullptr);
+        }
+        VK_CHECK(device->create_color_attachment(VK_FORMAT_R16G16B16A16_SFLOAT, 
+            swapchain.extent(),
+            &HDRImage[i]));
+
+        std::array<VkImageView, 2> targets = { HDRImage[i].view,  depth_image.view};
+        auto fbci = vks::initializers::framebufferCreateInfo();
+        fbci.renderPass = passes.triangle.pass;
+        fbci.layers = 1;
+        fbci.attachmentCount = (uint32_t)targets.size();
+        fbci.pAttachments = targets.data();
+        fbci.width = HDRImage[i].extent.width;
+        fbci.height = HDRImage[i].extent.height;
+        VK_CHECK(vkCreateFramebuffer(d, &fbci, 0, &HDRFramebuffer[i]));
+    }
+}
+
 void App::prepare()
 {
     vkjs::AppBase::prepare();
 
     setup_descriptor_pools();
+    setup_images();
 
     // Calculate required alignment based on minimum device offset alignment
     minUboAlignment = device->vkb_physical_device.properties.limits.minUniformBufferOffsetAlignment;

@@ -23,6 +23,7 @@ layout(location = 0) out INTERFACE {
     vec4 Color;
     vec3 FragCoordVS;
     vec3 LightVS;
+    vec3 LightDir;
     vec2 UV;
     vec3 NormalVS;
     vec3 TangentVS;
@@ -30,7 +31,7 @@ layout(location = 0) out INTERFACE {
 } Out;
 
 void main() {
-    vec3 light = vec3(0,2,0);
+    vec3 light = vec3(0,5,0);
     mat4 mvp = mtxProjection * mtxView * mtxModel;
     vec4 posVS = (mtxView * mtxModel) * vec4(inPosition, 1.0);
     gl_Position = mvp * vec4(inPosition, 1.0);
@@ -53,5 +54,6 @@ void main() {
     Out.Color = color;
     Out.FragCoordVS = posVS.xyz;
     Out.LightVS = (mtxView * vec4(light,1.0)).xyz;
+    Out.LightDir = (mtxView * vec4(0.5,-0.5,0.0,0)).xyz;
     Out.UV = inUV;
 }
