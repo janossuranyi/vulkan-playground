@@ -65,7 +65,6 @@ void main() {
     vec3 H = normalize(V + L);
     
     S_LIGHT light;
-    light.position = In.LightVS;
     light.range = 10.0;
     light.color = vec3(1.0);
     light.intensity = 35.0;
