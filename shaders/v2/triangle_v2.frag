@@ -4,9 +4,11 @@
 #ifndef pi
 const float pi = 3.1415926535;
 #endif
+#include "../v1/functions.glsl"
 #include "../v1/brdf.glsl"
 #include "../v1/colorConversion.glsl"
 #include "../v1/tonemapping.glsl"
+#include "../v1/light.glsl"
 
 layout(location = 0) out vec4 outColor0;
 
@@ -45,37 +47,52 @@ void main() {
     vec4 albedoColor = texture(samp_albedo, In.UV);
     vec3 normalTS = texture(samp_normal, In.UV).xyz * 2.0 - 1.0;
     vec4 pbrSample = texture(samp_pbr, In.UV);
+    
+    // b = 0.5 * sqrt(1 - ( 2 * r - 1)^2 - (2 * g - 1)^2) + 0.5
+    //vec3 normalTS = vec3(normalSamp.xy, sqrt(1.0 - normalSamp.x * normalSamp.x - normalSamp.y * normalSamp.y));
 
     const float perceptualRoughness = pbrSample.g;
-    const float alphaRoughness = perceptualRoughness * perceptualRoughness;
+    const float alphaRoughness = max(perceptualRoughness * perceptualRoughness, 0.0045f);
     const float metalness = pbrSample.b;
+    const float microAO = pbrSample.r;
+    const float Kd = (1.0 - metalness);
 
-    normalTS = normalize(normalTS * vec3(1.0,-1.0,1.0));
+    normalTS = normalize(normalTS) * vec3(1.0,-1.0,1.0);
 
     vec3 N = (tbn * normalTS);
-    vec3 L = normalize(In.LightVS);
+    vec3 L = normalize(In.LightVS - In.FragCoordVS);
     vec3 V = normalize(-In.FragCoordVS);
-    //vec3 H = normalize(L + V);
+    vec3 H = normalize(V + L);
     
-    albedoColor.rgb = sRGBToLinear(albedoColor.rgb);
+    S_LIGHT light;
+    light.position = In.LightVS;
+    light.range = 10.0;
+    light.color = vec3(1.0);
+    light.intensity = 35.0;
+    light.type = LightType_Point;
+    vec3 Attn = getLighIntensity(light, In.LightVS - In.FragCoordVS);
 
     if(albedoColor.a < 0.5) discard;
+    albedoColor.rgb = sRGBToLinear(albedoColor.rgb);
+    vec3 diffuseColor = albedoColor.rgb * Kd;
 
-    vec3 diffuseColor = (1.0 - metalness) * albedoColor.rgb;
+    float NoL = saturate(dot(N,L));
     vec3 F0 = mix(vec3(0.04), albedoColor.rgb, metalness);
-    vec3 specColor = specBRDF(N, V, L, F0, perceptualRoughness);
 
+    float NoH = saturate(dot(N,H));
+    float NoV = saturate(dot(N,V));
+    float VoH = saturate(dot(V,H));
+    vec3 specColor;
+    specColor = GGXSingleScattering(max(alphaRoughness,0.2), F0, NoH, NoV, VoH, NoL);
+    diffuseColor = CoDWWIIDiffuse(diffuseColor, NoL, VoH, NoV, NoH, alphaRoughness);
+    
 /*
     vec3 ddx = dFdx( In.FragCoordVS );
     vec3 ddy = dFdy( In.FragCoordVS );
     vec3 N = normalize( cross( ddx, ddy ) );
 */
-    float intensity = max(dot(N, L),0.0);
-    vec3 lightColor = vec3(10,6,2) * vec3(intensity);
-
-    vec3 ambient = 0.04 * albedoColor.rgb;
-    const vec3 fr = diffuseColor / pi;
-    outColor0 = vec4((fr + specColor) * lightColor + ambient, albedoColor.a);
+    vec3 ambient = 0.02 * albedoColor.rgb;
+    outColor0 = vec4((diffuseColor + specColor) * Attn * NoL + ambient, albedoColor.a);
     //outColor0 = vec4(vec3(spec), albedoColor.a);
-    outColor0.rgb = toSRGB( tonemap( outColor0.rgb ) );
+    outColor0.rgb = toSRGB( ACESFilmApproximate ( outColor0.rgb ) );
 }
