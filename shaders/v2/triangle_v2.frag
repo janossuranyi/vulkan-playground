@@ -62,7 +62,7 @@ void main() {
     //vec3 normalTS = vec3(normalSamp.xy, sqrt(1.0 - normalSamp.x * normalSamp.x - normalSamp.y * normalSamp.y));
 
     const float perceptualRoughness = pbrSample.g;
-    const float alphaRoughness = max(perceptualRoughness * perceptualRoughness, 0.0045f);
+    const float r = max(perceptualRoughness * perceptualRoughness, 0.0045f);
     const float metalness = pbrSample.b;
     const float microAO = pbrSample.r;
     const float Kd = (1.0 - metalness);
@@ -96,9 +96,9 @@ void main() {
     float NoV = saturate(dot(N,V));
     float VoH = saturate(dot(V,H));
     vec3 specColor;
-    specColor = GGXSingleScattering(alphaRoughness, F0, NoH, NoV, VoH, NoL);
+    specColor = GGXSingleScattering(r, F0, NoH, NoV, VoH, NoL);
     //specColor = specBRDF(NoH,NoV,NoL,VoH,F0,max(perceptualRoughness,.2));
-    diffuseColor = CoDWWIIDiffuse(diffuseColor, NoL, VoH, NoV, NoH, alphaRoughness);
+    diffuseColor = CoDWWIIDiffuse(diffuseColor, NoL, VoH, NoV, NoH, r);
     
 /*
     vec3 ddx = dFdx( In.FragCoordVS );

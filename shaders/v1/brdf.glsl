@@ -24,7 +24,7 @@ float Visibility(const float NoV, const float NoL, const float r){
     const float r_2 = r * r;
     const float v1 = NoL * sqrt(NoV * NoV * (1.f - r_2) + r_2);
     const float v2 = NoV * sqrt(NoL * NoL * (1.f - r_2) + r_2);
-    return 0.5f / (v1 + v2);
+    return 0.5f / (v1 + v2 + 1e-8);
 }
 
 //combination of viewer occlusion and facet shadowing
