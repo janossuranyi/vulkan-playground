@@ -31,7 +31,7 @@ layout(location = 0) out INTERFACE {
 } Out;
 
 void main() {
-    vec3 light = vec3(0,5,0);
+    vec3 light = vec3(0,15,0);
     mat4 mvp = mtxProjection * mtxView * mtxModel;
     vec4 posVS = (mtxView * mtxModel) * vec4(inPosition, 1.0);
     gl_Position = mvp * vec4(inPosition, 1.0);

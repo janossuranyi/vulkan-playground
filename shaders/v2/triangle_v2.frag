@@ -70,10 +70,10 @@ void main() {
     light.direction = In.LightDir;;
     light.innerConeCos = cos(40 * pi/180.0);
     light.outerConeCos = cos(45 * pi/180.0);
-    light.range = 30.0;
+    light.range = 20.0;
     light.color = vec3(1.0);
-    light.intensity = 200.0;
-    light.type = LightType_Spot;
+    light.intensity = 260.0;
+    light.type = LightType_Point;
     vec3 Attn = getLighIntensity( light, In.LightVS - In.FragCoordVS  );
 
     if(albedoColor.a < 0.5) discard;
@@ -95,8 +95,8 @@ void main() {
     vec3 ddy = dFdy( In.FragCoordVS );
     vec3 N = normalize( cross( ddx, ddy ) );
 */
-    vec3 ambient = 0.02 * albedoColor.rgb;
+    vec3 ambient = 0.05 * albedoColor.rgb;
     outColor0 = vec4((diffuseColor + specColor) * Attn * NoL + ambient, albedoColor.a);
     //outColor0 = vec4(vec3(spec), albedoColor.a);
-    outColor0.rgb = toSRGB( ACESFitted ( outColor0.rgb ) );
+    //outColor0.rgb = toSRGB( ACESFitted ( outColor0.rgb ) );
 }

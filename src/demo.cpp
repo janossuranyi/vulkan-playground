@@ -46,8 +46,10 @@ private:
     vkjs::Image uvChecker;
     std::array<vkjs::Image, MAX_CONCURRENT_FRAMES> HDRImage{};
     std::array<VkFramebuffer, MAX_CONCURRENT_FRAMES> HDRFramebuffer{};
+    std::array<VkDescriptorSet, MAX_CONCURRENT_FRAMES> HDRDescriptor{};
 
     VkSampler sampLinearRepeat;
+    VkSampler sampNearestClampBorder;
 
     vkutil::DescriptorAllocator descAllocator;
     vkutil::DescriptorLayoutCache descLayoutCache;
@@ -106,6 +108,7 @@ private:
     };
 
     VkDescriptorSet triangleDescriptors[MAX_CONCURRENT_FRAMES];
+    VkDescriptorSetLayout tonemapLayout = VK_NULL_HANDLE;
 
     VkFramebuffer fb[MAX_CONCURRENT_FRAMES] = {};
     fs::path basePath = fs::path("../..");
@@ -120,7 +123,7 @@ private:
 
 public:
 
-    virtual void on_update_gui() override {}
+    virtual void on_update_gui() override { ImGui::Text("Hello Vulkan"); }
     virtual void on_window_resized() override;
 
     void setup_descriptor_sets();
@@ -128,6 +131,8 @@ public:
     void setup_descriptor_pools();
 
     void setup_objects();
+    void setup_samplers();
+
 
     App(bool b) : AppBase(b) {
         depth_format = VK_FORMAT_D32_SFLOAT_S8_UINT;
@@ -190,6 +195,17 @@ int main(int argc, char* argv[])
 void App::on_window_resized()
 {
     setup_images();
+    for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i) {
+        if (HDRDescriptor[i] != VK_NULL_HANDLE) {
+            // update descript sets
+            VkDescriptorImageInfo inf{};
+            inf.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            inf.imageView = HDRImage[i].view;
+            inf.sampler = sampNearestClampBorder;
+            VkWriteDescriptorSet write = vks::initializers::writeDescriptorSet(HDRDescriptor[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &inf, 1);
+            vkUpdateDescriptorSets(d, 1, &write, 0, nullptr);
+        }
+    }
 }
 
 void App::setup_descriptor_sets()
@@ -207,6 +223,13 @@ void App::setup_descriptor_sets()
             .bind_buffer(1, &uboDrawData.descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT)
             .bind_image(2, &uvChecker.descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .build(triangleDescriptors[i]);
+
+        HDRImage[i].setup_descriptor();
+        HDRImage[i].descriptor.sampler = sampNearestClampBorder;
+        vkutil::DescriptorBuilder::begin(&descLayoutCache, &descAllocator)
+            .bind_image(0, &HDRImage[i].descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+            .build(HDRDescriptor[i]);
+
     }
 
 }
@@ -270,6 +293,33 @@ void App::setup_objects()
 
 }
 
+void App::setup_samplers()
+{
+    auto samplerCI = vks::initializers::samplerCreateInfo();
+    samplerCI.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerCI.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerCI.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerCI.anisotropyEnable = VK_TRUE;
+    samplerCI.maxAnisotropy = 8.f;
+    samplerCI.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+    samplerCI.compareEnable = VK_FALSE;
+    samplerCI.compareOp = VK_COMPARE_OP_ALWAYS;
+    samplerCI.magFilter = VK_FILTER_LINEAR;
+    samplerCI.minFilter = VK_FILTER_LINEAR;
+    samplerCI.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerCI.maxLod = 16.f;
+    VK_CHECK(device->create_sampler(samplerCI, &sampLinearRepeat));
+
+    samplerCI.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerCI.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerCI.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerCI.magFilter = VK_FILTER_NEAREST;
+    samplerCI.minFilter = VK_FILTER_NEAREST;
+    samplerCI.maxLod = 0.0f;
+    VK_CHECK(device->create_sampler(samplerCI, &sampNearestClampBorder));
+
+}
+
 App::~App()
 {
     vkDeviceWaitIdle(d);
@@ -289,12 +339,34 @@ App::~App()
     for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
     {
         vkDestroyFramebuffer(d, fb[i], 0);
+        vkDestroyFramebuffer(d, HDRFramebuffer[i], 0);
     }
 }
 
 void App::build_command_buffers()
 {
     VkCommandBuffer cmd = draw_cmd_buffers[currentFrame];
+
+    VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
+    VkClearValue clearVal[2];
+    clearVal[0].color = { 0.8f,0.8f,0.8f,1.0f };
+    clearVal[1].depthStencil.depth = 1.0f;
+
+    beginPass.clearValueCount = 2;
+    beginPass.pClearValues = &clearVal[0];
+    beginPass.renderPass = passes.triangle.pass;
+    beginPass.framebuffer = HDRFramebuffer[currentFrame];
+    beginPass.renderArea.extent = swapchain.vkb_swapchain.extent;
+    beginPass.renderArea.offset = { 0,0 };
+
+    HDRImage[currentFrame].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    
+    /*
+    HDRImage[currentFrame].record_change_layout(cmd, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+    HDRImage[currentFrame].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+*/
+    vkCmdBeginRenderPass(cmd, &beginPass, VK_SUBPASS_CONTENTS_INLINE);
+
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.triangle.pipeline);
     VkDeviceSize offset = 0;
     vkCmdBindVertexBuffers(cmd, 0, 1, &vtxbuf.buffer, &offset);
@@ -320,6 +392,27 @@ void App::build_command_buffers()
         }
         dynOffset += dynamicAlignment;
     }
+    vkCmdEndRenderPass(cmd);
+/*
+    HDRImage[currentFrame].record_change_layout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+*/
+    HDRImage[currentFrame].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    
+    clearVal[0].color = { 0.f,0.f,0.f,1.f };
+    beginPass.clearValueCount = 1;
+    beginPass.renderPass = passes.tonemap.pass;
+    beginPass.framebuffer = fb[currentFrame];
+    vkCmdBeginRenderPass(cmd, &beginPass, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.tonemap.pipeline);
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        passes.tonemap.layout, 0, 1, &HDRDescriptor[currentFrame], 0, nullptr);
+    vkCmdDraw(cmd, 3, 1, 0, 0);
+
+    vkCmdEndRenderPass(cmd);
+
 }
 
 void App::render()
@@ -332,9 +425,9 @@ void App::render()
         vkDestroyFramebuffer(d, fb[currentFrame], 0);
     }
 
-    std::array<VkImageView, 2> targets = { swapchain.views[current_buffer],  depth_image.view };
+    std::array<VkImageView, 1> targets = { swapchain.views[current_buffer] };
     auto fbci = vks::initializers::framebufferCreateInfo();
-    fbci.renderPass = passes.triangle.pass;
+    fbci.renderPass = passes.tonemap.pass;
     fbci.layers = 1;
     fbci.attachmentCount = (uint32_t) targets.size();
     fbci.pAttachments = targets.data();
@@ -342,22 +435,7 @@ void App::render()
     fbci.height = height;
     VK_CHECK(vkCreateFramebuffer(d, &fbci, 0, &fb[currentFrame]));
 
-    VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
-    VkClearValue clearVal[2];
-    clearVal[0].color = { 0.8f,0.8f,0.8f,1.0f };
-    clearVal[1].depthStencil.depth = 1.0f;
-
-    beginPass.clearValueCount = 2;
-    beginPass.pClearValues = &clearVal[0];
-    beginPass.renderPass = passes.triangle.pass;
-    beginPass.framebuffer = fb[currentFrame];
-    beginPass.renderArea.extent = swapchain.vkb_swapchain.extent;
-    beginPass.renderArea.offset = { 0,0 };
-
-    VkCommandBuffer cmd = draw_cmd_buffers[currentFrame];
-    vkCmdBeginRenderPass(cmd, &beginPass, VK_SUBPASS_CONTENTS_INLINE);
     build_command_buffers();
-    vkCmdEndRenderPass(cmd);
 }
 
 void App::setup_tonemap_pipeline(RenderPass& pass)
@@ -367,14 +445,14 @@ void App::setup_tonemap_pipeline(RenderPass& pass)
     const std::vector<VkDynamicState> dynStates = { VK_DYNAMIC_STATE_SCISSOR,VK_DYNAMIC_STATE_VIEWPORT };
     vkjs::PipelineBuilder pb = {};
     pb._rasterizer = vks::initializers::pipelineRasterizationStateCreateInfo(
-        VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
+        VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
     pb._depthStencil = vks::initializers::pipelineDepthStencilStateCreateInfo(VK_FALSE, VK_FALSE, VK_COMPARE_OP_ALWAYS);
     pb._dynamicStates = vks::initializers::pipelineDynamicStateCreateInfo(dynStates);
     pb._inputAssembly = vks::initializers::pipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
     pb._multisampling = vks::initializers::pipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT, 0);
-    pb._vertexInputInfo = vks::initializers::pipelineVertexInputStateCreateInfo(
-        vertexInput.bindings,
-        vertexInput.attributes);
+    pb._vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+    pb._colorBlendAttachments.push_back(vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE));
 
 
     vkjs::ShaderModule vert_module(*device);
@@ -413,12 +491,12 @@ void App::setup_tonemap_pipeline(RenderPass& pass)
     set0bind[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     VkDescriptorSetLayoutCreateInfo ds0ci = vks::initializers::descriptorSetLayoutCreateInfo(set0bind);
-    std::array<VkDescriptorSetLayout, 1> dsl;
-    dsl[0] = descLayoutCache.create_descriptor_layout(&ds0ci);
-    assert(dsl[0]);
+    
+    tonemapLayout = descLayoutCache.create_descriptor_layout(&ds0ci);
+    assert(tonemapLayout);
 
     VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo(1);
-    plci.pSetLayouts = dsl.data();
+    plci.pSetLayouts = &tonemapLayout;
     VK_CHECK(vkCreatePipelineLayout(d, &plci, nullptr, &pass.layout));
     pb._pipelineLayout = pass.layout;
     pass.pipeline = pb.build_pipeline(d, pass.pass);
@@ -562,8 +640,8 @@ void App::setup_triangle_pass()
 
     VkAttachmentDescription color = {};
     color.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    color.format = swapchain.vkb_swapchain.image_format;
+    color.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    color.format = VK_FORMAT_R16G16B16A16_SFLOAT;
     color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     color.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -586,10 +664,10 @@ void App::setup_triangle_pass()
     ZRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkSubpassDependency dep0 = {};
-    dep0.dependencyFlags = 0;
-    dep0.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dep0.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+    dep0.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
     dep0.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-    dep0.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dep0.srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
     dep0.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dep0.srcSubpass = VK_SUBPASS_EXTERNAL;
     dep0.dstSubpass = 0;
@@ -686,6 +764,8 @@ void App::setup_images()
         fbci.width = HDRImage[i].extent.width;
         fbci.height = HDRImage[i].extent.height;
         VK_CHECK(vkCreateFramebuffer(d, &fbci, 0, &HDRFramebuffer[i]));
+
+        HDRImage[i].change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
 }
 
@@ -694,7 +774,7 @@ void App::prepare()
     vkjs::AppBase::prepare();
 
     setup_descriptor_pools();
-    setup_images();
+    setup_samplers();
 
     // Calculate required alignment based on minimum device offset alignment
     minUboAlignment = device->vkb_physical_device.properties.limits.minUniformBufferOffsetAlignment;
@@ -706,21 +786,9 @@ void App::prepare()
 
     setup_triangle_pass();
     setup_triangle_pipeline(passes.triangle);
-
-    auto samplerCI = vks::initializers::samplerCreateInfo();
-    samplerCI.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerCI.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerCI.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerCI.anisotropyEnable = VK_TRUE;
-    samplerCI.maxAnisotropy = 8.f;
-    samplerCI.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
-    samplerCI.compareEnable = VK_FALSE;
-    samplerCI.compareOp = VK_COMPARE_OP_ALWAYS;
-    samplerCI.magFilter = VK_FILTER_LINEAR;
-    samplerCI.minFilter = VK_FILTER_LINEAR;
-    samplerCI.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    samplerCI.maxLod = 16.f;
-    VK_CHECK(device->create_sampler(samplerCI, &sampLinearRepeat));
+    setup_tonemap_pass();
+    setup_tonemap_pipeline(passes.tonemap);
+    setup_images();
 
     device->create_buffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 32ULL * 1024 * 1024, &vtxbuf);
     device->create_buffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 32ULL * 1024 * 1024, &idxbuf);
