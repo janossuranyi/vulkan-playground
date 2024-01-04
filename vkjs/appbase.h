@@ -89,7 +89,7 @@ namespace vkjs {
 		// List of available frame buffers (same as number of swap chain images)
 		std::vector<VkFramebuffer> framebuffers;
 		// Active frame buffer index
-		uint32_t current_buffer = 0;
+		uint32_t currentBuffer = 0;
 		// Descriptor set pool
 		VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
 		// List of shader modules created (stored for cleanup)

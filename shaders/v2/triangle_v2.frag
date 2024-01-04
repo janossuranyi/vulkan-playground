@@ -9,6 +9,7 @@ const float pi = 3.1415926535;
 #include "../v1/colorConversion.glsl"
 #include "../v1/tonemapping.glsl"
 #include "../v1/light.glsl"
+#include "../v1/fog.glsl"
 
 layout(location = 0) out vec4 outColor0;
 
@@ -38,6 +39,14 @@ vec3 toSRGB(vec3 color)
 vec3 tonemap(vec3 c) { return c / (1.0 + c); }
 
 void main() {
+
+    FogParameters fogParams;
+    fogParams.color = vec3(1.0);
+    fogParams.equation = 1;
+    fogParams.isEnabled = true;
+    fogParams.density = 0.01;
+
+    float fogFactor = getFogFactor(fogParams, abs(In.FragCoordVS.z));
 
     mat3 tbn = mat3(
         normalize(In.TangentVS),
@@ -72,7 +81,7 @@ void main() {
     light.outerConeCos = cos(45 * pi/180.0);
     light.range = 20.0;
     light.color = vec3(1.0);
-    light.intensity = 260.0;
+    light.intensity = 300.0;
     light.type = LightType_Point;
     vec3 Attn = getLighIntensity( light, In.LightVS - In.FragCoordVS  );
 
@@ -87,7 +96,8 @@ void main() {
     float NoV = saturate(dot(N,V));
     float VoH = saturate(dot(V,H));
     vec3 specColor;
-    specColor = GGXSingleScattering(max(perceptualRoughness,0.2), F0, NoH, NoV, VoH, NoL);
+    specColor = GGXSingleScattering(alphaRoughness, F0, NoH, NoV, VoH, NoL);
+    //specColor = specBRDF(NoH,NoV,NoL,VoH,F0,max(perceptualRoughness,.2));
     diffuseColor = CoDWWIIDiffuse(diffuseColor, NoL, VoH, NoV, NoH, alphaRoughness);
     
 /*
@@ -97,6 +107,7 @@ void main() {
 */
     vec3 ambient = 0.05 * albedoColor.rgb;
     outColor0 = vec4((diffuseColor + specColor) * Attn * NoL + ambient, albedoColor.a);
+    outColor0.rgb = mix(fogParams.color, outColor0.rgb, fogFactor);
     //outColor0 = vec4(vec3(spec), albedoColor.a);
     //outColor0.rgb = toSRGB( ACESFitted ( outColor0.rgb ) );
 }

@@ -8,7 +8,7 @@ namespace vkjs {
 		vkb::Swapchain vkb_swapchain{};
 		std::vector<VkImage> images;
 		std::vector<VkImageView> views;
-		uint32_t current_image = 0;
+
 		VkExtent3D extent() const {
 			return VkExtent3D{ vkb_swapchain.extent.width,vkb_swapchain.extent.height,1 };
 		}

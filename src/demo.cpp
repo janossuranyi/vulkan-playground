@@ -226,6 +226,8 @@ void App::setup_descriptor_sets()
 
         HDRImage[i].setup_descriptor();
         HDRImage[i].descriptor.sampler = sampNearestClampBorder;
+        HDRImage[i].descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
         vkutil::DescriptorBuilder::begin(&descLayoutCache, &descAllocator)
             .bind_image(0, &HDRImage[i].descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .build(HDRDescriptor[i]);
@@ -425,7 +427,7 @@ void App::render()
         vkDestroyFramebuffer(d, fb[currentFrame], 0);
     }
 
-    std::array<VkImageView, 1> targets = { swapchain.views[current_buffer] };
+    std::array<VkImageView, 1> targets = { swapchain.views[currentBuffer] };
     auto fbci = vks::initializers::framebufferCreateInfo();
     fbci.renderPass = passes.tonemap.pass;
     fbci.layers = 1;
@@ -765,7 +767,7 @@ void App::setup_images()
         fbci.height = HDRImage[i].extent.height;
         VK_CHECK(vkCreateFramebuffer(d, &fbci, 0, &HDRFramebuffer[i]));
 
-        HDRImage[i].change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        //HDRImage[i].change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
 }
 

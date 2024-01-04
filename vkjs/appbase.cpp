@@ -117,7 +117,7 @@ namespace vkjs
 		
 		vkWaitForFences(*device, 1, &wait_fences[currentFrame], VK_TRUE, UINT64_MAX);
 
-		VkResult result = swapchain.acquire_next_image(semaphores[currentFrame].present_complete, &current_buffer);
+		VkResult result = swapchain.acquire_next_image(semaphores[currentFrame].present_complete, &currentBuffer);
 		if (result == VK_ERROR_OUT_OF_DATE_KHR) {
 			window_resize();
 			return;
@@ -155,7 +155,7 @@ namespace vkjs
 		submit.pWaitDstStageMask = &stageMask;
 		VK_CHECK(vkQueueSubmit(queue, 1, &submit, wait_fences[currentFrame]));
 
-		result = swapchain.present_image(queue, current_buffer, semaphores[currentFrame].render_complete);
+		result = swapchain.present_image(queue, currentBuffer, semaphores[currentFrame].render_complete);
 
 		if ((result == VK_ERROR_OUT_OF_DATE_KHR) || (result == VK_SUBOPTIMAL_KHR)) {
 			window_resize();
@@ -415,7 +415,7 @@ namespace vkjs
 
 		VkFramebufferCreateInfo fbCI = vks::initializers::framebufferCreateInfo();
 		fbCI.attachmentCount = 1;
-		fbCI.pAttachments = &swapchain.views[current_buffer];
+		fbCI.pAttachments = &swapchain.views[currentBuffer];
 		fbCI.layers = 1;
 		fbCI.width = width;
 		fbCI.height = height;

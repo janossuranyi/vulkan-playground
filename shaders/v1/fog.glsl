@@ -14,7 +14,12 @@ struct FogParameters
 
 float getFogFactor(FogParameters params, float fogCoordinate)
 {
-	float result = 0.0;
+	float result = 1.0;
+	
+	if (!params.isEnabled) {
+		return result;
+	}
+
 	if(params.equation == 0)
 	{
 		float fogLength = params.linearEnd - params.linearStart;
