@@ -13,4 +13,28 @@ float ApproxPow ( float fBase, float fPower ) {
 	return asfloat( uint( fPower * float( asuint( fBase ) ) - ( fPower - 1 ) * 127 * ( 1 << 23 ) ) );
 }
 
+vec2 OctWrap ( vec2 v ) {
+	return ( 1.0 - abs( v.yx ) ) * vec2( sign(v.x) , sign(v.y) );
+}
+
+vec3 NormalOctDecode ( vec2 encN, bool expand_range ) {
+	if ( expand_range ) {
+		encN = encN * 2.0 - 1.0;
+	}
+	vec3 n;
+	n.z = 1.0 - abs( encN.x ) - abs( encN.y );
+	n.xy = n.z >= 0.0 ? encN.xy : OctWrap( encN.xy );
+	n = normalize( n );
+	return n;
+}
+
+vec2 NormalOctEncode ( vec3 n, bool compress_range ) {
+	n /= ( abs( n.x ) + abs( n.y ) + abs( n.z ) );
+	n.xy = n.z >= 0.0 ? n.xy : OctWrap( n.xy );
+	if ( compress_range ) {
+		n.xy = n.xy * 0.5 + 0.5;
+	}
+	return n.xy;
+}
+
 #endif

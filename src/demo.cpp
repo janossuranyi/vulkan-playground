@@ -45,6 +45,7 @@ private:
 
     vkjs::Image uvChecker;
     std::array<vkjs::Image, MAX_CONCURRENT_FRAMES> HDRImage{};
+    std::array<vkjs::Image, MAX_CONCURRENT_FRAMES> HDR_NormalImage{};
     std::array<VkFramebuffer, MAX_CONCURRENT_FRAMES> HDRFramebuffer{};
     std::array<VkDescriptorSet, MAX_CONCURRENT_FRAMES> HDRDescriptor{};
 
@@ -350,11 +351,12 @@ void App::build_command_buffers()
     VkCommandBuffer cmd = draw_cmd_buffers[currentFrame];
 
     VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
-    VkClearValue clearVal[2];
+    VkClearValue clearVal[3];
     clearVal[0].color = { 0.8f,0.8f,0.8f,1.0f };
-    clearVal[1].depthStencil.depth = 1.0f;
+    clearVal[1].color = { 0.0f,0.0f,0.0f,0.0f };
+    clearVal[2].depthStencil.depth = 1.0f;
 
-    beginPass.clearValueCount = 2;
+    beginPass.clearValueCount = 3;
     beginPass.pClearValues = &clearVal[0];
     beginPass.renderPass = passes.triangle.pass;
     beginPass.framebuffer = HDRFramebuffer[currentFrame];
@@ -454,35 +456,28 @@ void App::setup_tonemap_pipeline(RenderPass& pass)
     pb._multisampling = vks::initializers::pipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT, 0);
     pb._vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
-    pb._colorBlendAttachments.push_back(vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE));
-
+    pb._colorBlendAttachments.push_back(vks::initializers::pipelineColorBlendAttachmentState(0x0f, VK_FALSE));
 
     vkjs::ShaderModule vert_module(*device);
     vkjs::ShaderModule frag_module(*device);
-    fs::path vert_spirv_filename = basePath / "shaders/triquad.vert.spv";
-    fs::path frag_spirv_filename = basePath / "shaders/post.frag.spv";
+    const fs::path vert_spirv_filename = basePath / "shaders/triquad.vert.spv";
+    const fs::path frag_spirv_filename = basePath / "shaders/post.frag.spv";
     VK_CHECK(vert_module.create(vert_spirv_filename));
     VK_CHECK(frag_module.create(frag_spirv_filename));
 
-    pb._shaderStages.emplace_back();
-    auto& vert_stage = pb._shaderStages.back();
-    vert_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    vert_stage.stage = VK_SHADER_STAGE_VERTEX_BIT;
-    vert_stage.pName = "main";
-    vert_stage.module = vert_module.module();
-    pb._shaderStages.emplace_back();
-    auto& frag_stage = pb._shaderStages.back();
-    frag_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    frag_stage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    frag_stage.pName = "main";
-    frag_stage.module = frag_module.module();
+    pb._shaderStages.resize(2);
+    pb._shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    pb._shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    pb._shaderStages[0].pName = "main";
+    pb._shaderStages[0].module = vert_module.module();
+    pb._shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    pb._shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    pb._shaderStages[1].pName = "main";
+    pb._shaderStages[1].module = frag_module.module();
 
     /*
     layout:
-    set 0
-        0: ubo
-    set 1
-        0: dyn. ubo
+        set 0:0 input sampler
     */
 
     std::vector<VkDescriptorSetLayoutBinding> set0bind(1);
@@ -500,8 +495,10 @@ void App::setup_tonemap_pipeline(RenderPass& pass)
     VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo(1);
     plci.pSetLayouts = &tonemapLayout;
     VK_CHECK(vkCreatePipelineLayout(d, &plci, nullptr, &pass.layout));
+
     pb._pipelineLayout = pass.layout;
     pass.pipeline = pb.build_pipeline(d, pass.pass);
+
     assert(pass.pipeline);
 }
 
@@ -523,18 +520,15 @@ void App::setup_triangle_pipeline(RenderPass& pass)
     VK_CHECK(vert_module.create(basePath / "shaders/triangle_v2.vert.spv"));
     VK_CHECK(frag_module.create(basePath / "shaders/triangle_v2.frag.spv"));
 
-    pb._shaderStages.emplace_back();
-    auto& vert_stage = pb._shaderStages.back();
-    vert_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    vert_stage.stage = VK_SHADER_STAGE_VERTEX_BIT;
-    vert_stage.pName = "main";
-    vert_stage.module = vert_module.module();
-    pb._shaderStages.emplace_back();
-    auto& frag_stage = pb._shaderStages.back();
-    frag_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    frag_stage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    frag_stage.pName = "main";
-    frag_stage.module = frag_module.module();
+    pb._shaderStages.resize(2);
+    pb._shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    pb._shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    pb._shaderStages[0].pName = "main";
+    pb._shaderStages[0].module = vert_module.module();
+    pb._shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    pb._shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    pb._shaderStages[1].pName = "main";
+    pb._shaderStages[1].module = frag_module.module();
 
     /*
     layout:
@@ -587,7 +581,9 @@ void App::setup_triangle_pipeline(RenderPass& pass)
     pb._pipelineLayout = pass.layout;
 
     VkPipelineColorBlendAttachmentState blend0 = vks::initializers::pipelineColorBlendAttachmentState(
-        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT, VK_FALSE);
+        0x0f, VK_FALSE);
+
+    pb._colorBlendAttachments.push_back(blend0);
     pb._colorBlendAttachments.push_back(blend0);
 
     pass.pipeline = pb.build_pipeline(d, pass.pass);
@@ -648,6 +644,14 @@ void App::setup_triangle_pass()
     color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     color.samples = VK_SAMPLE_COUNT_1_BIT;
 
+    VkAttachmentDescription color2 = {};
+    color2.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    color2.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    color2.format = VK_FORMAT_R16G16_SFLOAT;
+    color2.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    color2.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    color2.samples = VK_SAMPLE_COUNT_1_BIT;
+
     VkAttachmentDescription depth = {};
     depth.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     depth.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
@@ -661,12 +665,15 @@ void App::setup_triangle_pass()
     VkAttachmentReference colorRef = {};
     colorRef.attachment = 0;
     colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    VkAttachmentReference color2Ref = {};
+    color2Ref.attachment = 1;
+    color2Ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     VkAttachmentReference ZRef = {};
-    ZRef.attachment = 1;
+    ZRef.attachment = 2;
     ZRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkSubpassDependency dep0 = {};
-    dep0.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+    dep0.dependencyFlags = 0;
     dep0.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
     dep0.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
     dep0.srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
@@ -675,27 +682,36 @@ void App::setup_triangle_pass()
     dep0.dstSubpass = 0;
     VkSubpassDependency dep1 = {};
     dep1.dependencyFlags = 0;
-    dep1.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    dep1.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    dep1.srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-    dep1.dstStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    dep1.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dep1.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+    dep1.srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dep1.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dep1.srcSubpass = VK_SUBPASS_EXTERNAL;
     dep1.dstSubpass = 0;
+    VkSubpassDependency dep2 = {};
+    dep2.dependencyFlags = 0;
+    dep2.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    dep2.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    dep2.srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    dep2.dstStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    dep2.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dep2.dstSubpass = 0;
 
-    const VkAttachmentDescription attachments[2] = { color,depth };
-    const VkSubpassDependency deps[2] = { dep0,dep1 };
+    const std::array<VkAttachmentDescription,3> attachments = { color,color2,depth };
+    const std::array<VkSubpassDependency,3> deps = { dep0,dep1,dep2 };
+    const std::array<VkAttachmentReference,2> refs = { colorRef,color2Ref };
 
     VkSubpassDescription subpass0 = {};
-    subpass0.colorAttachmentCount = 1;
-    subpass0.pColorAttachments = &colorRef;
     subpass0.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass0.colorAttachmentCount = (uint32_t) refs.size();
+    subpass0.pColorAttachments = refs.data();
     subpass0.pDepthStencilAttachment = &ZRef;
 
-    rpci.attachmentCount = 2;
-    rpci.pAttachments = attachments;
+    rpci.attachmentCount = (uint32_t) attachments.size();
+    rpci.pAttachments = attachments.data();
     rpci.flags = 0;
-    rpci.dependencyCount = 2;
-    rpci.pDependencies = deps;
+    rpci.dependencyCount = (uint32_t) deps.size();
+    rpci.pDependencies = deps.data();
     rpci.subpassCount = 1;
     rpci.pSubpasses = &subpass0;
 
@@ -750,14 +766,20 @@ void App::setup_images()
         if (HDRImage[i].image != VK_NULL_HANDLE) {
             device->destroy_image(&HDRImage[i]);
         }
+        if (HDR_NormalImage[i].image != VK_NULL_HANDLE) {
+            device->destroy_image(&HDR_NormalImage[i]);
+        }
         if (HDRFramebuffer[i] != VK_NULL_HANDLE) {
             vkDestroyFramebuffer(*device, HDRFramebuffer[i], nullptr);
         }
         VK_CHECK(device->create_color_attachment(VK_FORMAT_R16G16B16A16_SFLOAT, 
             swapchain.extent(),
             &HDRImage[i]));
+        VK_CHECK(device->create_color_attachment(VK_FORMAT_R16G16_SFLOAT,
+            swapchain.extent(),
+            &HDR_NormalImage[i]));
 
-        std::array<VkImageView, 2> targets = { HDRImage[i].view,  depth_image.view};
+        std::array<VkImageView, 3> targets = { HDRImage[i].view, HDR_NormalImage[i].view, depth_image.view};
         auto fbci = vks::initializers::framebufferCreateInfo();
         fbci.renderPass = passes.triangle.pass;
         fbci.layers = 1;

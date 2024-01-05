@@ -34,10 +34,11 @@ void main() {
     vec3 light = vec3(0,15,0);
     mat4 mvp = mtxProjection * mtxView * mtxModel;
     vec4 posVS = (mtxView * mtxModel) * vec4(inPosition, 1.0);
+
+    //output the position of each vertex
     gl_Position = mvp * vec4(inPosition, 1.0);
     gl_Position.y = -gl_Position.y;
 
-    //output the position of each vertex
 	mat3 mNormal =mat3(mtxView * mtxNormal);
 	
 	vec4 localTangent = inTangent * 2.0 - 1.0;

@@ -12,6 +12,7 @@ const float pi = 3.1415926535;
 #include "../v1/fog.glsl"
 
 layout(location = 0) out vec4 outColor0;
+layout(location = 1) out vec2 outNormal;
 
 layout(location = 0) in INTERFACE {
     vec4 Color;
@@ -31,17 +32,10 @@ layout(set = 1, binding = 0) uniform sampler2D samp_albedo;
 layout(set = 1, binding = 1) uniform sampler2D samp_normal;
 layout(set = 1, binding = 2) uniform sampler2D samp_pbr;
 
-vec3 toSRGB(vec3 color) 
-{
-    return pow(color, vec3(1.0/2.2));
-}
-
-vec3 tonemap(vec3 c) { return c / (1.0 + c); }
-
 void main() {
 
     FogParameters fogParams;
-    fogParams.color = vec3(1.0);
+    fogParams.color = vec3(0.75);
     fogParams.equation = 1;
     fogParams.isEnabled = true;
     fogParams.density = 0.01;
@@ -96,9 +90,9 @@ void main() {
     float NoV = saturate(dot(N,V));
     float VoH = saturate(dot(V,H));
     vec3 specColor;
-    specColor = GGXSingleScattering(r, F0, NoH, NoV, VoH, NoL);
-    //specColor = specBRDF(NoH,NoV,NoL,VoH,F0,max(perceptualRoughness,.2));
-    diffuseColor = CoDWWIIDiffuse(diffuseColor, NoL, VoH, NoV, NoH, r);
+    //specColor = GGXSingleScattering(r, F0, NoH, NoV, VoH, NoL);
+    specColor = specBRDF(NoH,NoV,NoL,VoH,F0,r);
+    diffuseColor /= pi; //CoDWWIIDiffuse(diffuseColor, NoL, VoH, NoV, NoH, r);
     
 /*
     vec3 ddx = dFdx( In.FragCoordVS );
@@ -108,6 +102,6 @@ void main() {
     vec3 ambient = 0.05 * albedoColor.rgb;
     outColor0 = vec4((diffuseColor + specColor) * Attn * NoL + ambient, albedoColor.a);
     outColor0.rgb = mix(fogParams.color, outColor0.rgb, fogFactor);
-    //outColor0 = vec4(vec3(spec), albedoColor.a);
-    //outColor0.rgb = toSRGB( ACESFitted ( outColor0.rgb ) );
+    outNormal = NormalOctEncode(N,false);
+//    outColor0.rgb = mix(checkerColor.rgb, outColor0.rgb, 0.98);
 }
