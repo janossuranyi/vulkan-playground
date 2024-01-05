@@ -3,6 +3,7 @@
 
 float asfloat ( uint x ) { return uintBitsToFloat( x ); }
 uint asuint ( float x ) { return floatBitsToUint( x ); }
+int asint ( float x ) { return floatBitsToInt( x ) ; }
 
 float saturate(float x) { return clamp(x, 0.0, 1.0); }
 vec2 saturate(vec2 x) { return clamp(x, 0.0, 1.0); }
