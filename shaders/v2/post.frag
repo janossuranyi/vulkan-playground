@@ -14,5 +14,5 @@ void main() {
     vec4 inColor = texture(samp_input, texcoord);
     inColor.rgb = ACESFitted( inColor.rgb );
     inColor.rgb = linearTosRGB( inColor.rgb );
-    fragColor0 = inColor;
+    fragColor0 = vec4(inColor.rgb, 1.0);
 }

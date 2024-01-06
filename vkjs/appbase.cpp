@@ -216,6 +216,7 @@ namespace vkjs
 		auto swap_ret = builder
 			.set_desired_format(format)
 			.set_desired_present_mode(presentMode)
+			.set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT| VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
 			.set_old_swapchain(swapchain.vkb_swapchain).build();
 
 		if (!swap_ret) {

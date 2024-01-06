@@ -93,7 +93,7 @@ vec3 specBRDF( vec3 N, vec3 V, vec3 L, vec3 f0, float r ) {
 	const vec3 H = normalize( V + L );
 	float m = 0.2 + r * 0.8;
     m *= m;
-    //m *= m;
+    m *= m;
     float m2 = m * m;
 	float NdotH = clamp( dot( N, H ), 0.0, 1.0 );
 	float spec = (NdotH * NdotH) * (m2 - 1) + 1;
@@ -101,7 +101,7 @@ vec3 specBRDF( vec3 N, vec3 V, vec3 L, vec3 f0, float r ) {
 	float Gv = clamp( dot( N, V ), 0.0, 1.0 ) * (1.0 - m) + m;
 	float Gl = clamp( dot( N, L ), 0.0, 1.0 ) * (1.0 - m) + m;
 	spec /= ( 4.0 * Gv * Gl + 1e-8 );
-	return F_Schlick( f0, vec3(1.0), clamp(dot( L, H ), 0.0, 1.0) ) * spec;
+	return fresnelSchlick( f0, clamp(dot( L, H ), 0.0, 1.0) ) * spec;
 }
 
 /* Modified DOOM2016 BRDF */

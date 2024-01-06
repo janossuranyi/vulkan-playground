@@ -405,7 +405,8 @@ void App::build_command_buffers()
     HDRImage[currentFrame].record_change_layout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 */
     HDRImage[currentFrame].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    
+    HDR_NormalImage[currentFrame].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
     clearVal[0].color = { 0.f,0.f,0.f,1.f };
     beginPass.clearValueCount = 1;
     beginPass.renderPass = passes.tonemap.pass;
@@ -420,7 +421,6 @@ void App::build_command_buffers()
     vkCmdDraw(cmd, 3, 1, 0, 0);
 
     vkCmdEndRenderPass(cmd);
-
 }
 
 void App::render()

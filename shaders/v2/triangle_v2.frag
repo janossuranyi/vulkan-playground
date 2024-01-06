@@ -85,13 +85,17 @@ void main() {
 
     float NoL = saturate(dot(N,L));
     vec3 F0 = mix(vec3(0.04), albedoColor.rgb, metalness);
-
+    vec3 specColor;
+/*
     float NoH = saturate(dot(N,H));
     float NoV = saturate(dot(N,V));
     float VoH = saturate(dot(V,H));
-    vec3 specColor;
-    //specColor = GGXSingleScattering(r, F0, NoH, NoV, VoH, NoL);
-    specColor = specBRDF(NoH,NoV,NoL,VoH,F0,r);
+    
+    specColor = GGXSingleScattering(r, F0, NoH, NoV, VoH, NoL);
+*/
+//    specColor = specBRDF(NoH,NoV,NoL,VoH,F0,r);
+
+    specColor = specBRDF(N,V,L,F0,perceptualRoughness);
     diffuseColor /= pi; //CoDWWIIDiffuse(diffuseColor, NoL, VoH, NoV, NoH, r);
     
 /*
@@ -99,8 +103,8 @@ void main() {
     vec3 ddy = dFdy( In.FragCoordVS );
     vec3 N = normalize( cross( ddx, ddy ) );
 */
-    vec3 ambient = 0.05 * albedoColor.rgb;
-    outColor0 = vec4((diffuseColor + specColor) * Attn * NoL + ambient, albedoColor.a);
+    vec3 ambientColor = 0.05 * albedoColor.rgb;
+    outColor0 = vec4((diffuseColor + specColor) * Attn * NoL + ambientColor, 1.0 - r);
     outColor0.rgb = mix(fogParams.color, outColor0.rgb, fogFactor);
     outNormal = NormalOctEncode(N,false);
 //    outColor0.rgb = mix(checkerColor.rgb, outColor0.rgb, 0.98);
