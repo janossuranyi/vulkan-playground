@@ -4,19 +4,9 @@
 
 namespace vkjs {
 
-	Device::Device(vkb::PhysicalDevice vkb_physical_device_, VkInstance instance) : vkb_physical_device(vkb_physical_device_)
+	Device::Device(vkb::PhysicalDevice vkb_physical_device_, VkInstance instance) : vkbPhysicalDevice(vkb_physical_device_)
 	{
-		auto devexts = vkb_physical_device.get_extensions();
-		jsrlib::Info("Device extensions");
-
-		for (auto& ext : devexts) {
-			jsrlib::Info(ext.c_str());
-			if (ext == VK_EXT_DEBUG_MARKER_EXTENSION_NAME) {
-				jsrlib::Info("%s supported !", VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
-			}
-		}
-
-		vkb::DeviceBuilder deviceBuilder(vkb_physical_device);
+		vkb::DeviceBuilder deviceBuilder(vkbPhysicalDevice);
 
 		auto device_build_result = deviceBuilder.build();
 		if (!device_build_result)
@@ -24,15 +14,22 @@ namespace vkjs {
 			throw std::runtime_error("FATAL: VKJS Cannot create logical device");
 		}
 
-		vkb_device = device_build_result.value();
-		logical_device = vkb_device.device;
+		vkbDevice = device_build_result.value();
+		logicalDevice = vkbDevice.device;
 		
+		for (auto& ext : vkbPhysicalDevice.get_extensions())
+		{
+			if (ext == VK_EXT_DEBUG_MARKER_EXTENSION_NAME) {
+				debugMarkerPresent = true;
+				break;
+			}
+		}
 
 #ifdef VKJS_USE_VOLK
-		volkLoadDevice(logical_device);
+		volkLoadDevice(logicalDevice);
 #endif
 
-		auto g_queue_index = vkb_device.get_queue_index(vkb::QueueType::graphics);
+		auto g_queue_index = vkbDevice.get_queue_index(vkb::QueueType::graphics);
 		if (!g_queue_index.has_value()) {
 			throw std::runtime_error("Fatal error: cannot get graphics queue index !");
 		}
@@ -41,29 +38,29 @@ namespace vkjs {
 		queue_family_indices.compute = g_queue_index.value();
 		queue_family_indices.transfer = g_queue_index.value();
 
-		if (vkb_physical_device.has_dedicated_compute_queue()) {
-			auto c_queue_index = vkb_device.get_queue_index(vkb::QueueType::compute);
+		if (vkbPhysicalDevice.has_dedicated_compute_queue()) {
+			auto c_queue_index = vkbDevice.get_queue_index(vkb::QueueType::compute);
 			queue_family_indices.compute = c_queue_index.value();
 		}
 
-		if (vkb_physical_device.has_dedicated_transfer_queue()) {
-			auto t_queue_index = vkb_device.get_queue_index(vkb::QueueType::transfer);
+		if (vkbPhysicalDevice.has_dedicated_transfer_queue()) {
+			auto t_queue_index = vkbDevice.get_queue_index(vkb::QueueType::transfer);
 			queue_family_indices.transfer = t_queue_index.value();
 		}
 
-		auto get_queue_result = vkb_device.get_queue(vkb::QueueType::graphics);
+		auto get_queue_result = vkbDevice.get_queue(vkb::QueueType::graphics);
 		if (!get_queue_result) {
 			throw std::runtime_error("Graphics queue not found !");
 		}
 
 		graphics_queue = get_graphics_queue();
-		for (size_t i(0); i < vkb_physical_device.memory_properties.memoryHeapCount; ++i) {
-			jsrlib::Info("Device memory heap[%d] size: %u Mb", i, vkb_physical_device.memory_properties.memoryHeaps[i].size / 1024 / 1024);
+		for (size_t i(0); i < vkbPhysicalDevice.memory_properties.memoryHeapCount; ++i) {
+			jsrlib::Info("Device memory heap[%d] size: %u Mb", i, vkbPhysicalDevice.memory_properties.memoryHeaps[i].size / 1024 / 1024);
 		}
 
-		for (size_t i = 0; i < vkb_physical_device.memory_properties.memoryTypeCount; ++i)
+		for (size_t i = 0; i < vkbPhysicalDevice.memory_properties.memoryTypeCount; ++i)
 		{
-			auto& m = vkb_physical_device.memory_properties.memoryTypes[i];
+			auto& m = vkbPhysicalDevice.memory_properties.memoryTypes[i];
 			std::string str = "";
 			if (m.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) str += "device-local; ";
 			if (m.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) str += "host-visible; ";
@@ -100,8 +97,8 @@ namespace vkjs {
 		allocatorInfo.pVulkanFunctions = &vma_vulkan_func;
 #endif
 		//initialize the memory allocator
-		allocatorInfo.physicalDevice = vkb_physical_device;
-		allocatorInfo.device = logical_device;
+		allocatorInfo.physicalDevice = vkbPhysicalDevice;
+		allocatorInfo.device = logicalDevice;
 		allocatorInfo.instance = instance;
 
 		if (vmaCreateAllocator(&allocatorInfo, &allocator) != VK_SUCCESS) {
@@ -114,9 +111,9 @@ namespace vkjs {
 
 	Device::~Device()
 	{
-		vkDeviceWaitIdle(logical_device);
+		vkDeviceWaitIdle(logicalDevice);
 
-		vkDestroyCommandPool(vkb_device, command_pool, nullptr);
+		vkDestroyCommandPool(vkbDevice, command_pool, nullptr);
 		
 		for (const auto& it : buffers) {
 			VmaAllocationInfo inf;
@@ -128,14 +125,14 @@ namespace vkjs {
 		}
 
 		for (const auto& it : images) {
-			vkDestroyImageView(vkb_device, it.view, nullptr);
+			vkDestroyImageView(vkbDevice, it.view, nullptr);
 			vmaDestroyImage(allocator, it.image, it.mem);
 		}
 		for (const auto& it : samplers) {
-			vkDestroySampler(logical_device, it.sampler, nullptr);
+			vkDestroySampler(logicalDevice, it.sampler, nullptr);
 		}
 		vmaDestroyAllocator(allocator);
-		vkb::destroy_device(vkb_device);
+		vkb::destroy_device(vkbDevice);
 	}
 
 	VkQueue Device::get_graphics_queue()
@@ -156,7 +153,7 @@ namespace vkjs {
 	VkQueue Device::get_dedicated_queue(vkb::QueueType t)
 	{
 		VkQueue res = VK_NULL_HANDLE;
-		auto get_queue_ret = vkb_device.get_queue(t);
+		auto get_queue_ret = vkbDevice.get_queue(t);
 
 		if (get_queue_ret) {
 			res = get_queue_ret.value();
@@ -167,12 +164,76 @@ namespace vkjs {
 
 	bool Device::has_dedicated_compute_queue() const
 	{
-		return vkb_physical_device.has_dedicated_compute_queue();
+		return vkbPhysicalDevice.has_dedicated_compute_queue();
 	}
 
 	bool Device::has_dedicated_transfer_queue() const
 	{
-		return vkb_physical_device.has_dedicated_transfer_queue();
+		return vkbPhysicalDevice.has_dedicated_transfer_queue();
+	}
+
+	void Device::set_object_name(uint64_t object, VkDebugReportObjectTypeEXT objectType, const char* name)
+	{
+		if (debugMarkerPresent)
+		{
+			if (vkDebugMarkerSetObjectNameEXT)
+			{
+				VkDebugMarkerObjectNameInfoEXT nameInfo = {};
+				nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_MARKER_OBJECT_NAME_INFO_EXT;
+				nameInfo.objectType = objectType;
+				nameInfo.object = object;
+				nameInfo.pObjectName = name;
+				vkDebugMarkerSetObjectNameEXT(logicalDevice, &nameInfo);
+			}
+		}
+	}
+
+	void Device::set_image_name(const Image* image, const std::string& name)
+	{
+		set_object_name((uint64_t)image->image, VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_EXT, name.c_str());
+	}
+
+	void Device::set_buffer_name(const Buffer* buffer, const std::string& name)
+	{
+		set_object_name((uint64_t)buffer->buffer, VK_DEBUG_REPORT_OBJECT_TYPE_BUFFER_EXT, name.c_str());
+	}
+
+	void Device::set_descriptor_set_name(VkDescriptorSet ds, const std::string& name)
+	{
+		set_object_name((uint64_t)ds, VK_DEBUG_REPORT_OBJECT_TYPE_DESCRIPTOR_SET_EXT, name.c_str());
+	}
+
+	void Device::set_debug_marker(VkCommandBuffer cmd, const glm::vec4& color, const std::string& name)
+	{
+		if (debugMarkerPresent)
+		{
+			VkDebugMarkerMarkerInfoEXT markerInfo = {};
+			memcpy(markerInfo.color, &color[0], sizeof(color));
+			markerInfo.pMarkerName = name.c_str();
+			vkCmdDebugMarkerInsertEXT(cmd, &markerInfo);
+		}
+	}
+
+	void Device::begin_debug_marker_region(VkCommandBuffer cmd, const glm::vec4& color, const std::string& name)
+	{
+		if (debugMarkerPresent)
+		{
+			VkDebugMarkerMarkerInfoEXT markerInfo = {};
+			markerInfo.sType = VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT;
+			// Color to display this region with (if supported by debugger)
+			memcpy(markerInfo.color, &color[0], sizeof(color));
+			// Name of the region displayed by the debugging application
+			markerInfo.pMarkerName = name.c_str();
+			vkCmdDebugMarkerBeginEXT(cmd, &markerInfo);
+		}
+	}
+
+	void Device::end_debug_marker_region(VkCommandBuffer cmd)
+	{
+		if (debugMarkerPresent)
+		{
+			vkCmdDebugMarkerEndEXT(cmd);
+		}
 	}
 
 	VkResult Device::create_command_pool(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags flags, VkCommandPool* result)
@@ -182,7 +243,7 @@ namespace vkjs {
 		ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 		ci.flags = flags;
 		ci.queueFamilyIndex = queueFamilyIndex;
-		VkResult err = vkCreateCommandPool(vkb_device, &ci, nullptr, result);
+		VkResult err = vkCreateCommandPool(vkbDevice, &ci, nullptr, result);
 		
 		return err;
 	}
@@ -201,7 +262,7 @@ namespace vkjs {
 		ai.commandPool = pool;
 		ai.level = secondary ? VK_COMMAND_BUFFER_LEVEL_SECONDARY : VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		ai.commandBufferCount = 1;
-		res = vkAllocateCommandBuffers(vkb_device, &ai, out);
+		res = vkAllocateCommandBuffers(vkbDevice, &ai, out);
 		if (res == VK_SUCCESS && begin)
 		{
 			VkCommandBufferBeginInfo cmdBufInfo = {};
@@ -234,7 +295,7 @@ namespace vkjs {
 		CI.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 		CI.flags = flags;
 
-		return vkCreateFence(vkb_device, &CI, nullptr, out);
+		return vkCreateFence(vkbDevice, &CI, nullptr, out);
 	}
 
 	VkResult Device::create_semaphore(VkSemaphoreCreateFlags flags, VkSemaphore* out)
@@ -242,7 +303,7 @@ namespace vkjs {
 		VkSemaphoreCreateInfo CI{};
 		CI.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 		CI.flags = flags;
-		return vkCreateSemaphore(vkb_device, &CI, nullptr, out);
+		return vkCreateSemaphore(vkbDevice, &CI, nullptr, out);
 	}
 
 	VkResult Device::create_buffer(VkBufferUsageFlags usage, VkMemoryPropertyFlags memFlags, VkDeviceSize size, Buffer* result)
@@ -376,7 +437,7 @@ namespace vkjs {
 		vinfo.subresourceRange.baseArrayLayer = 0;
 		vinfo.subresourceRange.layerCount = layers * faces;
 		vinfo.subresourceRange.aspectMask = aspectFlags;
-		err = vkCreateImageView(vkb_device, &vinfo, nullptr, &result->view);
+		err = vkCreateImageView(vkbDevice, &vinfo, nullptr, &result->view);
 
 		if (err) {
 			vmaDestroyImage(allocator, result->image, result->mem);
@@ -491,7 +552,7 @@ namespace vkjs {
 		err = create_image(
 			format,
 			extent,
-			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT|VK_IMAGE_USAGE_SAMPLED_BIT,
 			VK_IMAGE_TYPE_2D,
 			VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_VIEW_TYPE_2D,
@@ -507,7 +568,7 @@ namespace vkjs {
 
 	VkResult Device::create_sampler(const VkSamplerCreateInfo& samplerCreateInfo,  VkSampler *out)
 	{
-		auto err = vkCreateSampler(logical_device, &samplerCreateInfo, nullptr, out);
+		auto err = vkCreateSampler(logicalDevice, &samplerCreateInfo, nullptr, out);
 		if (err == VK_SUCCESS) {
 			samplers.emplace_back(SamplerInfo{ *out });
 		}
@@ -574,11 +635,11 @@ namespace vkjs {
 		}
 
 		// Wait for the fence to signal that command buffer has finished executing
-		VK_CHECK(vkWaitForFences(vkb_device, 1, &fence, VK_TRUE, UINT64_MAX));
-		vkDestroyFence(vkb_device, fence, nullptr);
+		VK_CHECK(vkWaitForFences(vkbDevice, 1, &fence, VK_TRUE, UINT64_MAX));
+		vkDestroyFence(vkbDevice, fence, nullptr);
 		if (free)
 		{
-			vkFreeCommandBuffers(vkb_device, pool, 1, &commandBuffer);
+			vkFreeCommandBuffers(vkbDevice, pool, 1, &commandBuffer);
 		}
 	}
 
@@ -589,7 +650,7 @@ namespace vkjs {
 		const VkCommandPool pool	= command_pool;
 		const VkCommandBuffer cmd	= command_buffer;
 
-		vkResetCommandPool(vkb_device, pool, 0);
+		vkResetCommandPool(vkbDevice, pool, 0);
 		begin_command_buffer(cmd);
 
 		callback(cmd);

@@ -196,8 +196,8 @@ namespace vkjs
 
 		uint32_t sfc{ 0 };
 		std::vector<VkSurfaceFormatKHR> formats;
-		vkGetPhysicalDeviceSurfaceFormatsKHR(device->vkb_physical_device, surface, &sfc, nullptr);	formats.resize(sfc);
-		vkGetPhysicalDeviceSurfaceFormatsKHR(device->vkb_physical_device, surface, &sfc, formats.data());
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device->vkbPhysicalDevice, surface, &sfc, nullptr);	formats.resize(sfc);
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device->vkbPhysicalDevice, surface, &sfc, formats.data());
 
 		for (const auto& it : formats) {
 			/*if (it.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 && VK_COLOR_SPACE_HDR10_ST2084_EXT) {
@@ -212,7 +212,7 @@ namespace vkjs
 
 		VkPresentModeKHR presentMode = settings.vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_MAILBOX_KHR;
 
-		vkb::SwapchainBuilder builder{ device->vkb_device };
+		vkb::SwapchainBuilder builder{ device->vkbDevice };
 		auto swap_ret = builder
 			.set_desired_format(format)
 			.set_desired_present_mode(presentMode)
@@ -360,7 +360,7 @@ namespace vkjs
 		imguiRenderPassCI.pDependencies = &dep;
 		imguiRenderPassCI.pSubpasses = &subpass;
 
-		VK_CHECK(vkCreateRenderPass(device->logical_device, &imguiRenderPassCI, nullptr, &imguiRenderPass));
+		VK_CHECK(vkCreateRenderPass(device->logicalDevice, &imguiRenderPassCI, nullptr, &imguiRenderPass));
 		// Setup Dear ImGui context
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
@@ -384,8 +384,8 @@ namespace vkjs
 		ImGui_ImplSDL2_InitForVulkan(window);
 		ImGui_ImplVulkan_InitInfo init_info = {};
 		init_info.Instance = instance;
-		init_info.PhysicalDevice = device->vkb_physical_device;
-		init_info.Device = device->logical_device;
+		init_info.PhysicalDevice = device->vkbPhysicalDevice;
+		init_info.Device = device->logicalDevice;
 		init_info.QueueFamily = device->queue_family_indices.graphics;
 		init_info.Queue = device->graphics_queue;
 		init_info.PipelineCache = VK_NULL_HANDLE;
@@ -451,7 +451,7 @@ namespace vkjs
 	}
 	AppBase::~AppBase() noexcept
 	{
-		if (!device || !device->logical_device || !prepared) return;
+		if (!device || !device->logicalDevice || !prepared) return;
 
 		vkDeviceWaitIdle(*device);
 
@@ -474,6 +474,7 @@ namespace vkjs
 
 		swapchain.vkb_swapchain.destroy_image_views(swapchain.views);
 		vkb::destroy_swapchain(swapchain.vkb_swapchain);
+		vkDestroyImageView(*device, deptOnlyView, nullptr);
 
 		if (device) { delete device; }
 		vkDestroySurfaceKHR(instance, surface, nullptr);
@@ -521,7 +522,8 @@ namespace vkjs
 			.set_surface(surface)
 			.set_required_features(enabled_features)
 			.set_required_features_12(enabled_features12)
-			.add_required_extension_features(shader_draw_parameters_features);
+			.add_required_extension_features(shader_draw_parameters_features)
+			.add_desired_extension(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
 
 		for (const auto* extension_name : enabled_device_extensions) {
 			selector.add_required_extension(extension_name);
@@ -730,8 +732,23 @@ namespace vkjs
 	{
 		if (depth_image.image) {
 			device->destroy_image(&depth_image);
+			vkDestroyImageView(*device, deptOnlyView, nullptr);
 		}
 		VK_CHECK(device->create_depth_stencil_attachment(depth_format, { swapchain.vkb_swapchain.extent.width,swapchain.vkb_swapchain.extent.height,1 }, &depth_image));
+
+		VkImageViewCreateInfo ivci = vks::initializers::imageViewCreateInfo();
+		ivci.format = depth_format;
+		ivci.image = depth_image.image;
+		ivci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		ivci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		ivci.subresourceRange.baseArrayLayer = 0;
+		ivci.subresourceRange.baseMipLevel = 0;
+		ivci.subresourceRange.layerCount = 1;
+		ivci.subresourceRange.levelCount = 1;
+		VK_CHECK(vkCreateImageView(*device, &ivci, nullptr, &deptOnlyView));
+
+		device->set_image_name(&depth_image, "Depth-Stencil image");
+
 	}
 	void AppBase::setup_framebuffer()
 	{

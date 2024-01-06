@@ -164,6 +164,7 @@ namespace vkjs {
 		VmaAllocator allocator;
 
 		Image depth_image;
+		VkImageView deptOnlyView = VK_NULL_HANDLE;
 
 		struct {
 			bool left = false;

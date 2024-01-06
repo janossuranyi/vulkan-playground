@@ -14,6 +14,7 @@
 #include "jsrlib/jsr_logger.h"
 #include "jsrlib/jsr_semaphore.h"
 #include "jsrlib/jsr_resources.h"
+#include "jsrlib/jsr_math.h"
 //#include "jsrlib/jsr_jobsystem2.h"
 #include "jobsys.h"
 #include "world.h"
@@ -62,6 +63,7 @@ private:
     size_t minUboAlignment = 0;
 
     std::array<vkjs::Buffer,MAX_CONCURRENT_FRAMES> uboPassData;
+    std::array<vkjs::Buffer, MAX_CONCURRENT_FRAMES> uboPostProcessData;
 
     size_t drawDataBufferSize = 32 * 1024;
     vkjs::Buffer uboDrawData;
@@ -100,7 +102,24 @@ private:
     struct PassData {
         glm::mat4 mtxView;
         glm::mat4 mtxProjection;
+        glm::vec4 vScaleBias;
+        glm::vec4 avSSAOkernel[12];
     } passData;
+
+    
+    struct PostProcessData {
+        glm::vec3 fogColor;
+        float fogLinearStart;
+        float fogLinearEnd;
+        float fogDensity;
+        int fogEquation;
+        int fogEnabled;
+        float fExposure;
+        float fZnear;
+        float fZfar;
+        int pad0;
+    } postProcessData;
+    static_assert((sizeof(PostProcessData) & 15) == 0);
 
     struct RenderPass {
         VkRenderPass pass;
@@ -136,7 +155,7 @@ public:
 
 
     App(bool b) : AppBase(b) {
-        depth_format = VK_FORMAT_D32_SFLOAT_S8_UINT;
+        depth_format = VK_FORMAT_D24_UNORM_S8_UINT;
     }
 
     virtual ~App();
@@ -157,7 +176,7 @@ public:
     void update_uniforms() {
 
         uboPassData[currentFrame].copyTo(0, sizeof(passData), &passData);
-
+        uboPostProcessData[currentFrame].copyTo(0, sizeof(PostProcessData), &postProcessData);
     }
 
     virtual void prepare() override;
@@ -177,8 +196,8 @@ void demo()
     app->settings.fullscreen = false;
     app->settings.exclusive = false;
     app->settings.vsync = true;
-    app->width = 1900;
-    app->height = 1000;
+    app->width = 1280;
+    app->height = 720;
     
     if (app->init()) {
         app->prepare();
@@ -201,12 +220,18 @@ void App::on_window_resized()
     for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i) {
         if (HDRDescriptor[i] != VK_NULL_HANDLE) {
             // update descript sets
-            VkDescriptorImageInfo inf{};
-            inf.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            inf.imageView = HDRImage[i].view;
-            inf.sampler = sampNearestClampBorder;
-            VkWriteDescriptorSet write = vks::initializers::writeDescriptorSet(HDRDescriptor[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &inf, 1);
-            vkUpdateDescriptorSets(d, 1, &write, 0, nullptr);
+            std::array<VkDescriptorImageInfo,2> inf{};
+            inf[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            inf[0].imageView = HDRImage[i].view;
+            inf[0].sampler = sampNearestClampBorder;
+            inf[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            inf[1].imageView = deptOnlyView;
+            inf[1].sampler = sampNearestClampBorder;
+            std::array<VkWriteDescriptorSet, 2> write;
+            write[0] = vks::initializers::writeDescriptorSet(HDRDescriptor[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &inf[0], 1);
+            write[1] = vks::initializers::writeDescriptorSet(HDRDescriptor[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &inf[1], 1);
+            
+            vkUpdateDescriptorSets(d, 2, &write[0], 0, nullptr);
         }
     }
 }
@@ -222,7 +247,7 @@ void App::setup_descriptor_sets()
         uboPassData[i].descriptor.offset = 0;
 
         vkutil::DescriptorBuilder::begin(&descLayoutCache, &descAllocator)
-            .bind_buffer(0, &uboPassData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
+            .bind_buffer(0, &uboPassData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT| VK_SHADER_STAGE_FRAGMENT_BIT)
             .bind_buffer(1, &uboDrawData.descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT)
             .bind_image(2, &uvChecker.descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .build(triangleDescriptors[i]);
@@ -231,10 +256,21 @@ void App::setup_descriptor_sets()
         HDRImage[i].descriptor.sampler = sampNearestClampBorder;
         HDRImage[i].descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
+        depth_image.setup_descriptor();
+        depth_image.descriptor.sampler = sampNearestClampBorder;
+        depth_image.descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        depth_image.descriptor.imageView = deptOnlyView;
+
+        uboPostProcessData[i].setup_descriptor();
+        uboPostProcessData[i].descriptor.range = sizeof(PostProcessData);
+
         vkutil::DescriptorBuilder::begin(&descLayoutCache, &descAllocator)
             .bind_image(0, &HDRImage[i].descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+            .bind_image(1, &depth_image.descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+            .bind_buffer(2, &uboPostProcessData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .build(HDRDescriptor[i]);
 
+        device->set_descriptor_set_name(HDRDescriptor[i], "Tonemap DSET " + std::to_string(i));
     }
 
 }
@@ -354,6 +390,7 @@ void App::build_command_buffers()
 {
     VkCommandBuffer cmd = draw_cmd_buffers[currentFrame];
 
+    device->begin_debug_marker_region(cmd, vec4(1.f, .5f, 0.f, 1.f), "Forward Pass");
     VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
     VkClearValue clearVal[3];
     clearVal[0].color = { 0.8f,0.8f,0.8f,1.0f };
@@ -369,10 +406,6 @@ void App::build_command_buffers()
 
     HDRImage[currentFrame].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     
-    /*
-    HDRImage[currentFrame].record_change_layout(cmd, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
-    HDRImage[currentFrame].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-*/
     vkCmdBeginRenderPass(cmd, &beginPass, VK_SUBPASS_CONTENTS_INLINE);
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.triangle.pipeline);
@@ -401,11 +434,14 @@ void App::build_command_buffers()
         dynOffset += dynamicAlignment;
     }
     vkCmdEndRenderPass(cmd);
+    device->end_debug_marker_region(cmd);
 /*
     HDRImage[currentFrame].record_change_layout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 */
     HDRImage[currentFrame].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     HDR_NormalImage[currentFrame].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    device->begin_debug_marker_region (cmd, vec4(.5f, 1.f, .5f, 1.f), "PostProcess Pass");
 
     clearVal[0].color = { 0.f,0.f,0.f,1.f };
     beginPass.clearValueCount = 1;
@@ -421,12 +457,20 @@ void App::build_command_buffers()
     vkCmdDraw(cmd, 3, 1, 0, 0);
 
     vkCmdEndRenderPass(cmd);
+    device->end_debug_marker_region(cmd);
 }
 
 void App::render()
 {
     passData.mtxView = camera.GetViewMatrix();
     passData.mtxProjection = glm::perspective(radians(camera.Zoom), (float)width / height, .01f, 500.f);
+    passData.vScaleBias.x = 1.0f / swapchain.extent().width;
+    passData.vScaleBias.y = 1.0f / swapchain.extent().height;
+    passData.vScaleBias.z = 0.f;
+    passData.vScaleBias.w = 0.f;
+    postProcessData.fZnear = .01f;
+    postProcessData.fZfar = 500.f;
+
     update_uniforms();
 
     if (fb[currentFrame] != VK_NULL_HANDLE) {
@@ -484,12 +528,20 @@ void App::setup_tonemap_pipeline(RenderPass& pass)
         set 0:0 input sampler
     */
 
-    std::vector<VkDescriptorSetLayoutBinding> set0bind(1);
+    std::vector<VkDescriptorSetLayoutBinding> set0bind(3);
 
     set0bind[0].binding = 0;
     set0bind[0].descriptorCount = 1;
     set0bind[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     set0bind[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    set0bind[1].binding = 1;
+    set0bind[1].descriptorCount = 1;
+    set0bind[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    set0bind[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    set0bind[2].binding = 2;
+    set0bind[2].descriptorCount = 1;
+    set0bind[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    set0bind[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     VkDescriptorSetLayoutCreateInfo ds0ci = vks::initializers::descriptorSetLayoutCreateInfo(set0bind);
     
@@ -548,7 +600,7 @@ void App::setup_triangle_pipeline(RenderPass& pass)
     set0bind[0].binding = 0;
     set0bind[0].descriptorCount = 1;
     set0bind[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    set0bind[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    set0bind[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     set0bind[1].binding = 1;
     set0bind[1].descriptorCount = 1;
     set0bind[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
@@ -658,7 +710,7 @@ void App::setup_triangle_pass()
 
     VkAttachmentDescription depth = {};
     depth.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    depth.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    depth.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     depth.format = depth_format;
     depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -783,6 +835,8 @@ void App::setup_images()
             swapchain.extent(),
             &HDR_NormalImage[i]));
 
+        device->set_image_name(&HDRImage[i], "HDR Image " + std::to_string(i));
+
         std::array<VkImageView, 3> targets = { HDRImage[i].view, HDR_NormalImage[i].view, depth_image.view};
         auto fbci = vks::initializers::framebufferCreateInfo();
         fbci.renderPass = passes.triangle.pass;
@@ -805,7 +859,7 @@ void App::prepare()
     setup_samplers();
 
     // Calculate required alignment based on minimum device offset alignment
-    minUboAlignment = device->vkb_physical_device.properties.limits.minUniformBufferOffsetAlignment;
+    minUboAlignment = device->vkbPhysicalDevice.properties.limits.minUniformBufferOffsetAlignment;
 
     camera.MovementSpeed = 0.001f;
 
@@ -821,12 +875,16 @@ void App::prepare()
     device->create_buffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 32ULL * 1024 * 1024, &vtxbuf);
     device->create_buffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 32ULL * 1024 * 1024, &idxbuf);
 
+    device->set_buffer_name(&vtxbuf, "Vertex Buffer");
+    device->set_buffer_name(&idxbuf, "Index Buffer");
+
     if (!load_texture2d("../../resources/images/uv_checker_large.png", &uvChecker, true, w, h, nc))
     {
         device->create_texture2d(VK_FORMAT_R8G8B8A8_SRGB, { 1,1,1 }, &uvChecker);
         uvChecker.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
     }
+
+    device->set_image_name(&uvChecker, "UV-Map debug image");
 
     //uvChecker.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     uvChecker.setup_descriptor();
@@ -836,6 +894,11 @@ void App::prepare()
     {
         device->create_uniform_buffer(8 * 1024, false, &uboPassData[i]);
         uboPassData[i].map();
+        device->set_buffer_name(&uboPassData[i], "PerPass UBO " + std::to_string(i));
+
+        device->create_uniform_buffer(sizeof(PostProcessData), false, &uboPostProcessData[i]);
+        uboPostProcessData[i].map();
+        device->set_buffer_name(&uboPostProcessData[i], "PostProcData UBO " + std::to_string(i));
     }
 
     scene = std::make_unique<World>();
@@ -919,12 +982,38 @@ void App::prepare()
     const size_t size = drawDataBufferSize * 2;
     device->create_uniform_buffer(size, false, &uboDrawData);
     uboDrawData.map();
+    device->set_buffer_name(&uboDrawData, "DrawData UBO");
+
     for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
     {
         uboDrawData.copyTo(i * drawDataBufferSize, drawData.size(), drawData.data());
     }
     setup_descriptor_sets();
 
+    const int kernelSize = sizeof(passData.avSSAOkernel) / sizeof(passData.avSSAOkernel[0]);
+    std::uniform_real_distribution<float> randomFloats(0.0, 1.0); // random floats between [0.0, 1.0]
+    std::default_random_engine generator;
+    for (unsigned int i = 0; i < kernelSize; ++i)
+    {
+        glm::vec4 sample(
+            randomFloats(generator) * 2.0 - 1.0,
+            randomFloats(generator) * 2.0 - 1.0,
+            randomFloats(generator),
+            0.0f
+        );
+        sample = glm::normalize(sample);
+        float scale = (float)i / float(kernelSize);
+        scale = jsrlib::lerp(0.1f, 1.0f, scale * scale);
+        sample *= scale;
+        //sample *= randomFloats(generator);
+        passData.avSSAOkernel[i] = sample;
+    }
+
+    postProcessData.fExposure = 1.0f;
+    postProcessData.fogColor = vec3(0.8f);
+    postProcessData.fogEquation = 1;
+    postProcessData.fogDensity = 0.01f;
+    postProcessData.fogEnabled = 1;
     prepared = true;
 }
 

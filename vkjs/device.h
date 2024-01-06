@@ -10,10 +10,11 @@ namespace vkjs {
 
 	struct Device {
 
-		VkDevice logical_device = VK_NULL_HANDLE;
+		bool debugMarkerPresent = false;
+		VkDevice logicalDevice = VK_NULL_HANDLE;
 		VmaAllocator allocator = {};
-		vkb::Device vkb_device = {};
-		vkb::PhysicalDevice vkb_physical_device = {};
+		vkb::Device vkbDevice = {};
+		vkb::PhysicalDevice vkbPhysicalDevice = {};
 		VkQueue graphics_queue = VK_NULL_HANDLE;
 		VmaVulkanFunctions vma_vulkan_func{};
 		struct
@@ -38,7 +39,7 @@ namespace vkjs {
 
 		constexpr operator VkDevice() const
 		{
-			return logical_device;
+			return logicalDevice;
 		};
 
 		explicit Device(vkb::PhysicalDevice physical_device_, VkInstance instance);
@@ -49,6 +50,15 @@ namespace vkjs {
 		VkQueue get_dedicated_queue(vkb::QueueType t);
 		bool has_dedicated_compute_queue() const;
 		bool has_dedicated_transfer_queue() const;
+
+		/* debug marker methodes */
+		void set_object_name(uint64_t object, VkDebugReportObjectTypeEXT objectType, const char* name);
+		void set_image_name(const Image* image, const std::string& name);
+		void set_buffer_name(const Buffer* buffer, const std::string& name);
+		void set_descriptor_set_name(VkDescriptorSet ds, const std::string& name);
+		void set_debug_marker(VkCommandBuffer cmd, const glm::vec4& color, const std::string& name);
+		void begin_debug_marker_region(VkCommandBuffer cmd, const glm::vec4& color, const std::string& name);
+		void end_debug_marker_region(VkCommandBuffer cmd);
 
 		VkResult create_command_pool(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags flags, VkCommandPool* result);
 		VkResult create_command_buffer(VkCommandPool pool, VkCommandBufferUsageFlags usage, bool secondary, VkCommandBuffer* out, bool begin);
