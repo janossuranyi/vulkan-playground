@@ -6,6 +6,16 @@ namespace vkjs {
 
 	Device::Device(vkb::PhysicalDevice vkb_physical_device_, VkInstance instance) : vkb_physical_device(vkb_physical_device_)
 	{
+		auto devexts = vkb_physical_device.get_extensions();
+		jsrlib::Info("Device extensions");
+
+		for (auto& ext : devexts) {
+			jsrlib::Info(ext.c_str());
+			if (ext == VK_EXT_DEBUG_MARKER_EXTENSION_NAME) {
+				jsrlib::Info("%s supported !", VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
+			}
+		}
+
 		vkb::DeviceBuilder deviceBuilder(vkb_physical_device);
 
 		auto device_build_result = deviceBuilder.build();

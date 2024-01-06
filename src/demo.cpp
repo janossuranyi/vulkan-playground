@@ -179,9 +179,11 @@ void demo()
     app->settings.vsync = true;
     app->width = 1900;
     app->height = 1000;
-    app->init();
-    app->prepare();
-    app->run();
+    
+    if (app->init()) {
+        app->prepare();
+        app->run();
+    }
 
     delete app;    
 }
@@ -325,6 +327,8 @@ void App::setup_samplers()
 
 App::~App()
 {
+    if (!d || !prepared) return;
+
     vkDeviceWaitIdle(d);
 
     std::array<RenderPass*, 3> rpasses = { &passes.preZ,&passes.tonemap,&passes.triangle };
@@ -952,6 +956,7 @@ void App::get_enabled_extensions()
     enabled_device_extensions.push_back(VK_EXT_SHADER_SUBGROUP_BALLOT_EXTENSION_NAME);
     enabled_device_extensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
     enabled_device_extensions.push_back(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
+    //enabled_device_extensions.push_back(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
 }
 
 void App::create_material_texture(std::string filename)

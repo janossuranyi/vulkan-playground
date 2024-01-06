@@ -446,9 +446,12 @@ namespace vkjs
 	AppBase::AppBase(bool enable_validation)
 	{
 		settings.validation = enable_validation;
+		device = {};
 	}
 	AppBase::~AppBase() noexcept
 	{
+		if (!device || !device->logical_device || !prepared) return;
+
 		vkDeviceWaitIdle(*device);
 
 		ImGui_ImplVulkan_Shutdown();
@@ -526,6 +529,7 @@ namespace vkjs
 		auto selector_result = selector.select();
 
 		if (!selector_result) {
+			jsrlib::Error("Cannot find a suitable physical device!");
 			return false;
 		}
 
