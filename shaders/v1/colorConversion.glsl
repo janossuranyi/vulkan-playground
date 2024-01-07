@@ -37,4 +37,20 @@ vec3 YCoCgToLinear(vec3 YCoCg){
     YCoCg.x - YCoCg.y - YCoCg.z);
 }
 
+float SRGBlinearApprox ( float value ) {
+	return value * ( value * ( value * 0.305306011 + 0.682171111 ) + 0.012522878 );
+}
+vec3 SRGBlinearApprox ( vec3 sRGB ) {
+	vec3 outLinear;
+	outLinear.r = SRGBlinearApprox( sRGB.r );
+	outLinear.g = SRGBlinearApprox( sRGB.g );
+	outLinear.b = SRGBlinearApprox( sRGB.b );
+	return outLinear;
+}
+vec4 SRGBlinearApprox ( vec4 sRGBA ) {
+	vec4 outLinear = vec4( SRGBlinearApprox( sRGBA.rgb ), 1 );
+	outLinear.a = SRGBlinearApprox( sRGBA.a );
+	return outLinear;
+}
+
 #endif // #ifndef COLOR_CONVERSION_INC
