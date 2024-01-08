@@ -27,6 +27,6 @@ void main() {
     float fogFactor = getFogFactor(sFogParams, abs(linearZ));
 
     inColor.rgb = ACESFitted( mix(sFogParams.color, fExposure * inColor.rgb, fogFactor ) );
-    inColor.rgb = linearTosRGB( inColor.rgb );
+    //inColor.rgb = linearTosRGB( inColor.rgb );
     fragColor0 = vec4(inColor.rgb, 1.0);
 }

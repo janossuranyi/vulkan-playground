@@ -33,6 +33,8 @@ layout(set = 0, binding = 0) uniform uPassData {
     mat4 mtxProjection;
     vec4 vScaleBias;
     vec4 avSSAOkernel[12];
+    vec4 vLightPos;
+    vec4 vLightColor;
 };
 
 
@@ -131,9 +133,9 @@ void main() {
     light.direction = In.LightDir;;
     light.innerConeCos = cos(40 * PI/180.0);
     light.outerConeCos = cos(45 * PI/180.0);
-    light.range = 20.0;
-    light.color = vec3(1.0);
-    light.intensity = 300.0;
+    light.range = vLightPos.w;
+    light.color = vLightColor.rgb;
+    light.intensity = vLightColor.a;
     light.type = LightType_Point;
     vec3 Attn = getLighIntensity( light, In.LightVS - In.FragCoordVS  );
 

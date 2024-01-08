@@ -48,6 +48,7 @@ private:
     VkDevice d;
 
     vkjs::Image uvChecker;
+    vkjs::Image ssaoNoise;
     std::array<vkjs::Image, MAX_CONCURRENT_FRAMES> HDRImage{};
     std::array<vkjs::Image, MAX_CONCURRENT_FRAMES> HDR_NormalImage{};
     std::array<VkFramebuffer, MAX_CONCURRENT_FRAMES> HDRFramebuffer{};
@@ -107,6 +108,8 @@ private:
         glm::mat4 mtxProjection;
         glm::vec4 vScaleBias;
         glm::vec4 avSSAOkernel[12];
+        glm::vec4 vLightPos;
+        glm::vec4 vLightColor;
     } passData;
 
     
@@ -148,6 +151,10 @@ public:
 
     virtual void on_update_gui() override
     { 
+        ImGui::DragFloat3("Light pos", &passData.vLightPos[0], 0.05f, -20.0f, 20.0f);
+        ImGui::ColorPicker3("LightColor", &passData.vLightColor[0]);
+        ImGui::DragFloat("Light intensity", &passData.vLightColor[3], 0.5f, 0.0f, 1000.0f);
+        ImGui::DragFloat("Light range", &passData.vLightPos[3], 0.05f, 0.0f, 100.0f);
         ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.1f, 1.0f, 50.0f);
         ImGui::Checkbox("Fog On/Off", (bool*) & postProcessData.fogEnabled);
         ImGui::DragFloat("Fog density", &postProcessData.fogDensity, 0.001, 0.0f, 1.0f);
@@ -260,7 +267,7 @@ void App::setup_descriptor_sets()
         vkutil::DescriptorBuilder::begin(&descLayoutCache, &descAllocator)
             .bind_buffer(0, &uboPassData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT| VK_SHADER_STAGE_FRAGMENT_BIT)
             .bind_buffer(1, &uboDrawData.descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT)
-            .bind_image(2, &uvChecker.descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+            .bind_image(2, &ssaoNoise.descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .build(triangleDescriptors[i]);
 
         HDRImage[i].setup_descriptor();
@@ -359,7 +366,8 @@ void App::setup_samplers()
     samplerCI.magFilter = VK_FILTER_LINEAR;
     samplerCI.minFilter = VK_FILTER_LINEAR;
     samplerCI.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    samplerCI.maxLod = 16.f;
+    samplerCI.minLod = -1000.f;
+    samplerCI.maxLod = 1000.f;
     VK_CHECK(device->create_sampler(samplerCI, &sampLinearRepeat));
 
     samplerCI.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
@@ -367,7 +375,9 @@ void App::setup_samplers()
     samplerCI.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
     samplerCI.magFilter = VK_FILTER_NEAREST;
     samplerCI.minFilter = VK_FILTER_NEAREST;
+    samplerCI.minLod = 0.0f;
     samplerCI.maxLod = 0.0f;
+    samplerCI.anisotropyEnable = VK_FALSE;
     VK_CHECK(device->create_sampler(samplerCI, &sampNearestClampBorder));
 
 }
@@ -859,6 +869,27 @@ void App::setup_images()
         fbci.height = HDRImage[i].extent.height;
         VK_CHECK(vkCreateFramebuffer(d, &fbci, 0, &HDRFramebuffer[i]));
 
+        VK_CHECK(device->create_texture2d(VK_FORMAT_R16G16_SFLOAT, VkExtent3D{ 4,4,1 }, &ssaoNoise));
+        std::uniform_real_distribution<float> randomFloats(0.0, 1.0); // random floats between [0.0, 1.0]
+        std::default_random_engine generator;
+        std::vector<glm::uint> ssaoNoise;
+        for (unsigned int i = 0; i < 16; i++)
+        {
+            glm::uint noise = glm::packHalf2x16(glm::vec2(
+                randomFloats(generator) * 2.0 - 1.0,
+                randomFloats(generator) * 2.0 - 1.0));
+
+            ssaoNoise.push_back(noise);
+        }
+        vkjs::Buffer tmpbuf;
+        device->create_staging_buffer(16 * 4, &tmpbuf);
+        tmpbuf.copyTo(0, 16 * 4, &ssaoNoise[0]);
+        this->ssaoNoise.upload(VkExtent3D{ 4,4,1 }, 0, 0, 0, 0, &tmpbuf);
+        device->destroy_buffer(&tmpbuf);
+        this->ssaoNoise.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        this->ssaoNoise.setup_descriptor();
+        this->ssaoNoise.descriptor.sampler = sampNearestClampBorder;
+
         //HDRImage[i].change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
 }
@@ -873,7 +904,9 @@ void App::prepare()
     // Calculate required alignment based on minimum device offset alignment
     minUboAlignment = device->vkbPhysicalDevice.properties.limits.minUniformBufferOffsetAlignment;
 
-    camera.MovementSpeed = 0.001f;
+    camera.MovementSpeed = 0.003f;
+    passData.vLightPos = glm::vec4(0.f, 1.5f, 0.f, 10.f);
+    passData.vLightColor = glm::vec4(0.800f, 0.453f, 0.100f, 15.f);
 
     d = *device;
     int w, h, nc;

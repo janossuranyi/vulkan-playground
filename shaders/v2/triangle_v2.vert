@@ -13,6 +13,8 @@ layout(set = 0, binding = 0) uniform uPassData {
     mat4 mtxProjection;
     vec4 vScaleBias;
     vec4 avSSAOkernel[12];
+    vec4 vLightPos;
+    vec4 vLightColor;
 };
 
 layout(set = 0, binding = 1) uniform uDrawData {
@@ -33,7 +35,7 @@ layout(location = 0) out INTERFACE {
 } Out;
 
 void main() {
-    vec3 light = vec3(0,15,0);
+    vec3 light = vLightPos.xyz;
     mat4 mvp = mtxProjection * mtxView * mtxModel;
     vec4 posVS = (mtxView * mtxModel) * vec4(inPosition, 1.0);
 
