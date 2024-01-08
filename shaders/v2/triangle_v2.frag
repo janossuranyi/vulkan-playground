@@ -28,15 +28,7 @@ layout(set = 1, binding = 0) uniform sampler2D samp_albedo;
 layout(set = 1, binding = 1) uniform sampler2D samp_normal;
 layout(set = 1, binding = 2) uniform sampler2D samp_pbr;
 
-layout(set = 0, binding = 0) uniform uPassData {
-    mat4 mtxView;
-    mat4 mtxProjection;
-    vec4 vScaleBias;
-    vec4 avSSAOkernel[12];
-    vec4 vLightPos;
-    vec4 vLightColor;
-};
-
+#include "passData.glsl"
 
 const float PI = 3.14159265359;
 
