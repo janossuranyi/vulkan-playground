@@ -83,7 +83,7 @@ namespace vkjs {
 		// Contains command buffers and semaphores to be presented to the queue
 		VkSubmitInfo submit_info;
 		// Command buffers used for rendering
-		std::array<VkCommandBuffer, MAX_CONCURRENT_FRAMES> draw_cmd_buffers;
+		std::array<VkCommandBuffer, MAX_CONCURRENT_FRAMES> drawCmdBuffers;
 		// Global render pass for frame buffer writes
 		VkRenderPass render_pass = VK_NULL_HANDLE;
 		// List of available frame buffers (same as number of swap chain images)

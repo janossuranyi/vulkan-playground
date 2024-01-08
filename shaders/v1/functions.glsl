@@ -45,34 +45,23 @@ float asfloat(int x)
 
 float sqrtIEEEIntApproximation(float inX, int inSqrtConst)
 {
-    float param = inX;
-    int x = asint(param);
+    int x = asint(inX);
     x = inSqrtConst + (x >> 1);
-    int param_1 = x;
-    return asfloat(param_1);
+    return asfloat(x);
 }
 
 float fastSqrtNR0(float inX)
 {
-    float param = inX;
-    int param_1 = 532487669;
-    return sqrtIEEEIntApproximation(param, param_1);
+    const int param_1 = 532487669;
+    return sqrtIEEEIntApproximation(inX, param_1);
 }
 
 float SmoothnessEncode(float s)
 {
     float param = abs(s);
     float s1 = fastSqrtNR0(param);
-    float _984;
-    if (s > 0.0)
-    {
-        _984 = s1;
-    }
-    else
-    {
-        _984 = -s1;
-    }
-    return (_984 * 0.5) + 0.5;
+    s1 = s > 0.0 ? s1 : -s1;
+    return (s1 * 0.5) + 0.5;
 }
 
 #endif

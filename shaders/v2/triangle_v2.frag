@@ -113,7 +113,7 @@ void main() {
     // b = 0.5 * sqrt(1 - ( 2 * r - 1)^2 - (2 * g - 1)^2) + 0.5
     //vec3 normalTS = vec3(normalSamp.xy, sqrt(1.0 - normalSamp.x * normalSamp.x - normalSamp.y * normalSamp.y));
 
-    const float r = pbrSample.g;
+    const float r = 0.2 + pbrSample.g * 0.8;
     const float metalness = pbrSample.b;
     const float microAO = pbrSample.r;
 
@@ -158,7 +158,8 @@ void main() {
     diffuseColor = (1.0 - metalness) * albedoColor.rgb * (1.0 - spec.rgb);
     
     vec3 ambientColor = 0.02 * albedoColor.rgb;
-    outColor0 = vec4((diffuseColor / PI + specColor.rgb) * Attn * NoL + ambientColor, smoothstep(0.8, 1.0, 1-r));
+    float reflectionMask = smoothstep(0.8, 1.0, 1.0 - r);
+    outColor0 = vec4((diffuseColor / PI + specColor.rgb) * Attn * NoL + ambientColor, reflectionMask);
     outNormal = NormalOctEncode(N,false);
 //    outColor0.rgb = mix(checkerColor.rgb, outColor0.rgb, 0.98);
 }

@@ -133,7 +133,7 @@ namespace vkjs
 
 		ImGui::NewFrame();
 
-		const VkCommandBuffer cmd = draw_cmd_buffers[currentFrame];
+		const VkCommandBuffer cmd = drawCmdBuffers[currentFrame];
 
 		VK_CHECK(vkResetCommandBuffer(cmd, 0));
 		device->begin_command_buffer(cmd);
@@ -250,7 +250,7 @@ namespace vkjs
 
 		VkCommandBufferAllocateInfo cbai = vks::initializers::commandBufferAllocateInfo(cmd_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 2);
 
-		vkAllocateCommandBuffers(*device, &cbai, draw_cmd_buffers.data());
+		vkAllocateCommandBuffers(*device, &cbai, drawCmdBuffers.data());
 	}
 	void AppBase::destroy_command_buffers()
 	{
@@ -433,7 +433,7 @@ namespace vkjs
 		renderPassInfo.renderArea.extent = swapchain.vkb_swapchain.extent;
 		renderPassInfo.renderPass = imguiRenderPass;
 
-		const auto cmd = draw_cmd_buffers[currentFrame];
+		const auto cmd = drawCmdBuffers[currentFrame];
 		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 		ImGui_ImplVulkan_RenderDrawData(draw_data, cmd);
 		vkCmdEndRenderPass(cmd);

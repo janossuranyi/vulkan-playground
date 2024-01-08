@@ -41,6 +41,9 @@ using namespace jsr;
 
 class App : public vkjs::AppBase {
 private:
+    //const VkFormat HDR_FMT = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+    const VkFormat HDR_RT_FMT = VK_FORMAT_R16G16B16A16_SFLOAT;
+    const VkFormat NORMAL_RT_FMT = VK_FORMAT_R16G16_SFLOAT;
 
     VkDevice d;
 
@@ -62,7 +65,7 @@ private:
     vkjs::Buffer idxbuf;
     size_t minUboAlignment = 0;
 
-    std::array<vkjs::Buffer,MAX_CONCURRENT_FRAMES> uboPassData;
+    std::array<vkjs::Buffer, MAX_CONCURRENT_FRAMES> uboPassData;
     std::array<vkjs::Buffer, MAX_CONCURRENT_FRAMES> uboPostProcessData;
 
     size_t drawDataBufferSize = 32 * 1024;
@@ -143,7 +146,14 @@ private:
 
 public:
 
-    virtual void on_update_gui() override { ImGui::Text("Hello Vulkan"); }
+    virtual void on_update_gui() override
+    { 
+        ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.1f, 1.0f, 50.0f);
+        ImGui::Checkbox("Fog On/Off", (bool*) & postProcessData.fogEnabled);
+        ImGui::DragFloat("Fog density", &postProcessData.fogDensity, 0.001, 0.0f, 1.0f);
+        ImGui::DragInt("Fog equation", &postProcessData.fogEquation, 1.f, 1, 2);
+    }
+
     virtual void on_window_resized() override;
 
     void setup_descriptor_sets();
@@ -199,7 +209,8 @@ void demo()
     app->width = 1280;
     app->height = 720;
     
-    if (app->init()) {
+    if (app->init())
+    {
         app->prepare();
         app->run();
     }
@@ -388,12 +399,12 @@ App::~App()
 
 void App::build_command_buffers()
 {
-    VkCommandBuffer cmd = draw_cmd_buffers[currentFrame];
+    VkCommandBuffer cmd = drawCmdBuffers[currentFrame];
 
     device->begin_debug_marker_region(cmd, vec4(1.f, .5f, 0.f, 1.f), "Forward Pass");
     VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
     VkClearValue clearVal[3];
-    clearVal[0].color = { 0.8f,0.8f,0.8f,1.0f };
+    clearVal[0].color = { 0.8f,0.8f,0.8f,0.0f };
     clearVal[1].color = { 0.0f,0.0f,0.0f,0.0f };
     clearVal[2].depthStencil.depth = 1.0f;
 
@@ -695,7 +706,7 @@ void App::setup_triangle_pass()
     VkAttachmentDescription color = {};
     color.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     color.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    color.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+    color.format = HDR_RT_FMT;
     color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     color.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -703,7 +714,7 @@ void App::setup_triangle_pass()
     VkAttachmentDescription color2 = {};
     color2.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     color2.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    color2.format = VK_FORMAT_R16G16_SFLOAT;
+    color2.format = NORMAL_RT_FMT;
     color2.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     color2.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     color2.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -828,14 +839,15 @@ void App::setup_images()
         if (HDRFramebuffer[i] != VK_NULL_HANDLE) {
             vkDestroyFramebuffer(*device, HDRFramebuffer[i], nullptr);
         }
-        VK_CHECK(device->create_color_attachment(VK_FORMAT_R16G16B16A16_SFLOAT, 
+        VK_CHECK(device->create_color_attachment(HDR_RT_FMT,
             swapchain.extent(),
             &HDRImage[i]));
-        VK_CHECK(device->create_color_attachment(VK_FORMAT_R16G16_SFLOAT,
+        VK_CHECK(device->create_color_attachment(NORMAL_RT_FMT,
             swapchain.extent(),
             &HDR_NormalImage[i]));
 
-        device->set_image_name(&HDRImage[i], "HDR Image " + std::to_string(i));
+        device->set_image_name(&HDRImage[i], "Forward Color Attachment " + std::to_string(i));
+        device->set_image_name(&HDR_NormalImage[i], "Forward Normal Attachment " + std::to_string(i));
 
         std::array<VkImageView, 3> targets = { HDRImage[i].view, HDR_NormalImage[i].view, depth_image.view};
         auto fbci = vks::initializers::framebufferCreateInfo();
