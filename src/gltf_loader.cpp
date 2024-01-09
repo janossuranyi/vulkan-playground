@@ -242,7 +242,12 @@ namespace jsr {
 				}
 			}
 			else {
-				auto mtx = glm::mat4(glm::make_mat4(node.matrix.data()));
+				glm::mat4x4 mtx{};// = glm::mat4x4(glm::make_mat4((double*)node.matrix.data()));
+				const double* src = node.matrix.data();
+				float* dst = &mtx[0][0];
+
+				for (size_t i(0); i < 16; ++i) { dst[i] = static_cast<float>(src[i]); }
+
 				myNode.setTransform(mtx);
 			}
 		}

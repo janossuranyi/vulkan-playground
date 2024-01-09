@@ -132,7 +132,7 @@ void main() {
     vec3 Attn = getLighIntensity( light, In.LightVS - In.FragCoordVS  );
 
     if(albedoColor.a < 0.5) discard;
-    albedoColor.rgb = sRGBToLinear(albedoColor.rgb);
+    albedoColor.rgb = sRGBToLinear(albedoColor.rgb /* In.Color.rgb*/);
 
     float NoL = saturate(dot(N,L));
     vec3 F0 = mix(vec3(0.04), albedoColor.rgb, metalness);

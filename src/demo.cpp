@@ -74,7 +74,7 @@ private:
     std::array<vkjs::Buffer, MAX_CONCURRENT_FRAMES> uboPassData;
     std::array<vkjs::Buffer, MAX_CONCURRENT_FRAMES> uboPostProcessData;
 
-    size_t drawDataBufferSize = 32 * 1024;
+    size_t drawDataBufferSize = 8 * 1024 * 1024;
     vkjs::Buffer uboDrawData;
 
     size_t dynamicAlignment = 0;
@@ -328,7 +328,6 @@ void App::setup_descriptor_pools()
 
 void App::setup_objects()
 {
-    std::vector<mat4> parentMatrices(scene->scene.rootNodes.size(), mat4(1.0f));
     std::vector<int> nodesToProcess = scene->scene.rootNodes;
     objects.clear();
 
@@ -346,11 +345,9 @@ void App::setup_objects()
     {
         int idx = nodesToProcess.back();
         nodesToProcess.pop_back();
-        mat4 parentMatrix = parentMatrices.back();
-        parentMatrices.pop_back();
 
         auto& node = scene->scene.nodes[idx];
-        mat4 mtxModel = parentMatrix * node.getTransform();
+        mat4 mtxModel = node.getTransform();
         if (node.isMesh()) {
             for (auto& e : node.getEntities()) {
                 Object obj;
@@ -367,7 +364,6 @@ void App::setup_objects()
         }
         for (const auto& e : node.getChildren()) {
             nodesToProcess.push_back(e);
-            parentMatrices.push_back(mtxModel);
         }
     }
     drawData.resize(ddlst.size() * dynamicAlignment);
@@ -442,7 +438,9 @@ void App::build_command_buffers()
     device->begin_debug_marker_region(cmd, vec4(1.f, .5f, 0.f, 1.f), "Forward Pass");
     VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
     VkClearValue clearVal[3];
-    clearVal[0].color = { 0.8f,0.8f,0.8f,0.0f };
+    glm::vec4 sky = glm::vec4{ 135, 206, 235, 255 } / 255.f;
+
+    clearVal[0].color = { sky.r,sky.g,sky.b,sky.a };
     clearVal[1].color = { 0.0f,0.0f,0.0f,0.0f };
     clearVal[2].depthStencil.depth = 1.0f;
     //clearVal[3].color = { 0.0f,0.0f,0.0f,0.0f };
@@ -1139,8 +1137,20 @@ void App::prepare()
 
     scene = std::make_unique<World>();
 
-    auto scenePath = fs::path("../../resources/models/sponza");
-    jsr::gltfLoadWorld(scenePath / "sponza_j.gltf", *scene);
+    struct S_Scene {
+        fs::path dir;
+        std::string file;
+        S_Scene(const fs::path& a, const std::string& b) : dir(a), file(b) {}
+    };
+
+    std::array<S_Scene, 2> scenes = {
+        S_Scene{fs::path("../../resources/models/sponza"), "sponza_j.gltf"},
+        S_Scene{fs::path("../../resources/models/sw_venator"), "scene.gltf"}
+    };
+
+    const int sceneIdx = 1;
+    auto scenePath = scenes[sceneIdx].dir;
+    jsr::gltfLoadWorld(scenePath / scenes[sceneIdx].file, *scene);
 
     std::vector<vkjs::Vertex> vertices;
     std::vector<uint16_t> indices;
