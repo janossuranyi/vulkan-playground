@@ -46,10 +46,15 @@ private:
     const VkFormat NORMAL_RT_FMT = VK_FORMAT_R16G16_SFLOAT;
 
     VkDevice d;
+    bool smaaChanged = false;
 
     vkjs::Image uvChecker;
     vkjs::Image ssaoNoise;
+    std::array<VkImageView, MAX_CONCURRENT_FRAMES> depthResolvedView{};
+    std::array<vkjs::Image, MAX_CONCURRENT_FRAMES> depthResolved{};
+    std::array<vkjs::Image, MAX_CONCURRENT_FRAMES> HDRImage_MS{};
     std::array<vkjs::Image, MAX_CONCURRENT_FRAMES> HDRImage{};
+    std::array<vkjs::Image, MAX_CONCURRENT_FRAMES> HDR_NormalImage_MS{};
     std::array<vkjs::Image, MAX_CONCURRENT_FRAMES> HDR_NormalImage{};
     std::array<VkFramebuffer, MAX_CONCURRENT_FRAMES> HDRFramebuffer{};
     std::array<VkDescriptorSet, MAX_CONCURRENT_FRAMES> HDRDescriptor{};
@@ -151,14 +156,35 @@ public:
 
     virtual void on_update_gui() override
     { 
+        static const char* items[] = { "Off","MSAAx2","MSAAx4","MSAAx8" };
+        static const char* current_msaa_item = items[static_cast<size_t>(settings.msaaSamples)-1];
+
+        static const VkSampleCountFlagBits smaaBits[] = { VK_SAMPLE_COUNT_1_BIT,VK_SAMPLE_COUNT_2_BIT,VK_SAMPLE_COUNT_4_BIT,VK_SAMPLE_COUNT_8_BIT };
+
         ImGui::DragFloat3("Light pos", &passData.vLightPos[0], 0.05f, -20.0f, 20.0f);
         ImGui::ColorPicker3("LightColor", &passData.vLightColor[0]);
-        ImGui::DragFloat("Light intensity", &passData.vLightColor[3], 0.5f, 0.0f, 1000.0f);
+        ImGui::DragFloat("Light intensity", &passData.vLightColor[3], 0.5f, 0.0f, 10000.0f);
         ImGui::DragFloat("Light range", &passData.vLightPos[3], 0.05f, 0.0f, 100.0f);
-        ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.1f, 1.0f, 50.0f);
+        ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.01f, 1.0f, 50.0f);
         ImGui::Checkbox("Fog On/Off", (bool*) & postProcessData.fogEnabled);
-        ImGui::DragFloat("Fog density", &postProcessData.fogDensity, 0.001, 0.0f, 1.0f);
+        ImGui::DragFloat("Fog density", &postProcessData.fogDensity, 0.0002, 0.0f, 1.0f, "%.4f");
         ImGui::DragInt("Fog equation", &postProcessData.fogEquation, 1.f, 1, 2);
+        if (ImGui::BeginCombo("MSAA", current_msaa_item, ImGuiComboFlags_HeightRegular))
+        {
+            for (int n = 0; n < IM_ARRAYSIZE(items); ++n)
+            {
+                bool isSelected = (current_msaa_item == items[n]);
+                if (ImGui::Selectable(items[n], isSelected)) {
+                    current_msaa_item = items[n];
+                    settings.msaaSamples = smaaBits[n];
+                    smaaChanged = true;
+                }
+                if (isSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
     }
 
     virtual void on_window_resized() override;
@@ -213,6 +239,7 @@ void demo()
     app->settings.fullscreen = false;
     app->settings.exclusive = false;
     app->settings.vsync = true;
+    app->settings.msaaSamples = VK_SAMPLE_COUNT_2_BIT;
     app->width = 1280;
     app->height = 720;
     
@@ -243,13 +270,13 @@ void App::on_window_resized()
             inf[0].imageView = HDRImage[i].view;
             inf[0].sampler = sampNearestClampBorder;
             inf[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            inf[1].imageView = deptOnlyView;
+            inf[1].imageView = (settings.msaaSamples > VK_SAMPLE_COUNT_1_BIT) ? depthResolvedView[i] : deptOnlyView;
             inf[1].sampler = sampNearestClampBorder;
             std::array<VkWriteDescriptorSet, 2> write;
             write[0] = vks::initializers::writeDescriptorSet(HDRDescriptor[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &inf[0], 1);
             write[1] = vks::initializers::writeDescriptorSet(HDRDescriptor[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &inf[1], 1);
             
-            vkUpdateDescriptorSets(d, 2, &write[0], 0, nullptr);
+            vkUpdateDescriptorSets(d, 2, write.data(), 0, nullptr);
         }
     }
 }
@@ -274,17 +301,17 @@ void App::setup_descriptor_sets()
         HDRImage[i].descriptor.sampler = sampNearestClampBorder;
         HDRImage[i].descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-        depth_image.setup_descriptor();
-        depth_image.descriptor.sampler = sampNearestClampBorder;
-        depth_image.descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        depth_image.descriptor.imageView = deptOnlyView;
+        VkDescriptorImageInfo zinf = {};
+        zinf.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        zinf.imageView = (settings.msaaSamples > VK_SAMPLE_COUNT_1_BIT) ? depthResolvedView[i] : deptOnlyView;
+        zinf.sampler = sampNearestClampBorder;
 
         uboPostProcessData[i].setup_descriptor();
         uboPostProcessData[i].descriptor.range = sizeof(PostProcessData);
 
         vkutil::DescriptorBuilder::begin(&descLayoutCache, &descAllocator)
             .bind_image(0, &HDRImage[i].descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
-            .bind_image(1, &depth_image.descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+            .bind_image(1, &zinf, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .bind_buffer(2, &uboPostProcessData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .build(HDRDescriptor[i]);
 
@@ -404,6 +431,7 @@ App::~App()
     {
         vkDestroyFramebuffer(d, fb[i], 0);
         vkDestroyFramebuffer(d, HDRFramebuffer[i], 0);
+        vkDestroyImageView(d, depthResolvedView[i], 0);
     }
 }
 
@@ -417,6 +445,8 @@ void App::build_command_buffers()
     clearVal[0].color = { 0.8f,0.8f,0.8f,0.0f };
     clearVal[1].color = { 0.0f,0.0f,0.0f,0.0f };
     clearVal[2].depthStencil.depth = 1.0f;
+    //clearVal[3].color = { 0.0f,0.0f,0.0f,0.0f };
+    //clearVal[4].color = { 0.0f,0.0f,0.0f,0.0f };
 
     beginPass.clearValueCount = 3;
     beginPass.pClearValues = &clearVal[0];
@@ -425,7 +455,7 @@ void App::build_command_buffers()
     beginPass.renderArea.extent = swapchain.vkb_swapchain.extent;
     beginPass.renderArea.offset = { 0,0 };
 
-    HDRImage[currentFrame].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    HDRImage_MS[currentFrame].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     
     vkCmdBeginRenderPass(cmd, &beginPass, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -456,11 +486,12 @@ void App::build_command_buffers()
     }
     vkCmdEndRenderPass(cmd);
     device->end_debug_marker_region(cmd);
+
 /*
     HDRImage[currentFrame].record_change_layout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 */
-    HDRImage[currentFrame].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    HDR_NormalImage[currentFrame].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    HDRImage_MS[currentFrame].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    HDR_NormalImage_MS[currentFrame].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     device->begin_debug_marker_region (cmd, vec4(.5f, 1.f, .5f, 1.f), "PostProcess Pass");
 
@@ -483,6 +514,16 @@ void App::build_command_buffers()
 
 void App::render()
 {
+
+    if (smaaChanged) {
+        vkDeviceWaitIdle(d);
+        setup_triangle_pass();
+        setup_triangle_pipeline(passes.triangle);
+        setup_depth_stencil();
+        on_window_resized();
+        smaaChanged = false;
+    }
+
     passData.mtxView = camera.GetViewMatrix();
     passData.mtxProjection = glm::perspective(radians(camera.Zoom), (float)width / height, .01f, 500.f);
     passData.vScaleBias.x = 1.0f / swapchain.extent().width;
@@ -581,6 +622,13 @@ void App::setup_tonemap_pipeline(RenderPass& pass)
 
 void App::setup_triangle_pipeline(RenderPass& pass)
 {
+    if (pass.pipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(d, pass.pipeline, 0);
+        vkDestroyPipelineLayout(d, pass.layout, 0);
+        pass.pipeline = VK_NULL_HANDLE;
+        pass.layout = VK_NULL_HANDLE;
+    }
+
     auto vertexInput = vkjs::Vertex::vertex_input_description();
     const std::vector<VkDynamicState> dynamicStates = { VK_DYNAMIC_STATE_SCISSOR,VK_DYNAMIC_STATE_VIEWPORT };
 
@@ -589,7 +637,10 @@ void App::setup_triangle_pipeline(RenderPass& pass)
     pb._depthStencil = vks::initializers::pipelineDepthStencilStateCreateInfo(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
     pb._dynamicStates = vks::initializers::pipelineDynamicStateCreateInfo(dynamicStates);
     pb._inputAssembly = vks::initializers::pipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
-    pb._multisampling = vks::initializers::pipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT, 0);
+    pb._multisampling = vks::initializers::pipelineMultisampleStateCreateInfo(settings.msaaSamples, 0);
+    pb._multisampling.minSampleShading = .2f;
+    pb._multisampling.sampleShadingEnable = VK_TRUE;
+
     pb._vertexInputInfo = vks::initializers::pipelineVertexInputStateCreateInfo(vertexInput.bindings, vertexInput.attributes);
 
     vkjs::ShaderModule vert_module(*device);
@@ -711,45 +762,75 @@ void App::setup_preZ_pass()
 
 void App::setup_triangle_pass()
 {
-    VkRenderPassCreateInfo rpci = vks::initializers::renderPassCreateInfo();
+    if (passes.triangle.pass != VK_NULL_HANDLE)
+    {
+        vkDestroyRenderPass(d, passes.triangle.pass, 0);
+        passes.triangle.pass = VK_NULL_HANDLE;
+    }
 
-    VkAttachmentDescription color = {};
+    VkRenderPassCreateInfo2 rpci = vks::initializers::renderPassCreateInfo2();
+    const bool msaaEnabled = (settings.msaaSamples > VK_SAMPLE_COUNT_1_BIT);
+
+    VkAttachmentDescription2 color = {};
+    color.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
     color.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    color.finalLayout = msaaEnabled ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     color.format = HDR_RT_FMT;
     color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    color.samples = VK_SAMPLE_COUNT_1_BIT;
+    color.storeOp = msaaEnabled ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE;
+    color.samples = settings.msaaSamples;
 
-    VkAttachmentDescription color2 = {};
-    color2.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color2.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    color2.format = NORMAL_RT_FMT;
-    color2.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    color2.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    color2.samples = VK_SAMPLE_COUNT_1_BIT;
+    VkAttachmentDescription2 colorResolve = {};
+    colorResolve.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
+    colorResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorResolve.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    colorResolve.format = HDR_RT_FMT;
+    colorResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorResolve.samples = VK_SAMPLE_COUNT_1_BIT;
 
-    VkAttachmentDescription depth = {};
+    VkAttachmentDescription2 colorNormal = {};
+    colorNormal.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
+    colorNormal.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorNormal.finalLayout = msaaEnabled ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    colorNormal.format = NORMAL_RT_FMT;
+    colorNormal.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorNormal.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorNormal.samples = settings.msaaSamples;
+
+    VkAttachmentDescription2 colorNormalResolve = {};
+    colorNormalResolve.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
+    colorNormalResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorNormalResolve.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    colorNormalResolve.format = NORMAL_RT_FMT;
+    colorNormalResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorNormalResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorNormalResolve.samples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkAttachmentDescription2 depth = {};
+    depth.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
     depth.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    depth.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    depth.finalLayout = msaaEnabled ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     depth.format = depth_format;
     depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    depth.storeOp = msaaEnabled ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE;
     depth.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     depth.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depth.samples = VK_SAMPLE_COUNT_1_BIT;
+    depth.samples = settings.msaaSamples;
 
-    VkAttachmentReference colorRef = {};
-    colorRef.attachment = 0;
-    colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    VkAttachmentReference color2Ref = {};
-    color2Ref.attachment = 1;
-    color2Ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    VkAttachmentReference ZRef = {};
-    ZRef.attachment = 2;
-    ZRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    VkAttachmentDescription2 depthResolve = {};
+    depthResolve.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
+    depthResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    depthResolve.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    depthResolve.format = depth_format;
+    depthResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    depthResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    depthResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    depthResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depthResolve.samples = VK_SAMPLE_COUNT_1_BIT;
 
-    VkSubpassDependency dep0 = {};
+    VkSubpassDependency2 dep0 = {};
+    dep0.sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2;
     dep0.dependencyFlags = 0;
     dep0.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
     dep0.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
@@ -757,7 +838,8 @@ void App::setup_triangle_pass()
     dep0.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dep0.srcSubpass = VK_SUBPASS_EXTERNAL;
     dep0.dstSubpass = 0;
-    VkSubpassDependency dep1 = {};
+    VkSubpassDependency2 dep1 = {};
+    dep1.sType = dep0.sType;
     dep1.dependencyFlags = 0;
     dep1.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
     dep1.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
@@ -765,7 +847,8 @@ void App::setup_triangle_pass()
     dep1.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dep1.srcSubpass = VK_SUBPASS_EXTERNAL;
     dep1.dstSubpass = 0;
-    VkSubpassDependency dep2 = {};
+    VkSubpassDependency2 dep2 = {};
+    dep2.sType = dep0.sType;
     dep2.dependencyFlags = 0;
     dep2.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     dep2.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
@@ -773,18 +856,71 @@ void App::setup_triangle_pass()
     dep2.dstStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dep2.srcSubpass = VK_SUBPASS_EXTERNAL;
     dep2.dstSubpass = 0;
+    VkSubpassDependency2 dep3 = {};
+    dep3.sType = dep0.sType;
+    dep3.dependencyFlags = 0;
+    dep3.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dep3.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+    dep3.srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dep3.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dep3.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dep3.dstSubpass = 0;
 
-    const std::array<VkAttachmentDescription,3> attachments = { color,color2,depth };
-    const std::array<VkSubpassDependency,3> deps = { dep0,dep1,dep2 };
-    const std::array<VkAttachmentReference,2> refs = { colorRef,color2Ref };
+    VkAttachmentReference2 colorRef = vks::initializers::attachmentReference2();
+    colorRef.attachment = 0; 
+    colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorRef.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-    VkSubpassDescription subpass0 = {};
+    VkAttachmentReference2 NormalRef = vks::initializers::attachmentReference2();
+    NormalRef.attachment = 1;
+    NormalRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    NormalRef.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+    VkAttachmentReference2 ZRef = vks::initializers::attachmentReference2(); 
+    ZRef.attachment = 2;
+    ZRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    ZRef.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+
+    VkAttachmentReference2 colorResolveRef = vks::initializers::attachmentReference2();
+    colorResolveRef.attachment = 3;
+    colorResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorResolveRef.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+    VkAttachmentReference2 normalResolveRef = vks::initializers::attachmentReference2();
+    normalResolveRef.attachment = 4;
+    normalResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    normalResolveRef.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+ 
+    VkAttachmentReference2 ZResolveRef = vks::initializers::attachmentReference2();
+    ZResolveRef.attachment = 5;
+    ZResolveRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    ZResolveRef.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+
+    const std::array<VkAttachmentDescription2,6> attachments = { color,colorNormal,depth,colorResolve, colorNormalResolve, depthResolve };
+    const std::array<VkSubpassDependency2,2> deps = { dep0,dep2 };
+    const std::array<VkAttachmentReference2,2> colorRefs = { colorRef,NormalRef };
+    const std::array<VkAttachmentReference2,2> resolveRefs = { colorResolveRef,normalResolveRef };
+
+    VkSubpassDescriptionDepthStencilResolve depthResolveDesc = {};
+    depthResolveDesc.sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_DEPTH_STENCIL_RESOLVE;
+    depthResolveDesc.depthResolveMode = VK_RESOLVE_MODE_MIN_BIT;
+    depthResolveDesc.pDepthStencilResolveAttachment = &ZResolveRef;
+
+    const uint32_t attachmentCount = msaaEnabled ? 6 : 3;
+
+    VkSubpassDescription2 subpass0 = {};
+    subpass0.sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2;
     subpass0.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass0.colorAttachmentCount = (uint32_t) refs.size();
-    subpass0.pColorAttachments = refs.data();
+    subpass0.colorAttachmentCount = (uint32_t) colorRefs.size();
+    subpass0.pColorAttachments = colorRefs.data();
     subpass0.pDepthStencilAttachment = &ZRef;
 
-    rpci.attachmentCount = (uint32_t) attachments.size();
+    if (msaaEnabled) {
+        subpass0.pResolveAttachments = resolveRefs.data();
+        subpass0.pNext = &depthResolveDesc;
+    }
+
+    rpci.attachmentCount = attachmentCount;
     rpci.pAttachments = attachments.data();
     rpci.flags = 0;
     rpci.dependencyCount = (uint32_t) deps.size();
@@ -792,7 +928,7 @@ void App::setup_triangle_pass()
     rpci.subpassCount = 1;
     rpci.pSubpasses = &subpass0;
 
-    VK_CHECK(vkCreateRenderPass(*device, &rpci, nullptr, &passes.triangle.pass));
+    VK_CHECK(vkCreateRenderPass2(d, &rpci, nullptr, &passes.triangle.pass));
 }
 
 void App::setup_tonemap_pass()
@@ -840,56 +976,111 @@ void App::setup_images()
 {
     for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
     {
-        if (HDRImage[i].image != VK_NULL_HANDLE) {
-            device->destroy_image(&HDRImage[i]);
+        if (HDRFramebuffer[i] != VK_NULL_HANDLE) {
+            vkDestroyFramebuffer(*device, HDRFramebuffer[i], nullptr);
+        }
+        if (depthResolved[i].image != VK_NULL_HANDLE) {
+            device->destroy_image(&depthResolved[i]);
+            vkDestroyImageView(d, depthResolvedView[i], nullptr);
+        }
+        if (HDRImage_MS[i].image != VK_NULL_HANDLE) {
+            device->destroy_image(&HDRImage_MS[i]);
+        }
+        if (HDR_NormalImage_MS[i].image != VK_NULL_HANDLE) {
+            device->destroy_image(&HDR_NormalImage_MS[i]);
         }
         if (HDR_NormalImage[i].image != VK_NULL_HANDLE) {
             device->destroy_image(&HDR_NormalImage[i]);
         }
-        if (HDRFramebuffer[i] != VK_NULL_HANDLE) {
-            vkDestroyFramebuffer(*device, HDRFramebuffer[i], nullptr);
-        }
+
+        VK_CHECK(device->create_depth_stencil_attachment(depth_format,
+            swapchain.extent(),
+            VK_SAMPLE_COUNT_1_BIT,
+            &depthResolved[i]));
+
+        VkImageViewCreateInfo view = vks::initializers::imageViewCreateInfo();
+        view.format = depth_format;
+        view.image = depthResolved[i].image;
+        view.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        view.subresourceRange.layerCount = 1;
+        view.subresourceRange.levelCount = 1;
+        VK_CHECK( vkCreateImageView(d, &view, nullptr, &depthResolvedView[i]) );
+
         VK_CHECK(device->create_color_attachment(HDR_RT_FMT,
             swapchain.extent(),
+            settings.msaaSamples,
+            &HDRImage_MS[i]));
+        VK_CHECK(device->create_color_attachment(HDR_RT_FMT,
+            swapchain.extent(),
+            VK_SAMPLE_COUNT_1_BIT,
             &HDRImage[i]));
         VK_CHECK(device->create_color_attachment(NORMAL_RT_FMT,
             swapchain.extent(),
+            settings.msaaSamples,
+            &HDR_NormalImage_MS[i]));
+        VK_CHECK(device->create_color_attachment(NORMAL_RT_FMT,
+            swapchain.extent(),
+            VK_SAMPLE_COUNT_1_BIT,
             &HDR_NormalImage[i]));
 
-        device->set_image_name(&HDRImage[i], "Forward Color Attachment " + std::to_string(i));
-        device->set_image_name(&HDR_NormalImage[i], "Forward Normal Attachment " + std::to_string(i));
+        //depthResolved[i].change_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-        std::array<VkImageView, 3> targets = { HDRImage[i].view, HDR_NormalImage[i].view, depth_image.view};
+        device->set_image_name(&HDRImage_MS[i], "Forward Color Attachment " + std::to_string(i));
+        device->set_image_name(&HDR_NormalImage_MS[i], "Forward Normal Attachment " + std::to_string(i));
+
+        std::vector<VkImageView> targets;
+        if (settings.msaaSamples > VK_SAMPLE_COUNT_1_BIT)
+        {
+            targets = {
+                HDRImage_MS[i].view,
+                HDR_NormalImage_MS[i].view,
+                depth_image.view,
+                HDRImage[i].view,
+                HDR_NormalImage[i].view,
+                depthResolved[i].view
+            };
+        }
+        else {
+            targets = {
+                HDRImage[i].view,
+                HDR_NormalImage[i].view,
+                depth_image.view
+            };
+        }
+
         auto fbci = vks::initializers::framebufferCreateInfo();
         fbci.renderPass = passes.triangle.pass;
         fbci.layers = 1;
-        fbci.attachmentCount = (uint32_t)targets.size();
+        fbci.attachmentCount = static_cast<uint32_t>(targets.size());
         fbci.pAttachments = targets.data();
-        fbci.width = HDRImage[i].extent.width;
-        fbci.height = HDRImage[i].extent.height;
+        fbci.width = HDRImage_MS[i].extent.width;
+        fbci.height = HDRImage_MS[i].extent.height;
         VK_CHECK(vkCreateFramebuffer(d, &fbci, 0, &HDRFramebuffer[i]));
 
-        VK_CHECK(device->create_texture2d(VK_FORMAT_R16G16_SFLOAT, VkExtent3D{ 4,4,1 }, &ssaoNoise));
-        std::uniform_real_distribution<float> randomFloats(0.0, 1.0); // random floats between [0.0, 1.0]
-        std::default_random_engine generator;
-        std::vector<glm::uint> ssaoNoise;
-        for (unsigned int i = 0; i < 16; i++)
+        if (ssaoNoise.image == VK_NULL_HANDLE)
         {
-            glm::uint noise = glm::packHalf2x16(glm::vec2(
-                randomFloats(generator) * 2.0 - 1.0,
-                randomFloats(generator) * 2.0 - 1.0));
+            VK_CHECK(device->create_texture2d(VK_FORMAT_R16G16_SFLOAT, VkExtent3D{ 4,4,1 }, &ssaoNoise));
+            std::uniform_real_distribution<float> randomFloats(0.0, 1.0); // random floats between [0.0, 1.0]
+            std::default_random_engine generator;
+            std::vector<glm::uint> ssaoNoise;
+            for (unsigned int i = 0; i < 16; i++)
+            {
+                glm::uint noise = glm::packHalf2x16(glm::vec2(
+                    randomFloats(generator) * 2.0 - 1.0,
+                    randomFloats(generator) * 2.0 - 1.0));
 
-            ssaoNoise.push_back(noise);
+                ssaoNoise.push_back(noise);
+            }
+            vkjs::Buffer tmpbuf;
+            device->create_staging_buffer(16 * 4, &tmpbuf);
+            tmpbuf.copyTo(0, 16 * 4, &ssaoNoise[0]);
+            this->ssaoNoise.upload(VkExtent3D{ 4,4,1 }, 0, 0, 0, 0, &tmpbuf);
+            device->destroy_buffer(&tmpbuf);
+            this->ssaoNoise.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            this->ssaoNoise.setup_descriptor();
+            this->ssaoNoise.descriptor.sampler = sampNearestClampBorder;
         }
-        vkjs::Buffer tmpbuf;
-        device->create_staging_buffer(16 * 4, &tmpbuf);
-        tmpbuf.copyTo(0, 16 * 4, &ssaoNoise[0]);
-        this->ssaoNoise.upload(VkExtent3D{ 4,4,1 }, 0, 0, 0, 0, &tmpbuf);
-        device->destroy_buffer(&tmpbuf);
-        this->ssaoNoise.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-        this->ssaoNoise.setup_descriptor();
-        this->ssaoNoise.descriptor.sampler = sampNearestClampBorder;
-
         //HDRImage[i].change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
 }
@@ -1071,6 +1262,7 @@ void App::get_enabled_features()
     enabled_features.geometryShader = VK_TRUE;
     enabled_features.textureCompressionBC = VK_TRUE;
     enabled_features.shaderSampledImageArrayDynamicIndexing = VK_TRUE;
+    enabled_features.sampleRateShading = VK_TRUE;
 
     enabled_features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
     enabled_features12.pNext = nullptr;

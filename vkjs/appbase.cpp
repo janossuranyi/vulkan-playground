@@ -203,11 +203,11 @@ namespace vkjs
 			/*if (it.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 && VK_COLOR_SPACE_HDR10_ST2084_EXT) {
 				format = it;
 				break;
-			}
+			}*/
 			if (it.format == VK_FORMAT_B8G8R8A8_UNORM || it.format == VK_FORMAT_R8G8B8A8_UNORM) {
 				format = it;
 				break;
-			}*/
+			}
 		}
 
 		VkPresentModeKHR presentMode = settings.vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_MAILBOX_KHR;
@@ -734,7 +734,7 @@ namespace vkjs
 			device->destroy_image(&depth_image);
 			vkDestroyImageView(*device, deptOnlyView, nullptr);
 		}
-		VK_CHECK(device->create_depth_stencil_attachment(depth_format, { swapchain.vkb_swapchain.extent.width,swapchain.vkb_swapchain.extent.height,1 }, &depth_image));
+		VK_CHECK(device->create_depth_stencil_attachment(depth_format, { swapchain.vkb_swapchain.extent.width,swapchain.vkb_swapchain.extent.height,1 }, settings.msaaSamples, &depth_image));
 
 		VkImageViewCreateInfo ivci = vks::initializers::imageViewCreateInfo();
 		ivci.format = depth_format;

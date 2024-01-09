@@ -72,10 +72,23 @@ namespace vks
 			return renderPassBeginInfo;
 		}
 
+		inline VkAttachmentReference2 attachmentReference2()
+		{
+			VkAttachmentReference2 x{};
+			x.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2;
+			return x;
+		}
 		inline VkRenderPassCreateInfo renderPassCreateInfo()
 		{
 			VkRenderPassCreateInfo renderPassCreateInfo {};
 			renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+			return renderPassCreateInfo;
+		}
+
+		inline VkRenderPassCreateInfo2 renderPassCreateInfo2()
+		{
+			VkRenderPassCreateInfo2 renderPassCreateInfo{};
+			renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2;
 			return renderPassCreateInfo;
 		}
 

@@ -72,8 +72,8 @@ namespace vkjs {
 		VkResult create_texture2d_with_mips(VkFormat format, const VkExtent3D& extent, Image* result);
 		VkResult create_texture2d(VkFormat format, const VkExtent3D& extent, Image* result);
 		VkResult create_texture2d_cube(VkFormat format, const VkExtent3D& extent, bool withMips, Image* result);
-		VkResult create_color_attachment(VkFormat format, const VkExtent3D& extent, Image* result);
-		VkResult create_depth_stencil_attachment(VkFormat format, const VkExtent3D& extent, Image* result);
+		VkResult create_color_attachment(VkFormat format, const VkExtent3D& extent, VkSampleCountFlagBits sampleCount, Image* result);
+		VkResult create_depth_stencil_attachment(VkFormat format, const VkExtent3D& extent, VkSampleCountFlagBits sampleCount, Image* result);
 		VkResult create_sampler(const VkSamplerCreateInfo& samplerCreateInfo, VkSampler *out);
 
 		void destroy_buffer(Buffer* b);

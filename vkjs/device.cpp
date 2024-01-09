@@ -520,7 +520,7 @@ namespace vkjs {
 		return err;
 	}
 
-	VkResult Device::create_color_attachment(VkFormat format, const VkExtent3D& extent, Image* result)
+	VkResult Device::create_color_attachment(VkFormat format, const VkExtent3D& extent, VkSampleCountFlagBits sampleCount, Image* result)
 	{
 		VkResult err;
 
@@ -534,7 +534,7 @@ namespace vkjs {
 			VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_VIEW_TYPE_2D,
 			levels, 1, 1,
-			VK_SAMPLE_COUNT_1_BIT,
+			sampleCount,
 			VK_IMAGE_ASPECT_COLOR_BIT,
 			result
 		);
@@ -543,7 +543,7 @@ namespace vkjs {
 		return err;
 	}
 
-	VkResult Device::create_depth_stencil_attachment(VkFormat format, const VkExtent3D& extent, Image* result)
+	VkResult Device::create_depth_stencil_attachment(VkFormat format, const VkExtent3D& extent, VkSampleCountFlagBits sampleCount, Image* result)
 	{
 		VkResult err;
 
@@ -552,12 +552,12 @@ namespace vkjs {
 		err = create_image(
 			format,
 			extent,
-			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT|VK_IMAGE_USAGE_SAMPLED_BIT,
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT|VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT| VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 			VK_IMAGE_TYPE_2D,
 			VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_VIEW_TYPE_2D,
 			levels, 1, 1,
-			VK_SAMPLE_COUNT_1_BIT,
+			sampleCount,
 			VK_IMAGE_ASPECT_STENCIL_BIT|VK_IMAGE_ASPECT_DEPTH_BIT,
 			result
 		);

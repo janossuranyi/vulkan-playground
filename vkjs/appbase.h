@@ -132,6 +132,8 @@ namespace vkjs {
 			bool vsync = false;
 			/** @brief Enable UI overlay */
 			bool overlay = true;
+			/*** @brief Set MSAA level */
+			VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 		} settings;
 
 		struct window_data
