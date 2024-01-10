@@ -38,7 +38,7 @@ namespace vkjs {
 		Device* device;
 
 		std::string shader_path() const;
-		u32 frameCounter;
+		u32 frameCounter{ 0 };
 		u32 currentFrame;
 		u32 lastFPS;
 		VkSurfaceKHR surface;

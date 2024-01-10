@@ -45,6 +45,7 @@ private:
     const VkFormat HDR_RT_FMT = VK_FORMAT_R16G16B16A16_SFLOAT;
     const VkFormat NORMAL_RT_FMT = VK_FORMAT_R16G16_SFLOAT;
 
+    float fps = 0.f;
     VkDevice d;
     bool smaaChanged = false;
 
@@ -160,7 +161,7 @@ public:
         static const char* current_msaa_item = items[static_cast<size_t>(settings.msaaSamples)-1];
 
         static const VkSampleCountFlagBits smaaBits[] = { VK_SAMPLE_COUNT_1_BIT,VK_SAMPLE_COUNT_2_BIT,VK_SAMPLE_COUNT_4_BIT,VK_SAMPLE_COUNT_8_BIT };
-
+        ImGui::Text("Fps: %.2f", fps);
         ImGui::DragFloat3("Light pos", &passData.vLightPos[0], 0.05f, -20.0f, 20.0f);
         ImGui::ColorPicker3("LightColor", &passData.vLightColor[0]);
         ImGui::DragFloat("Light intensity", &passData.vLightColor[3], 0.5f, 0.0f, 10000.0f);
@@ -239,7 +240,7 @@ void demo()
     app->settings.fullscreen = false;
     app->settings.exclusive = false;
     app->settings.vsync = true;
-    app->settings.msaaSamples = VK_SAMPLE_COUNT_2_BIT;
+    app->settings.msaaSamples = VK_SAMPLE_COUNT_1_BIT;
     app->width = 1280;
     app->height = 720;
     
@@ -512,6 +513,17 @@ void App::build_command_buffers()
 
 void App::render()
 {
+    static float lastTime = 0.f;
+    static uint32_t lastFrame = 0;
+
+    float time = ((float)SDL_GetTicks64());
+
+    if ((time - lastTime) >= 500.f) {
+        float frames = (float)(frameCounter - lastFrame);
+        fps = frames / ((time - lastTime) / 1000.f) ;
+        lastTime = time;
+        lastFrame = frameCounter;
+    }
 
     if (smaaChanged) {
         vkDeviceWaitIdle(d);
@@ -637,7 +649,7 @@ void App::setup_triangle_pipeline(RenderPass& pass)
     pb._inputAssembly = vks::initializers::pipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
     pb._multisampling = vks::initializers::pipelineMultisampleStateCreateInfo(settings.msaaSamples, 0);
     pb._multisampling.minSampleShading = .2f;
-    pb._multisampling.sampleShadingEnable = VK_TRUE;
+    pb._multisampling.sampleShadingEnable = settings.msaaSamples > VK_SAMPLE_COUNT_1_BIT ? VK_TRUE : VK_FALSE;
 
     pb._vertexInputInfo = vks::initializers::pipelineVertexInputStateCreateInfo(vertexInput.bindings, vertexInput.attributes);
 

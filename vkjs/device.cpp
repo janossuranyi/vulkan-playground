@@ -525,11 +525,19 @@ namespace vkjs {
 		VkResult err;
 
 		const uint32_t levels = 1u;
+		VkImageUsageFlags usageFlags;
+			
+		if (sampleCount > VK_SAMPLE_COUNT_1_BIT) {
+			usageFlags = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT| VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		}
+		else {
+			usageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		}
 
 		err = create_image(
 			format,
 			extent,
-			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT| VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+			usageFlags,
 			VK_IMAGE_TYPE_2D,
 			VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_VIEW_TYPE_2D,
@@ -548,6 +556,14 @@ namespace vkjs {
 		VkResult err;
 
 		const uint32_t levels = 1u;
+		VkImageUsageFlags usageFlags;
+
+		if (sampleCount > VK_SAMPLE_COUNT_1_BIT) {
+			usageFlags = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+		}
+		else {
+			usageFlags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		}
 
 		err = create_image(
 			format,

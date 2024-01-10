@@ -26,6 +26,7 @@ void main() {
     float linearZ = linearize_depth(znorm, fZnear, fZfar);
     float fogFactor = getFogFactor(sFogParams, abs(linearZ));
 
+    fogFactor = mix(fogFactor, 1.0, znorm == 1.0 );
     inColor.rgb = ACESFitted( mix(sFogParams.color, fExposure * inColor.rgb, fogFactor ) );
     inColor.rgb = linearTosRGB( inColor.rgb );
     fragColor0 = vec4(inColor.rgb, 1.0);
