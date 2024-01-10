@@ -832,7 +832,7 @@ void App::setup_triangle_pass()
     dep0.dependencyFlags = 0;
     dep0.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
     dep0.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-    dep0.srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dep0.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dep0.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dep0.srcSubpass = VK_SUBPASS_EXTERNAL;
     dep0.dstSubpass = 0;
@@ -840,29 +840,11 @@ void App::setup_triangle_pass()
     dep1.sType = dep0.sType;
     dep1.dependencyFlags = 0;
     dep1.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dep1.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-    dep1.srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dep1.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dep1.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    dep1.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    dep1.dstStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dep1.srcSubpass = VK_SUBPASS_EXTERNAL;
     dep1.dstSubpass = 0;
-    VkSubpassDependency2 dep2 = {};
-    dep2.sType = dep0.sType;
-    dep2.dependencyFlags = 0;
-    dep2.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    dep2.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    dep2.srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-    dep2.dstStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dep2.srcSubpass = VK_SUBPASS_EXTERNAL;
-    dep2.dstSubpass = 0;
-    VkSubpassDependency2 dep3 = {};
-    dep3.sType = dep0.sType;
-    dep3.dependencyFlags = 0;
-    dep3.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dep3.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-    dep3.srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dep3.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dep3.srcSubpass = VK_SUBPASS_EXTERNAL;
-    dep3.dstSubpass = 0;
 
     VkAttachmentReference2 colorRef = vks::initializers::attachmentReference2();
     colorRef.attachment = 0; 
@@ -895,7 +877,7 @@ void App::setup_triangle_pass()
     ZResolveRef.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
 
     const std::array<VkAttachmentDescription2,6> attachments = { color,colorNormal,depth,colorResolve, colorNormalResolve, depthResolve };
-    const std::array<VkSubpassDependency2,2> deps = { dep0,dep2 };
+    const std::array<VkSubpassDependency2,2> deps = { dep0,dep1 };
     const std::array<VkAttachmentReference2,2> colorRefs = { colorRef,NormalRef };
     const std::array<VkAttachmentReference2,2> resolveRefs = { colorResolveRef,normalResolveRef };
 
@@ -1148,7 +1130,7 @@ void App::prepare()
         S_Scene{fs::path("../../resources/models/sw_venator"), "scene.gltf"}
     };
 
-    const int sceneIdx = 1;
+    const int sceneIdx = 0;
     auto scenePath = scenes[sceneIdx].dir;
     jsr::gltfLoadWorld(scenePath / scenes[sceneIdx].file, *scene);
 
