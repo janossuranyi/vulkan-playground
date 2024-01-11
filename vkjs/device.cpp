@@ -186,6 +186,7 @@ namespace vkjs {
 				vkDebugMarkerSetObjectNameEXT(logicalDevice, &nameInfo);
 			}
 		}
+		jsrlib::Info("Object %llx, name: %s", object, name);
 	}
 
 	void Device::set_image_name(const Image* image, const std::string& name)
@@ -443,6 +444,7 @@ namespace vkjs {
 			vmaDestroyImage(allocator, result->image, result->mem);
 			result->image = VK_NULL_HANDLE;
 			result->mem = {};
+			return err;
 		}
 
 		images.push_back({ result->image,result->mem,result->view });

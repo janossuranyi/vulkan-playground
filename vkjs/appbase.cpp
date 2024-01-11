@@ -361,6 +361,8 @@ namespace vkjs
 		imguiRenderPassCI.pSubpasses = &subpass;
 
 		VK_CHECK(vkCreateRenderPass(device->logicalDevice, &imguiRenderPassCI, nullptr, &imguiRenderPass));
+		device->set_object_name((uint64_t)imguiRenderPass, VK_DEBUG_REPORT_OBJECT_TYPE_RENDER_PASS_EXT, "ImGui::RenderPass");
+
 		// Setup Dear ImGui context
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();

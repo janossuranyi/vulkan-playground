@@ -48,6 +48,7 @@ private:
     float fps = 0.f;
     VkDevice d;
     bool smaaChanged = false;
+    bool firstRun = true;
 
     vkjs::Image uvChecker;
     vkjs::Image ssaoNoise;
@@ -393,6 +394,7 @@ void App::setup_samplers()
     samplerCI.minLod = -1000.f;
     samplerCI.maxLod = 1000.f;
     VK_CHECK(device->create_sampler(samplerCI, &sampLinearRepeat));
+    device->set_object_name((uint64_t)sampLinearRepeat, VK_DEBUG_REPORT_OBJECT_TYPE_SAMPLER_EXT, "Linear-Repeat Samp");
 
     samplerCI.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
     samplerCI.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
@@ -403,6 +405,7 @@ void App::setup_samplers()
     samplerCI.maxLod = 0.0f;
     samplerCI.anisotropyEnable = VK_FALSE;
     VK_CHECK(device->create_sampler(samplerCI, &sampNearestClampBorder));
+    device->set_object_name((uint64_t)sampNearestClampBorder, VK_DEBUG_REPORT_OBJECT_TYPE_SAMPLER_EXT, "Nearest-Border Samp");
 
 }
 
@@ -434,6 +437,8 @@ App::~App()
 
 void App::build_command_buffers()
 {
+    const bool MSAA_ENABLED = (settings.msaaSamples > VK_SAMPLE_COUNT_1_BIT);
+
     VkCommandBuffer cmd = drawCmdBuffers[currentFrame];
 
     device->begin_debug_marker_region(cmd, vec4(1.f, .5f, 0.f, 1.f), "Forward Pass");
@@ -516,6 +521,13 @@ void App::render()
     static float lastTime = 0.f;
     static uint32_t lastFrame = 0;
 
+#if 0
+    if (!firstRun) 
+    {
+        quit = true;
+        return;
+    }
+#endif
     float time = ((float)SDL_GetTicks64());
 
     if ((time - lastTime) >= 500.f) {
@@ -560,6 +572,9 @@ void App::render()
     VK_CHECK(vkCreateFramebuffer(d, &fbci, 0, &fb[currentFrame]));
 
     build_command_buffers();
+
+    firstRun = false;
+
 }
 
 void App::setup_tonemap_pipeline(RenderPass& pass)
@@ -628,6 +643,7 @@ void App::setup_tonemap_pipeline(RenderPass& pass)
     pass.pipeline = pb.build_pipeline(d, pass.pass);
 
     assert(pass.pipeline);
+    device->set_object_name((uint64_t)pass.pipeline, VK_DEBUG_REPORT_OBJECT_TYPE_PIPELINE_EXT, "Tonemap pipeline");
 }
 
 void App::setup_triangle_pipeline(RenderPass& pass)
@@ -726,6 +742,9 @@ void App::setup_triangle_pipeline(RenderPass& pass)
 
     pass.pipeline = pb.build_pipeline(d, pass.pass);
     assert(pass.pipeline);
+
+    device->set_object_name((uint64_t) pass.pipeline, VK_DEBUG_REPORT_OBJECT_TYPE_PIPELINE_EXT, "Forward pipeline");
+
 }
 
 void App::setup_preZ_pass()
@@ -839,24 +858,36 @@ void App::setup_triangle_pass()
     depthResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depthResolve.samples = VK_SAMPLE_COUNT_1_BIT;
 
-    VkSubpassDependency2 dep0 = {};
-    dep0.sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2;
-    dep0.dependencyFlags = 0;
-    dep0.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dep0.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-    dep0.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dep0.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dep0.srcSubpass = VK_SUBPASS_EXTERNAL;
-    dep0.dstSubpass = 0;
-    VkSubpassDependency2 dep1 = {};
-    dep1.sType = dep0.sType;
-    dep1.dependencyFlags = 0;
-    dep1.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dep1.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    dep1.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    dep1.dstStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dep1.srcSubpass = VK_SUBPASS_EXTERNAL;
-    dep1.dstSubpass = 0;
+
+    std::array<VkSubpassDependency2, 3> deps = {};
+    size_t dep = 0;
+    deps[dep].sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2;
+    deps[dep].dependencyFlags = 0;
+    deps[dep].srcAccessMask = VK_ACCESS_NONE;
+    deps[dep].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+    deps[dep].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    deps[dep].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    deps[dep].srcSubpass = VK_SUBPASS_EXTERNAL;
+    deps[dep].dstSubpass = 0;
+    ++dep;
+    deps[dep].sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2;
+    deps[dep].dependencyFlags = 0;
+    deps[dep].srcAccessMask = VK_ACCESS_NONE;
+    deps[dep].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    deps[dep].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    deps[dep].dstStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    deps[dep].srcSubpass = VK_SUBPASS_EXTERNAL;
+    deps[dep].dstSubpass = 0;
+    ++dep;
+    deps[dep].sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2;
+    deps[dep].dependencyFlags = 0;
+    deps[dep].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT|VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    deps[dep].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    deps[dep].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    deps[dep].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    deps[dep].srcSubpass = 0;
+    deps[dep].dstSubpass = VK_SUBPASS_EXTERNAL;
+
 
     VkAttachmentReference2 colorRef = vks::initializers::attachmentReference2();
     colorRef.attachment = 0; 
@@ -889,7 +920,6 @@ void App::setup_triangle_pass()
     ZResolveRef.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
 
     const std::array<VkAttachmentDescription2,6> attachments = { color,colorNormal,depth,colorResolve, colorNormalResolve, depthResolve };
-    const std::array<VkSubpassDependency2,2> deps = { dep0,dep1 };
     const std::array<VkAttachmentReference2,2> colorRefs = { colorRef,NormalRef };
     const std::array<VkAttachmentReference2,2> resolveRefs = { colorResolveRef,normalResolveRef };
 
@@ -921,6 +951,8 @@ void App::setup_triangle_pass()
     rpci.pSubpasses = &subpass0;
 
     VK_CHECK(vkCreateRenderPass2(d, &rpci, nullptr, &passes.triangle.pass));
+    device->set_object_name((uint64_t)passes.triangle.pass, VK_DEBUG_REPORT_OBJECT_TYPE_RENDER_PASS_EXT, "Forward pass");
+
 }
 
 void App::setup_tonemap_pass()
@@ -931,7 +963,7 @@ void App::setup_tonemap_pass()
     color.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     color.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     color.format = swapchain.vkb_swapchain.image_format;
-    color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    color.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     color.samples = VK_SAMPLE_COUNT_1_BIT;
 
@@ -947,21 +979,32 @@ void App::setup_tonemap_pass()
     VkSubpassDependency dep0 = {};
     dep0.dependencyFlags = 0;
     dep0.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dep0.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+    dep0.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
     dep0.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dep0.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dep0.srcSubpass = VK_SUBPASS_EXTERNAL;
     dep0.dstSubpass = 0;
+    VkSubpassDependency dep1 = {};
+    dep1.dependencyFlags = 0;
+    dep1.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dep1.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dep1.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dep1.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dep1.dstSubpass = VK_SUBPASS_EXTERNAL;
+    dep1.srcSubpass = 0;
+    std::array<VkSubpassDependency, 2> deps = { dep0,dep1 };
 
     rpci.attachmentCount = 1;
     rpci.pAttachments = &color;
     rpci.flags = 0;
-    rpci.dependencyCount = 1;
-    rpci.pDependencies = &dep0;
+    rpci.dependencyCount = (uint32_t)deps.size();
+    rpci.pDependencies = deps.data();
     rpci.subpassCount = 1;
     rpci.pSubpasses = &subpass0;
 
     VK_CHECK(vkCreateRenderPass(*device, &rpci, nullptr, &passes.tonemap.pass));
+    device->set_object_name((uint64_t) passes.tonemap.pass, VK_DEBUG_REPORT_OBJECT_TYPE_RENDER_PASS_EXT, "Tonemap pass");
+
 }
 
 void App::setup_images()
@@ -990,6 +1033,8 @@ void App::setup_images()
             VK_SAMPLE_COUNT_1_BIT,
             &depthResolved[i]));
 
+        device->set_image_name(&depthResolved[i], "Resolved Depth Img");
+
         VkImageViewCreateInfo view = vks::initializers::imageViewCreateInfo();
         view.format = depth_format;
         view.image = depthResolved[i].image;
@@ -998,6 +1043,7 @@ void App::setup_images()
         view.subresourceRange.layerCount = 1;
         view.subresourceRange.levelCount = 1;
         VK_CHECK( vkCreateImageView(d, &view, nullptr, &depthResolvedView[i]) );
+        device->set_object_name((uint64_t)depthResolvedView[i], VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT, "Resolved Depth View");
 
         VK_CHECK(device->create_color_attachment(HDR_RT_FMT,
             swapchain.extent(),
@@ -1015,6 +1061,16 @@ void App::setup_images()
             swapchain.extent(),
             VK_SAMPLE_COUNT_1_BIT,
             &HDR_NormalImage[i]));
+
+        device->set_image_name(&HDRImage_MS[i], "HDR MS Img");
+        device->set_image_name(&HDRImage[i], "Resolved HDR Img");
+        device->set_image_name(&HDR_NormalImage_MS[i], "Normal map MS Img");
+        device->set_image_name(&HDR_NormalImage[i], "Normal map Img");
+
+        device->set_object_name((uint64_t)HDRImage_MS[i].view, VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT, "HDR MS View");
+        device->set_object_name((uint64_t)HDRImage[i].view, VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT, "Resolved HDR View");
+        device->set_object_name((uint64_t)HDR_NormalImage_MS[i].view, VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT, "Normal map View");
+        device->set_object_name((uint64_t)HDR_NormalImage[i].view, VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT, "Resolved Normal map View");
 
         //depthResolved[i].change_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
@@ -1142,7 +1198,7 @@ void App::prepare()
         S_Scene{fs::path("../../resources/models/sw_venator"), "scene.gltf"}
     };
 
-    const int sceneIdx = 0;
+    const int sceneIdx = 1;
     auto scenePath = scenes[sceneIdx].dir;
     jsr::gltfLoadWorld(scenePath / scenes[sceneIdx].file, *scene);
 

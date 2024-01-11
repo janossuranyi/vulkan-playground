@@ -8,7 +8,7 @@
 
 layout(location = 0) in vec2 texcoord;
 
-layout(set = 0, binding = 0) uniform sampler2D samp_input;
+layout(set = 0, binding = 0) uniform sampler2D samp_input;  
 layout(set = 0, binding = 1) uniform sampler2D samp_depth;
 layout(set = 0, binding = 2) uniform PostProcessData_ubo {
     FogParameters sFogParams;

@@ -23,7 +23,11 @@ namespace vkjs {
 
 		device_->execute_commands([&](VkCommandBuffer cmd)
 			{
-				record_change_layout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_HOST_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT);
+				record_change_layout(cmd, 
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_PIPELINE_STAGE_HOST_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT,
+				0,
+				VK_ACCESS_TRANSFER_WRITE_BIT);
 				vkCmdCopyBufferToImage(
 					cmd,
 					buffer->buffer,
@@ -79,7 +83,12 @@ namespace vkjs {
 		subresourceRange.layerCount = face_total;
 
 
-		record_change_layout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+		record_change_layout(cmd, 
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+			VK_PIPELINE_STAGE_HOST_BIT, 
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			0,VK_ACCESS_TRANSFER_WRITE_BIT);
+		
 		layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
 		vkCmdCopyBufferToImage(
@@ -95,7 +104,7 @@ namespace vkjs {
 		//layout = final_layout;
 	}
 
-	VkImageMemoryBarrier Image::get_layout_transition_barrier(VkImageLayout newLayout)
+	VkImageMemoryBarrier Image::get_layout_transition_barrier(VkImageLayout newLayout, VkAccessFlags srcAccess, VkAccessFlags dstAccess)
 	{
 		VkImageMemoryBarrier ibar = {};
 
@@ -106,8 +115,8 @@ namespace vkjs {
 		ibar.subresourceRange.layerCount = layers;
 		ibar.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 		ibar.image = image;
-		ibar.dstAccessMask = VK_ACCESS_NONE;
-		ibar.srcAccessMask = VK_ACCESS_NONE;
+		ibar.dstAccessMask = dstAccess;
+		ibar.srcAccessMask = srcAccess;
 		ibar.oldLayout = layout;
 		ibar.newLayout = newLayout;
 		
@@ -220,11 +229,11 @@ namespace vkjs {
 		layout = newLayout;
 	}
 
-	void Image::record_change_layout(VkCommandBuffer cmd, VkImageLayout newLayout, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask)
+	void Image::record_change_layout(VkCommandBuffer cmd, VkImageLayout newLayout, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkAccessFlags srcAccess, VkAccessFlags dstAccess)
 	{
 		assert(image);
 		
-		const VkImageMemoryBarrier ibar = get_layout_transition_barrier(newLayout);
+		const VkImageMemoryBarrier ibar = get_layout_transition_barrier(newLayout,srcAccess,dstAccess);
 		vkCmdPipelineBarrier(cmd, srcStageMask, dstStageMask, 0, 0, nullptr, 0, nullptr, 1, &ibar);
 	}
 
