@@ -68,7 +68,7 @@ namespace vkjs {
 		VkResult create_uniform_buffer(VkDeviceSize size, bool deviceLocal, Buffer* result);
 		VkResult create_staging_buffer(VkDeviceSize size, Buffer* result);
 		VkResult create_storage_buffer(VkDeviceSize size, Buffer* result);
-		VkResult create_image(VkFormat format, const VkExtent3D& extent, VkImageUsageFlags usage, VkImageType type, VkImageTiling tiling, VkImageViewType viewType, uint32_t levels, uint32_t layers, uint32_t faces, VkSampleCountFlagBits samples, VkImageAspectFlags aspectFlags, Image* result);
+		VkResult create_image(VkFormat format, const VkExtent3D& extent, VkImageUsageFlags usage, VkImageType type, VkImageTiling tiling, VkImageViewType viewType, uint32_t levels, uint32_t layers, uint32_t faces, VkSampleCountFlagBits samples, VkImageAspectFlags aspectFlags, Image* result, bool transient = false);
 		VkResult create_texture2d_with_mips(VkFormat format, const VkExtent3D& extent, Image* result);
 		VkResult create_texture2d(VkFormat format, const VkExtent3D& extent, Image* result);
 		VkResult create_texture2d_cube(VkFormat format, const VkExtent3D& extent, bool withMips, Image* result);

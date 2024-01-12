@@ -865,7 +865,7 @@ void App::setup_triangle_pass()
     deps[dep].dependencyFlags = 0;
     deps[dep].srcAccessMask = VK_ACCESS_NONE;
     deps[dep].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-    deps[dep].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    deps[dep].srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
     deps[dep].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     deps[dep].srcSubpass = VK_SUBPASS_EXTERNAL;
     deps[dep].dstSubpass = 0;
@@ -874,7 +874,7 @@ void App::setup_triangle_pass()
     deps[dep].dependencyFlags = 0;
     deps[dep].srcAccessMask = VK_ACCESS_NONE;
     deps[dep].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    deps[dep].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    deps[dep].srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     deps[dep].dstStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     deps[dep].srcSubpass = VK_SUBPASS_EXTERNAL;
     deps[dep].dstSubpass = 0;

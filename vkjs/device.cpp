@@ -379,7 +379,7 @@ namespace vkjs {
 			result);
 	}
 
-	VkResult Device::create_image(VkFormat format, const VkExtent3D& extent, VkImageUsageFlags usage, VkImageType type, VkImageTiling tiling, VkImageViewType viewType, uint32_t levels, uint32_t layers, uint32_t faces, VkSampleCountFlagBits samples, VkImageAspectFlags aspectFlags, Image* result)
+	VkResult Device::create_image(VkFormat format, const VkExtent3D& extent, VkImageUsageFlags usage, VkImageType type, VkImageTiling tiling, VkImageViewType viewType, uint32_t levels, uint32_t layers, uint32_t faces, VkSampleCountFlagBits samples, VkImageAspectFlags aspectFlags, Image* result, bool transient)
 	{
 		VkImageCreateInfo info = {};
 		info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -403,6 +403,11 @@ namespace vkjs {
 		VmaAllocationCreateInfo ai = {};
 		ai.usage = VMA_MEMORY_USAGE_UNKNOWN;
 		ai.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+		if (transient)
+		{
+			ai.preferredFlags |= VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT;
+		}
+
 		VkResult err;
 		//allocate and create the image
 		err = vmaCreateImage(allocator, &info, &ai, &result->image, &result->mem, nullptr);
@@ -529,7 +534,9 @@ namespace vkjs {
 		const uint32_t levels = 1u;
 		VkImageUsageFlags usageFlags;
 			
-		if (sampleCount > VK_SAMPLE_COUNT_1_BIT) {
+		const bool multiSampled = (sampleCount > VK_SAMPLE_COUNT_1_BIT);
+
+		if (multiSampled) {
 			usageFlags = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT| VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 		}
 		else {
@@ -546,7 +553,8 @@ namespace vkjs {
 			levels, 1, 1,
 			sampleCount,
 			VK_IMAGE_ASPECT_COLOR_BIT,
-			result
+			result,
+			multiSampled
 		);
 		result->final_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
