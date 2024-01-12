@@ -230,7 +230,7 @@ public:
 
     virtual void get_enabled_extensions() override;
 
-    void create_material_texture(std::string filename);
+    void create_material_texture(const std::string& filename);
     bool load_texture2d(std::string filename, vkjs::Image* dest, bool autoMipmap, int& w, int& h, int& nchannel);
 };
 
@@ -1345,7 +1345,7 @@ void App::get_enabled_extensions()
     //enabled_device_extensions.push_back(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
 }
 
-void App::create_material_texture(std::string filename)
+void App::create_material_texture(const std::string& filename)
 {
     if (imageCache.find(filename) == imageCache.end())
     {
