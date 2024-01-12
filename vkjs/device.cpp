@@ -186,7 +186,7 @@ namespace vkjs {
 				vkDebugMarkerSetObjectNameEXT(logicalDevice, &nameInfo);
 			}
 		}
-		jsrlib::Info("Object %llx, name: %s", object, name);
+		jsrlib::Info("Object 0x%llx, name: %s", object, name);
 	}
 
 	void Device::set_image_name(const Image* image, const std::string& name)
