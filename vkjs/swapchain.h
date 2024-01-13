@@ -38,7 +38,7 @@ namespace vkjs {
 		*/
 		VkResult present_image(VkQueue queue, uint32_t imageIndex, VkSemaphore waitSemaphore);
 
-		std::vector<Image> create_swapchain_images();
+		std::vector<Image> get_swapchain_images();
 	};
 }
 #endif // !VKJS_SWAPCHAIN_H

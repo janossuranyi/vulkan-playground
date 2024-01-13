@@ -19,9 +19,9 @@ namespace vkjs {
 		
 		for (auto& ext : vkbPhysicalDevice.get_extensions())
 		{
+			jsrlib::Info("Enabled extension: %s", ext.c_str());
 			if (ext == VK_EXT_DEBUG_MARKER_EXTENSION_NAME) {
 				debugMarkerPresent = true;
-				break;
 			}
 		}
 

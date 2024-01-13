@@ -147,7 +147,7 @@ namespace jsr {
 		//we now use all of the info structs we have been writing into into this one to create the pipeline
 		VkGraphicsPipelineCreateInfo pipelineInfo{};
 		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-		pipelineInfo.pNext = nullptr;
+		pipelineInfo.pNext = _pNext;
 
 		pipelineInfo.stageCount = static_cast<unsigned>(_shaderStages.size());
 		pipelineInfo.pStages = _shaderStages.data();

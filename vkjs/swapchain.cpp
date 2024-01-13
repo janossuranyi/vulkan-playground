@@ -26,7 +26,7 @@ VkResult vkjs::SwapChain::present_image(VkQueue queue, uint32_t imageIndex, VkSe
 	return vkQueuePresentKHR(queue, &presentInfo);
 }
 
-std::vector<vkjs::Image> vkjs::SwapChain::create_swapchain_images()
+std::vector<vkjs::Image> vkjs::SwapChain::get_swapchain_images()
 {
 	auto ret = std::vector<vkjs::Image>(this->images.size());
 	for (size_t i(0); i < images.size(); ++i)

@@ -23,6 +23,7 @@ namespace jsr {
 		VkPipelineLayout									_pipelineLayout;
 		VkPipelineDepthStencilStateCreateInfo				_depthStencil;
 		VkPipelineDynamicStateCreateInfo					_dynamicStates;
+		void*												_pNext;
 		VkPipeline build_pipeline(VkDevice device, VkRenderPass pass);
 	};
 

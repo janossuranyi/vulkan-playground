@@ -12,6 +12,21 @@
 
 namespace vkjs {
 
+	struct GenericFeature {
+		static const uint32_t capacity = 256;
+		
+		GenericFeature();
+		
+		template <typename T> GenericFeature(T const& feature) noexcept {
+			memset(fields, UINT8_MAX, sizeof(VkBool32) * capacity);
+			memcpy(this, &feature, sizeof(T));
+		}
+
+		VkStructureType sType = static_cast<VkStructureType>(0);
+		void* pNext = nullptr;
+		VkBool32 fields[capacity];
+	};
+
 	class AppBase {
 	private:
 		std::string window_title() const;
@@ -36,6 +51,8 @@ namespace vkjs {
 		bool minimized = false;
 		bool quit = false;
 		Device* device;
+
+		std::vector<GenericFeature> required_generic_features;
 
 		std::string shader_path() const;
 		u32 frameCounter{ 0 };

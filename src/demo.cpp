@@ -15,11 +15,12 @@
 #include "jsrlib/jsr_semaphore.h"
 #include "jsrlib/jsr_resources.h"
 #include "jsrlib/jsr_math.h"
+#include "jsrlib/jsr_frustum.h"
+
 //#include "jsrlib/jsr_jobsystem2.h"
 #include "jobsys.h"
 #include "world.h"
 #include "gltf_loader.h"
-#include <thread>
 #include "stb_image.h"
 #include "vkjs/vkjs.h"
 #include "vkjs/appbase.h"
@@ -46,9 +47,12 @@ private:
     const VkFormat NORMAL_RT_FMT = VK_FORMAT_R16G16_SFLOAT;
 
     float fps = 0.f;
+    float maxZ = 0.0f, minZ = 0.0f;
     VkDevice d;
     bool smaaChanged = false;
     bool firstRun = true;
+
+    std::vector<vkjs::Image> swapchainImages;
 
     vkjs::Image uvChecker;
     vkjs::Image ssaoNoise;
@@ -72,6 +76,9 @@ private:
     vkjs::Buffer vtxbuf;
     vkjs::Buffer idxbuf;
     size_t minUboAlignment = 0;
+
+    vkjs::Buffer vtxStagingBuffer;
+    std::array<vkjs::Buffer, MAX_CONCURRENT_FRAMES> transientVtxBuf;
 
     std::array<vkjs::Buffer, MAX_CONCURRENT_FRAMES> uboPassData;
     std::array<vkjs::Buffer, MAX_CONCURRENT_FRAMES> uboPostProcessData;
@@ -143,6 +150,9 @@ private:
     VkDescriptorSet triangleDescriptors[MAX_CONCURRENT_FRAMES];
     VkDescriptorSetLayout tonemapLayout = VK_NULL_HANDLE;
 
+    VkPipelineLayout debugPipelineLayout = VK_NULL_HANDLE;
+    VkPipeline debugPipeline = VK_NULL_HANDLE;
+
     VkFramebuffer fb[MAX_CONCURRENT_FRAMES] = {};
     fs::path basePath = fs::path("../..");
 
@@ -153,6 +163,7 @@ private:
         RenderPass preZ = {};
         RenderPass triangle = {};
     } passes;
+    uint32_t visibleObjectCount{};
 
 public:
 
@@ -162,7 +173,10 @@ public:
         static const char* current_msaa_item = items[static_cast<size_t>(settings.msaaSamples)-1];
 
         static const VkSampleCountFlagBits smaaBits[] = { VK_SAMPLE_COUNT_1_BIT,VK_SAMPLE_COUNT_2_BIT,VK_SAMPLE_COUNT_4_BIT,VK_SAMPLE_COUNT_8_BIT };
+
         ImGui::Text("Fps: %.2f", fps);
+        ImGui::Text("obj in frustum: %d", visibleObjectCount);
+        ImGui::Text("maxZ: %.2f, minZ: %.2f", maxZ, minZ);
         ImGui::DragFloat3("Light pos", &passData.vLightPos[0], 0.05f, -20.0f, 20.0f);
         ImGui::ColorPicker3("LightColor", &passData.vLightColor[0]);
         ImGui::DragFloat("Light intensity", &passData.vLightColor[3], 0.5f, 0.0f, 10000.0f);
@@ -201,6 +215,7 @@ public:
 
     App(bool b) : AppBase(b) {
         depth_format = VK_FORMAT_D24_UNORM_S8_UINT;
+        settings.validation = b;
     }
 
     virtual ~App();
@@ -208,6 +223,8 @@ public:
     virtual void build_command_buffers() override;
 
     virtual void render() override;
+
+    void setup_debug_pipeline(RenderPass& pass);
 
     void setup_tonemap_pipeline(RenderPass& pass);
 
@@ -281,6 +298,7 @@ void App::on_window_resized()
             vkUpdateDescriptorSets(d, 2, write.data(), 0, nullptr);
         }
     }
+    swapchainImages = swapchain.get_swapchain_images();
 }
 
 void App::setup_descriptor_sets()
@@ -420,6 +438,9 @@ App::~App()
         if (pass->pipeline) vkDestroyPipeline(d, pass->pipeline, nullptr);
         if (pass->layout) vkDestroyPipelineLayout(d, pass->layout, nullptr);
     }
+    if (debugPipeline) vkDestroyPipeline(d, debugPipeline, nullptr);
+    if (debugPipelineLayout) vkDestroyPipelineLayout(d, debugPipelineLayout, nullptr);
+
     vkDestroyRenderPass(d, passes.tonemap.pass, nullptr);
     vkDestroyRenderPass(d, passes.preZ.pass, nullptr);
     vkDestroyRenderPass(d, passes.triangle.pass, nullptr);
@@ -440,6 +461,7 @@ void App::build_command_buffers()
     const bool MSAA_ENABLED = (settings.msaaSamples > VK_SAMPLE_COUNT_1_BIT);
 
     VkCommandBuffer cmd = drawCmdBuffers[currentFrame];
+    const VkDeviceSize offset = 0;
 
     device->begin_debug_marker_region(cmd, vec4(1.f, .5f, 0.f, 1.f), "Forward Pass");
     VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
@@ -464,7 +486,6 @@ void App::build_command_buffers()
     vkCmdBeginRenderPass(cmd, &beginPass, VK_SUBPASS_CONTENTS_INLINE);
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.triangle.pipeline);
-    VkDeviceSize offset = 0;
     vkCmdBindVertexBuffers(cmd, 0, 1, &vtxbuf.buffer, &offset);
     vkCmdBindIndexBuffer(cmd, idxbuf.buffer, 0ull, VK_INDEX_TYPE_UINT16);
     VkViewport viewport{ 0.f,0.f,float(width),float(height),0.0f,1.0f };
@@ -472,17 +493,39 @@ void App::build_command_buffers()
     vkCmdSetViewport(cmd, 0, 1, &viewport);
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
+    const mat4 vp = passData.mtxProjection * passData.mtxView;
+    jsr::Frustum frustum(vp);
+
     uint32_t dynOffset = 0;
+    size_t transientVtxOffset = 0;
+
+    vkjs::Vertex v{};
+
+    visibleObjectCount = 0;
     for (const auto& obj : objects) {
         const auto& mesh = meshes[obj.mesh];
         const int materialIndex = scene->meshes[obj.mesh].material;
         const auto& material = scene->materials[materialIndex];
+
+        const bool visible = frustum.Intersects2(obj.aabb);
+
+        if (visible && material.alphaMode != ALPHA_MODE_BLEND) {
         
-        if (material.alphaMode != ALPHA_MODE_BLEND) {
+            visibleObjectCount++;
+
+            auto corners = obj.aabb.GetHomogenousCorners();
+            vec4 pp[8];
+
+            for (uint32_t i = 0; i < 8; ++i) {
+                vec4 p = vp * corners[i];
+                p /= p.w;
+                v.xyz = p;
+                vtxStagingBuffer.copyTo(transientVtxOffset, sizeof(vkjs::Vertex), &v);
+                transientVtxOffset += sizeof(vkjs::Vertex);
+            }
 
             const VkDescriptorSet dsets[2] = { triangleDescriptors[currentFrame], obj.vkResources };
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                passes.triangle.layout, 0, 2, dsets, 1, &dynOffset);
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.triangle.layout, 0, 2, dsets, 1, &dynOffset);
 
             vkCmdDrawIndexed(cmd, mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, 0);
         }
@@ -490,6 +533,19 @@ void App::build_command_buffers()
     }
     vkCmdEndRenderPass(cmd);
     device->end_debug_marker_region(cmd);
+
+    if (transientVtxOffset > 0)
+    {
+        VkBufferCopy copy;
+        copy.srcOffset = 0;
+        copy.dstOffset = 0;
+        copy.size = transientVtxOffset;
+        vkCmdCopyBuffer(cmd, vtxStagingBuffer.buffer, transientVtxBuf[currentFrame].buffer, 1u, &copy);
+        VkMemoryBarrier vkmb = vks::initializers::memoryBarrier();
+        vkmb.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        vkmb.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0, 1, &vkmb, 0, nullptr, 0, nullptr);
+    }
 
 /*
     HDRImage[currentFrame].record_change_layout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
@@ -503,16 +559,58 @@ void App::build_command_buffers()
     beginPass.clearValueCount = 1;
     beginPass.renderPass = passes.tonemap.pass;
     beginPass.framebuffer = fb[currentFrame];
-    vkCmdBeginRenderPass(cmd, &beginPass, VK_SUBPASS_CONTENTS_INLINE);
+    //vkCmdBeginRenderPass(cmd, &beginPass, VK_SUBPASS_CONTENTS_INLINE);
 
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.tonemap.pipeline);
+    // New structures are used to define the attachments used in dynamic rendering
+    VkRenderingAttachmentInfoKHR colorAttachment{};
+    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+    colorAttachment.imageView = swapchain.views[currentBuffer];
+    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.clearValue.color = { 0.0f,0.0f,0.0f,1.0f };
+    
+    VkRenderingInfoKHR renderingInfo{};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+    renderingInfo.renderArea = { 0, 0, width, height };
+    renderingInfo.layerCount = 1;
+    renderingInfo.colorAttachmentCount = 1;
+    renderingInfo.pColorAttachments = &colorAttachment;
+    renderingInfo.pDepthAttachment = 0;
+    renderingInfo.pStencilAttachment = 0;
+
+    if (swapchainImages[currentBuffer].layout != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+    {
+        swapchainImages[currentBuffer].record_change_layout(cmd,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        swapchainImages[currentBuffer].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    }
+    // Begin dynamic rendering
+    vkCmdBeginRenderingKHR(cmd, &renderingInfo);
+
     vkCmdSetViewport(cmd, 0, 1, &viewport);
     vkCmdSetScissor(cmd, 0, 1, &scissor);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-        passes.tonemap.layout, 0, 1, &HDRDescriptor[currentFrame], 0, nullptr);
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.tonemap.pipeline);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.tonemap.layout, 0, 1, &HDRDescriptor[currentFrame], 0, nullptr);
     vkCmdDraw(cmd, 3, 1, 0, 0);
 
-    vkCmdEndRenderPass(cmd);
+    if (visibleObjectCount > 0)
+    {
+
+        vkCmdBindVertexBuffers(cmd, 0, 1, &transientVtxBuf[currentFrame].buffer, &offset);
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, debugPipeline);
+        vkCmdDraw(cmd, (transientVtxOffset / sizeof(vkjs::Vertex)), 1, 0, 0);
+    }
+
+    //vkCmdEndRenderPass(cmd);
+    // End dynamic rendering
+    vkCmdEndRenderingKHR(cmd);
+
     device->end_debug_marker_region(cmd);
 }
 
@@ -577,6 +675,67 @@ void App::render()
 
 }
 
+void App::setup_debug_pipeline(RenderPass& pass)
+{
+    auto vertexInput = vkjs::Vertex::vertex_input_description_position_only();
+
+    const std::vector<VkDynamicState> dynStates = { VK_DYNAMIC_STATE_SCISSOR,VK_DYNAMIC_STATE_VIEWPORT };
+    vkjs::PipelineBuilder pb = {};
+    pb._rasterizer = vks::initializers::pipelineRasterizationStateCreateInfo(
+        VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
+    pb._rasterizer.lineWidth = 1.0f;
+
+    pb._depthStencil = vks::initializers::pipelineDepthStencilStateCreateInfo(VK_FALSE, VK_FALSE, VK_COMPARE_OP_ALWAYS);
+    pb._dynamicStates = vks::initializers::pipelineDynamicStateCreateInfo(dynStates);
+    pb._inputAssembly = vks::initializers::pipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_POINT_LIST, 0, VK_FALSE);
+    pb._multisampling = vks::initializers::pipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT, 0);
+    pb._vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    pb._vertexInputInfo = vks::initializers::pipelineVertexInputStateCreateInfo(vertexInput.bindings, vertexInput.attributes);
+
+    pb._colorBlendAttachments.push_back(vks::initializers::pipelineColorBlendAttachmentState(0x0f, VK_FALSE));
+
+    vkjs::ShaderModule vert_module(*device);
+    vkjs::ShaderModule frag_module(*device);
+    const fs::path vert_spirv_filename = basePath / "shaders/debug.vert.spv";
+    const fs::path frag_spirv_filename = basePath / "shaders/debug.frag.spv";
+    VK_CHECK(vert_module.create(vert_spirv_filename));
+    VK_CHECK(frag_module.create(frag_spirv_filename));
+
+    pb._shaderStages.resize(2);
+    pb._shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    pb._shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    pb._shaderStages[0].pName = "main";
+    pb._shaderStages[0].module = vert_module.module();
+    pb._shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    pb._shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    pb._shaderStages[1].pName = "main";
+    pb._shaderStages[1].module = frag_module.module();
+
+    VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo();
+    plci.pSetLayouts = VK_NULL_HANDLE;
+    plci.setLayoutCount = 0;
+    VK_CHECK(vkCreatePipelineLayout(d, &plci, nullptr, &debugPipelineLayout));
+
+    pb._pipelineLayout = debugPipelineLayout;
+
+    // New create info to define color, depth and stencil attachments at pipeline create time
+    VkPipelineRenderingCreateInfoKHR pipelineRenderingCreateInfo{};
+    pipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+    pipelineRenderingCreateInfo.colorAttachmentCount = 1;
+    pipelineRenderingCreateInfo.pColorAttachmentFormats = &swapchain.vkb_swapchain.image_format;
+    pipelineRenderingCreateInfo.depthAttachmentFormat = VK_FORMAT_UNDEFINED;
+    pipelineRenderingCreateInfo.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
+
+    // Chain into the pipeline creat einfo
+    pb._pNext = &pipelineRenderingCreateInfo;
+
+    debugPipeline = pb.build_pipeline(d, /*pass.pass*/ VK_NULL_HANDLE);
+
+    assert(debugPipeline);
+    device->set_object_name((uint64_t)debugPipeline, VK_DEBUG_REPORT_OBJECT_TYPE_PIPELINE_EXT, "Debug pipeline");
+
+}
+
 void App::setup_tonemap_pipeline(RenderPass& pass)
 {
     auto vertexInput = vkjs::Vertex::vertex_input_description_position_only();
@@ -638,9 +797,19 @@ void App::setup_tonemap_pipeline(RenderPass& pass)
     VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo(1);
     plci.pSetLayouts = &tonemapLayout;
     VK_CHECK(vkCreatePipelineLayout(d, &plci, nullptr, &pass.layout));
-
     pb._pipelineLayout = pass.layout;
-    pass.pipeline = pb.build_pipeline(d, pass.pass);
+
+    // New create info to define color, depth and stencil attachments at pipeline create time
+    VkPipelineRenderingCreateInfoKHR pipelineRenderingCreateInfo{};
+    pipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+    pipelineRenderingCreateInfo.colorAttachmentCount = 1;
+    pipelineRenderingCreateInfo.pColorAttachmentFormats = &swapchain.vkb_swapchain.image_format;
+    pipelineRenderingCreateInfo.depthAttachmentFormat = VK_FORMAT_UNDEFINED;
+    pipelineRenderingCreateInfo.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
+    // Chain into the pipeline creat einfo
+    pb._pNext = &pipelineRenderingCreateInfo;
+
+    pass.pipeline = pb.build_pipeline(d, /*pass.pass*/VK_NULL_HANDLE);
 
     assert(pass.pipeline);
     device->set_object_name((uint64_t)pass.pipeline, VK_DEBUG_REPORT_OBJECT_TYPE_PIPELINE_EXT, "Tonemap pipeline");
@@ -1150,14 +1319,20 @@ void App::prepare()
     d = *device;
     int w, h, nc;
 
+    swapchainImages = swapchain.get_swapchain_images();
+
     setup_triangle_pass();
     setup_triangle_pipeline(passes.triangle);
     setup_tonemap_pass();
     setup_tonemap_pipeline(passes.tonemap);
+    setup_debug_pipeline(passes.tonemap);
+
     setup_images();
 
     device->create_buffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 32ULL * 1024 * 1024, &vtxbuf);
     device->create_buffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 32ULL * 1024 * 1024, &idxbuf);
+
+    device->create_staging_buffer(static_cast<VkDeviceSize>(1 * 1024) * 1024, &vtxStagingBuffer);
 
     device->set_buffer_name(&vtxbuf, "Vertex Buffer");
     device->set_buffer_name(&idxbuf, "Index Buffer");
@@ -1176,6 +1351,11 @@ void App::prepare()
 
     for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
     {
+        VK_CHECK(device->create_buffer(
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT| VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            1ULL * 1024 * 1024, &transientVtxBuf[i]));
+
         device->create_uniform_buffer(8 * 1024, false, &uboPassData[i]);
         uboPassData[i].map();
         device->set_buffer_name(&uboPassData[i], "PerPass UBO " + std::to_string(i));
@@ -1342,7 +1522,13 @@ void App::get_enabled_extensions()
     enabled_device_extensions.push_back(VK_EXT_SHADER_SUBGROUP_BALLOT_EXTENSION_NAME);
     enabled_device_extensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
     enabled_device_extensions.push_back(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
+    enabled_device_extensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
     //enabled_device_extensions.push_back(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
+
+    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeaturesKHR{};
+    dynamicRenderingFeaturesKHR.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+    dynamicRenderingFeaturesKHR.dynamicRendering = VK_TRUE;
+    required_generic_features.push_back(vkjs::GenericFeature(dynamicRenderingFeaturesKHR));
 }
 
 void App::create_material_texture(const std::string& filename)

@@ -236,6 +236,9 @@ namespace vkjs
 			height = swapchain.vkb_swapchain.extent.height;
 			swapchain.images = swapchain.vkb_swapchain.get_images().value();
 			swapchain.views = swapchain.vkb_swapchain.get_image_views().value();
+			for (const auto& it : swapchain.images) {
+				jsrlib::Info("Swapchain Image: %llx", it);
+			}
 		}
 	}
 	void AppBase::setup_swapchain()
@@ -531,6 +534,10 @@ namespace vkjs
 			selector.add_required_extension(extension_name);
 		}
 		
+		for (const auto& it : required_generic_features) {
+			selector.add_required_extension_features(it);
+		}
+
 		auto selector_result = selector.select();
 
 		if (!selector_result) {
@@ -842,5 +849,9 @@ namespace vkjs
 	void AppBase::on_update_gui()
 	{
 		ImGui::ShowDemoWindow();
+	}
+	GenericFeature::GenericFeature()
+	{
+		memset(fields, 0, sizeof(VkBool32) * capacity);
 	}
 }
