@@ -54,6 +54,8 @@ namespace vkjs {
 
 		std::vector<GenericFeature> required_generic_features;
 
+		std::vector<vkjs::Image> swapchain_images;
+
 		std::string shader_path() const;
 		u32 frameCounter{ 0 };
 		u32 currentFrame;

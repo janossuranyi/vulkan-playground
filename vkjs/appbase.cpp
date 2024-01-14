@@ -156,6 +156,7 @@ namespace vkjs
 		VK_CHECK(vkQueueSubmit(queue, 1, &submit, wait_fences[currentFrame]));
 
 		result = swapchain.present_image(queue, currentBuffer, semaphores[currentFrame].render_complete);
+		swapchain_images[currentBuffer].layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
 		if ((result == VK_ERROR_OUT_OF_DATE_KHR) || (result == VK_SUBOPTIMAL_KHR)) {
 			window_resize();
@@ -236,9 +237,12 @@ namespace vkjs
 			height = swapchain.vkb_swapchain.extent.height;
 			swapchain.images = swapchain.vkb_swapchain.get_images().value();
 			swapchain.views = swapchain.vkb_swapchain.get_image_views().value();
+			
 			for (const auto& it : swapchain.images) {
 				jsrlib::Info("Swapchain Image: %llx", it);
 			}
+
+			swapchain_images = swapchain.get_swapchain_images();
 		}
 	}
 	void AppBase::setup_swapchain()

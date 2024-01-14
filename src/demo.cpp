@@ -52,7 +52,6 @@ private:
     bool smaaChanged = false;
     bool firstRun = true;
 
-    std::vector<vkjs::Image> swapchainImages;
 
     vkjs::Image uvChecker;
     vkjs::Image ssaoNoise;
@@ -298,7 +297,6 @@ void App::on_window_resized()
             vkUpdateDescriptorSets(d, 2, write.data(), 0, nullptr);
         }
     }
-    swapchainImages = swapchain.get_swapchain_images();
 }
 
 void App::setup_descriptor_sets()
@@ -579,15 +577,15 @@ void App::build_command_buffers()
     renderingInfo.pDepthAttachment = 0;
     renderingInfo.pStencilAttachment = 0;
 
-    if (swapchainImages[currentBuffer].layout != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+    if (swapchain_images[currentBuffer].layout != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
     {
-        swapchainImages[currentBuffer].record_change_layout(cmd,
+        swapchain_images[currentBuffer].record_change_layout(cmd,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
-        swapchainImages[currentBuffer].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT);
+        swapchain_images[currentBuffer].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     }
     // Begin dynamic rendering
     vkCmdBeginRenderingKHR(cmd, &renderingInfo);
@@ -601,7 +599,6 @@ void App::build_command_buffers()
 
     if (visibleObjectCount > 0)
     {
-
         vkCmdBindVertexBuffers(cmd, 0, 1, &transientVtxBuf[currentFrame].buffer, &offset);
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, debugPipeline);
         vkCmdDraw(cmd, (transientVtxOffset / sizeof(vkjs::Vertex)), 1, 0, 0);
@@ -673,6 +670,7 @@ void App::render()
 
     firstRun = false;
 
+    swapchain_images[currentBuffer].layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 }
 
 void App::setup_debug_pipeline(RenderPass& pass)
@@ -1318,8 +1316,6 @@ void App::prepare()
 
     d = *device;
     int w, h, nc;
-
-    swapchainImages = swapchain.get_swapchain_images();
 
     setup_triangle_pass();
     setup_triangle_pipeline(passes.triangle);
