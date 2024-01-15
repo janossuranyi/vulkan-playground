@@ -30,6 +30,7 @@
 #include "vkjs/vertex.h"
 #include "vkjs/vk_descriptors.h"
 #include "vkjs/shader_module.h"
+#include "vkjs/spirv_utils.h"
 #include <gli/generate_mipmaps.hpp>
 #include "renderer/gli_utils.h"
 
@@ -841,6 +842,14 @@ void App::setup_triangle_pipeline(RenderPass& pass)
     VK_CHECK(vert_module.create(basePath / "shaders/triangle_v2.vert.spv"));
     VK_CHECK(frag_module.create(basePath / "shaders/triangle_v2.frag.spv"));
 
+    std::vector<vkjs::DescriptorSetLayoutData> sets;
+    auto fragSetInfo = vkjs::get_descriptor_set_layout_data(frag_module.size(), frag_module.data());
+    auto vertSetInfo = vkjs::get_descriptor_set_layout_data(vert_module.size(), vert_module.data());
+    sets.insert(sets.end(), fragSetInfo.begin(), fragSetInfo.end());
+    sets.insert(sets.end(), vertSetInfo.begin(), vertSetInfo.end());
+
+    auto merged_sets = vkjs::merge_descriptor_set_layout_data(sets);
+
     pb._shaderStages.resize(2);
     pb._shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     pb._shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
@@ -851,50 +860,10 @@ void App::setup_triangle_pipeline(RenderPass& pass)
     pb._shaderStages[1].pName = "main";
     pb._shaderStages[1].module = frag_module.module();
 
-    /*
-    layout:
-    set 0
-        0: ubo
-        1: dyn. ubo
-        2: combined image
-    */
-
-    std::vector<VkDescriptorSetLayoutBinding> set0bind(3);
-    std::vector<VkDescriptorSetLayoutBinding> set1bind(3);
-
-    set0bind[0].binding = 0;
-    set0bind[0].descriptorCount = 1;
-    set0bind[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    set0bind[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-    set0bind[1].binding = 1;
-    set0bind[1].descriptorCount = 1;
-    set0bind[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-    set0bind[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    set0bind[2].binding = 2;
-    set0bind[2].descriptorCount = 1;
-    set0bind[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    set0bind[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-
-    set1bind[0].binding = 0;
-    set1bind[0].descriptorCount = 1;
-    set1bind[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    set1bind[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    set1bind[1].binding = 1;
-    set1bind[1].descriptorCount = 1;
-    set1bind[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    set1bind[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    set1bind[2].binding = 2;
-    set1bind[2].descriptorCount = 1;
-    set1bind[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    set1bind[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-    VkDescriptorSetLayoutCreateInfo ds0ci = vks::initializers::descriptorSetLayoutCreateInfo(set0bind);
-    VkDescriptorSetLayoutCreateInfo ds1ci = vks::initializers::descriptorSetLayoutCreateInfo(set1bind);
-    std::array<VkDescriptorSetLayout, 2> dsl;
-    dsl[0] = descLayoutCache.create_descriptor_layout(&ds0ci);
-    dsl[1] = descLayoutCache.create_descriptor_layout(&ds1ci);
-    assert(dsl[0] && dsl[1]);
+    std::vector<VkDescriptorSetLayout> dsl;
+    for (const auto& it : merged_sets) {
+        dsl.push_back(it.create_info);
+    }
 
     VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo((uint32_t)dsl.size());
     plci.pSetLayouts = dsl.data();

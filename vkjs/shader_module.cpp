@@ -20,6 +20,21 @@ namespace vkjs {
 		smci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 		smci.codeSize = spirv.size();
 		smci.pCode = (uint32_t*)spirv.data();
+
+		_size = static_cast<uint32_t>( spirv.size() );
+		uint32_t* ptr = new uint32_t[spirv.size() / 4];
+		memcpy(ptr, spirv.data(), _size);
+		_data.reset(ptr);
+
 		return(vkCreateShaderModule(_device, &smci, nullptr, &_module));
+
+	}
+	uint32_t ShaderModule::size() const
+	{
+		return _size;
+	}
+	const void* ShaderModule::data() const
+	{
+		return _data.get();
 	}
 }

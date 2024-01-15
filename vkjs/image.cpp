@@ -25,7 +25,8 @@ namespace vkjs {
 			{
 				record_change_layout(cmd, 
 				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				VK_PIPELINE_STAGE_HOST_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT,
+				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
 				0,
 				VK_ACCESS_TRANSFER_WRITE_BIT);
 				vkCmdCopyBufferToImage(
@@ -41,7 +42,7 @@ namespace vkjs {
 		layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 	}
 
-	void Image::upload(upload_callback&& callback, Buffer* buffer)
+	void Image::upload(UploadCallbackFn&& callback, Buffer* buffer)
 	{
 		assert(image);
 		device_->execute_commands([&](VkCommandBuffer cmd)
@@ -50,7 +51,7 @@ namespace vkjs {
 			});
 	}
 
-	void Image::record_upload(VkCommandBuffer cmd, upload_callback callback, Buffer* buffer)
+	void Image::record_upload(VkCommandBuffer cmd, UploadCallbackFn callback, Buffer* buffer)
 	{
 		assert(image);
 		std::vector<VkBufferImageCopy> bufferCopyRegions;

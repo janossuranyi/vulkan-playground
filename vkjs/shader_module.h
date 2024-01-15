@@ -10,9 +10,13 @@ namespace vkjs {
 		~ShaderModule();
 		VkResult create(std::filesystem::path filename);
 		VkShaderModule module() const { return _module; }
+		uint32_t size() const;
+		const void* data() const;
 	private:
 		VkDevice _device;
 		VkShaderModule _module;
+		uint32_t _size;
+		std::unique_ptr<uint32_t[]> _data;
 	};
 }
 #endif // !VKJS_SHADER_MODULE_H_

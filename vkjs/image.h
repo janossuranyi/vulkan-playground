@@ -37,13 +37,13 @@ namespace vkjs {
 			VkDeviceSize offset;
 		};
 
-		using upload_callback = std::function<void(uint32_t layer, uint32_t face, uint32_t level, UploadInfo*)>;
+		using UploadCallbackFn = std::function<void(uint32_t layer, uint32_t face, uint32_t level, UploadInfo*)>;
 
 		explicit Image(Device* device);
 		Image() = default;
 
 		void upload(const VkExtent3D& extent, uint32_t layer, uint32_t face, uint32_t level, VkDeviceSize offset, Buffer* buffer);
-		void upload(upload_callback&& callback, Buffer* buffer);
+		void upload(UploadCallbackFn&& callback, Buffer* buffer);
 		void change_layout(VkImageLayout newLayout, VkPipelineStageFlags srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
 
 		void record_change_layout(
@@ -53,7 +53,7 @@ namespace vkjs {
 			VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
 			VkAccessFlags srcAccess = 0,
 			VkAccessFlags dstAccess = 0);
-		void record_upload(VkCommandBuffer cmd, upload_callback callback, Buffer* buffer);
+		void record_upload(VkCommandBuffer cmd, UploadCallbackFn callback, Buffer* buffer);
 		VkImageMemoryBarrier get_layout_transition_barrier(VkImageLayout newLayout, VkAccessFlags srcAccess = 0, VkAccessFlags dstAccess = 0);
 		void generate_mipmaps(VkFilter filter = VK_FILTER_LINEAR);
 

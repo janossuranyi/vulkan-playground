@@ -20,6 +20,7 @@ target_sources(vkjs PRIVATE
     vk_types.h
     shader_module.h
     pipeline.h
+    spirv_utils.h
     device.cpp
     buffer.cpp
     image.cpp
@@ -32,6 +33,7 @@ target_sources(vkjs PRIVATE
     VulkanInitializers.hpp
     vk_descriptors.cpp
     shader_module.cpp
+    spirv_utils.cpp
 )
 
 target_link_libraries(vkjs 
@@ -43,4 +45,5 @@ target_link_libraries(vkjs
     imgui
     #    Vulkan::Vulkan
     volk
+    spirv-reflect
 )
