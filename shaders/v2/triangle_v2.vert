@@ -21,7 +21,7 @@ struct S_DRAW_DATA {
 };
 
 layout(set = 0, binding = 1) uniform DrawData_ubo {
-    S_DRAW_DATA drawdata[256];
+    S_DRAW_DATA drawdata[128];
 };
 
 layout(location = 0) out INTERFACE {

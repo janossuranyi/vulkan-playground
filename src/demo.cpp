@@ -304,7 +304,7 @@ void App::setup_descriptor_sets()
 {
     for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
     {
-        uboDrawData.descriptor.range = sizeof(DrawData) * 256;
+        uboDrawData.descriptor.range = sizeof(DrawData) * 128;
         uboDrawData.descriptor.offset = i * drawDataBufferSize;
 
         uboPassData[i].descriptor.range = sizeof(PassData);
@@ -387,7 +387,7 @@ void App::setup_objects()
         }
     }
     
-    drawData.resize(ddlst.size() /** dynamicAlignment*/);
+    drawData.resize(ddlst.size() * sizeof(DrawData) /** dynamicAlignment*/);
 /*
     size_t offset = 0;
     for (size_t i(0); i < ddlst.size(); ++i) {
