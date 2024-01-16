@@ -7,8 +7,10 @@
 #include "../v1/tonemapping.glsl"
 #include "../v1/light.glsl"
 
-layout(location = 0) out vec4 outColor0;
-layout(location = 1) out vec2 outNormal;
+#include "passData.glsl"
+
+layout(location = 0) out vec4 out_Color0;
+layout(location = 1) out vec2 out_Normal;
 
 layout(location = 0) in INTERFACE {
     vec4 Color;
@@ -21,14 +23,15 @@ layout(location = 0) in INTERFACE {
     vec3 BitangentVS;
 } In;
 
+layout(set = 0, binding = 0) uniform PassData_ubo {
+    S_PASS passdata;
+};
 
 layout(set = 0, binding = 2) uniform sampler2D samp0;
-
 layout(set = 1, binding = 0) uniform sampler2D samp_albedo;
 layout(set = 1, binding = 1) uniform sampler2D samp_normal;
 layout(set = 1, binding = 2) uniform sampler2D samp_pbr;
 
-#include "passData.glsl"
 
 const float PI = 3.14159265359;
 
@@ -55,7 +58,7 @@ float G_SchlicksmithGGX(float dotNL, float dotNV, float roughness)
 vec3 F_Schlick(vec3 F0, float cosTheta)
 {
 	vec3 F = F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0); 
-	return F;    
+	return F;
 }
 
 // Specular BRDF composition --------------------------------------------
@@ -125,9 +128,9 @@ void main() {
     light.direction = In.LightDir;;
     light.innerConeCos = cos(40 * PI/180.0);
     light.outerConeCos = cos(45 * PI/180.0);
-    light.range = vLightPos.w;
-    light.color = vLightColor.rgb;
-    light.intensity = vLightColor.a;
+    light.range = passdata.vLightPos.w;
+    light.color = passdata.vLightColor.rgb;
+    light.intensity = passdata.vLightColor.a;
     light.type = LightType_Point;
     vec3 Attn = getLighIntensity( light, In.LightVS - In.FragCoordVS  );
 
@@ -153,7 +156,7 @@ void main() {
     
     vec3 ambientColor = 0.02 * albedoColor.rgb;
     float reflectionMask = smoothstep(0.8, 1.0, 1.0 - r);
-    outColor0 = vec4((diffuseColor / PI + specColor.rgb) * Attn * NoL + ambientColor, reflectionMask);
-    outNormal = NormalOctEncode(N,false);
+    out_Color0 = vec4((diffuseColor / PI + specColor.rgb) * Attn * NoL + ambientColor, reflectionMask);
+    out_Normal = NormalOctEncode(N,false);
 //    outColor0.rgb = mix(checkerColor.rgb, outColor0.rgb, 0.98);
 }

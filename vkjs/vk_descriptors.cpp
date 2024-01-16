@@ -128,7 +128,7 @@ namespace vkutil {
 		device = newDevice;
 	}
 
-	VkDescriptorSetLayout DescriptorLayoutCache::create_descriptor_layout(VkDescriptorSetLayoutCreateInfo* info)
+	VkDescriptorSetLayout DescriptorLayoutCache::create_descriptor_layout(const VkDescriptorSetLayoutCreateInfo* info)
 	{
 		DescriptorLayoutInfo layoutinfo;
 		layoutinfo.bindings.reserve(info->bindingCount);

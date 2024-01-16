@@ -1,7 +1,7 @@
 #ifndef PASSDATA_INC_
 #define PASSDATA_INC_
 
-layout(set = 0, binding = 0) uniform uPassData {
+struct S_PASS {
     mat4 mtxView;
     mat4 mtxProjection;
     vec4 vScaleBias;

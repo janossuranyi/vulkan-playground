@@ -83,7 +83,7 @@ private:
     std::array<vkjs::Buffer, MAX_CONCURRENT_FRAMES> uboPassData;
     std::array<vkjs::Buffer, MAX_CONCURRENT_FRAMES> uboPostProcessData;
 
-    size_t drawDataBufferSize = 8 * 1024 * 1024;
+    size_t drawDataBufferSize = 128 * sizeof(DrawData);
     vkjs::Buffer uboDrawData;
 
     size_t dynamicAlignment = 0;
@@ -304,15 +304,16 @@ void App::setup_descriptor_sets()
 {
     for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
     {
-        uboDrawData.descriptor.range = sizeof(DrawData);
+        uboDrawData.descriptor.range = sizeof(DrawData) * 256;
         uboDrawData.descriptor.offset = i * drawDataBufferSize;
 
         uboPassData[i].descriptor.range = sizeof(PassData);
         uboPassData[i].descriptor.offset = 0;
+        const VkShaderStageFlags stageBits = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
         vkutil::DescriptorBuilder::begin(&descLayoutCache, &descAllocator)
-            .bind_buffer(0, &uboPassData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT| VK_SHADER_STAGE_FRAGMENT_BIT)
-            .bind_buffer(1, &uboDrawData.descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT)
+            .bind_buffer(0, &uboPassData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+            .bind_buffer(1, &uboDrawData.descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
             .bind_image(2, &ssaoNoise.descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .build(triangleDescriptors[i]);
 
@@ -385,13 +386,16 @@ void App::setup_objects()
             nodesToProcess.push_back(e);
         }
     }
-    drawData.resize(ddlst.size() * dynamicAlignment);
+    
+    drawData.resize(ddlst.size() /** dynamicAlignment*/);
+/*
     size_t offset = 0;
     for (size_t i(0); i < ddlst.size(); ++i) {
         memcpy(&drawData[offset], &ddlst[i], sizeof(DrawData));
         offset += dynamicAlignment;
     }
-
+*/
+    memcpy(drawData.data(), ddlst.data(), ddlst.size() * sizeof(DrawData));
 }
 
 void App::setup_samplers()
@@ -501,6 +505,7 @@ void App::build_command_buffers()
     vkjs::Vertex v{};
 
     visibleObjectCount = 0;
+    uint32_t objIdx = 0;
     for (const auto& obj : objects) {
         const auto& mesh = meshes[obj.mesh];
         const int materialIndex = scene->meshes[obj.mesh].material;
@@ -524,11 +529,12 @@ void App::build_command_buffers()
             }
 
             const VkDescriptorSet dsets[2] = { triangleDescriptors[currentFrame], obj.vkResources };
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.triangle.layout, 0, 2, dsets, 1, &dynOffset);
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.triangle.layout, 0, 2, dsets, 0, &dynOffset);
 
-            vkCmdDrawIndexed(cmd, mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, 0);
+            vkCmdDrawIndexed(cmd, mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, objIdx);
         }
         dynOffset += dynamicAlignment;
+        objIdx++;
     }
     vkCmdEndRenderPass(cmd);
     device->end_debug_marker_region(cmd);
@@ -842,14 +848,11 @@ void App::setup_triangle_pipeline(RenderPass& pass)
     VK_CHECK(vert_module.create(basePath / "shaders/triangle_v2.vert.spv"));
     VK_CHECK(frag_module.create(basePath / "shaders/triangle_v2.frag.spv"));
 
-    std::vector<vkjs::DescriptorSetLayoutData> sets;
-    auto fragSetInfo = vkjs::get_descriptor_set_layout_data(frag_module.size(), frag_module.data());
-    auto vertSetInfo = vkjs::get_descriptor_set_layout_data(vert_module.size(), vert_module.data());
-    sets.insert(sets.end(), fragSetInfo.begin(), fragSetInfo.end());
-    sets.insert(sets.end(), vertSetInfo.begin(), vertSetInfo.end());
-
-    auto merged_sets = vkjs::merge_descriptor_set_layout_data(sets);
-
+    auto merged_sets = vkjs::extract_descriptor_set_layout_data({ &frag_module,&vert_module });
+    
+    assert((merged_sets[0].binding_typename[1] == "DrawData_ubo"));
+    //merged_sets[0].bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    
     pb._shaderStages.resize(2);
     pb._shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     pb._shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
@@ -860,13 +863,62 @@ void App::setup_triangle_pipeline(RenderPass& pass)
     pb._shaderStages[1].pName = "main";
     pb._shaderStages[1].module = frag_module.module();
 
-    std::vector<VkDescriptorSetLayout> dsl;
-    for (const auto& it : merged_sets) {
-        dsl.push_back(it.create_info);
-    }
 
-    VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo((uint32_t)dsl.size());
-    plci.pSetLayouts = dsl.data();
+    /*
+ layout:
+ set 0
+     0: ubo
+     1: dyn. ubo
+     2: combined image
+ */
+
+    std::vector<VkDescriptorSetLayoutBinding> set0bind(3);
+    std::vector<VkDescriptorSetLayoutBinding> set1bind(3);
+
+    const VkShaderStageFlags stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    set0bind[0].binding = 0;
+    set0bind[0].descriptorCount = 1;
+    set0bind[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    set0bind[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    set0bind[1].binding = 1;
+    set0bind[1].descriptorCount = 1;
+    set0bind[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    set0bind[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    set0bind[2].binding = 2;
+    set0bind[2].descriptorCount = 1;
+    set0bind[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    set0bind[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+
+    set1bind[0].binding = 0;
+    set1bind[0].descriptorCount = 1;
+    set1bind[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    set1bind[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    set1bind[1].binding = 1;
+    set1bind[1].descriptorCount = 1;
+    set1bind[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    set1bind[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    set1bind[2].binding = 2;
+    set1bind[2].descriptorCount = 1;
+    set1bind[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    set1bind[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+#if 1
+    std::vector<VkDescriptorSetLayout> dsls;
+    for (const auto& dsl : merged_sets)
+    {
+        dsls.push_back(descLayoutCache.create_descriptor_layout(&dsl.create_info));
+    }
+#else    
+    VkDescriptorSetLayoutCreateInfo ds0ci = vks::initializers::descriptorSetLayoutCreateInfo(set0bind);
+    VkDescriptorSetLayoutCreateInfo ds1ci = vks::initializers::descriptorSetLayoutCreateInfo(set1bind);
+    std::array<VkDescriptorSetLayout, 2> dsls;
+    dsls[0] = descLayoutCache.create_descriptor_layout(&ds0ci);
+    dsls[1] = descLayoutCache.create_descriptor_layout(&ds1ci);
+    assert(dsls[0] && dsls[1]);
+#endif
+    VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo((uint32_t)dsls.size());
+    plci.pSetLayouts = dsls.data();
     VK_CHECK(vkCreatePipelineLayout(d, &plci, nullptr, &pass.layout));
     pb._pipelineLayout = pass.layout;
 
@@ -1343,7 +1395,7 @@ void App::prepare()
         S_Scene{fs::path("../../resources/models/sw_venator"), "scene.gltf"}
     };
 
-    const int sceneIdx = 1;
+    const int sceneIdx = 0;
     auto scenePath = scenes[sceneIdx].dir;
     jsr::gltfLoadWorld(scenePath / scenes[sceneIdx].file, *scene);
 
@@ -1420,7 +1472,7 @@ void App::prepare()
 
     setup_objects();
 
-    const size_t size = drawDataBufferSize * 2;
+    const size_t size = drawDataBufferSize * MAX_CONCURRENT_FRAMES;
     device->create_uniform_buffer(size, false, &uboDrawData);
     uboDrawData.map();
     device->set_buffer_name(&uboDrawData, "DrawData UBO");

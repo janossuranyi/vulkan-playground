@@ -52,7 +52,7 @@ namespace vkutil {
 		void init(VkDevice newDevice);
 		void cleanup();
 
-		VkDescriptorSetLayout create_descriptor_layout(VkDescriptorSetLayoutCreateInfo* info);
+		VkDescriptorSetLayout create_descriptor_layout(const VkDescriptorSetLayoutCreateInfo* info);
 
 		struct DescriptorLayoutInfo {
 			//good idea to turn this into a inlined array

@@ -1,4 +1,5 @@
 #include "spirv_utils.h"
+#include "VulkanInitializers.hpp"
 
 namespace vkjs {
  
@@ -23,12 +24,18 @@ namespace vkjs {
             const SpvReflectDescriptorSet& refl_set = *(sets[i_set]);
             DescriptorSetLayoutData& layout = set_layouts[i_set];
             layout.bindings.resize(refl_set.binding_count);
+            layout.binding_typename.resize(refl_set.binding_count);
             for (uint32_t i_binding = 0; i_binding < refl_set.binding_count; ++i_binding) {
                 const SpvReflectDescriptorBinding& refl_binding = *(refl_set.bindings[i_binding]);
                 VkDescriptorSetLayoutBinding& layout_binding = layout.bindings[i_binding];
                 layout_binding.binding = refl_binding.binding;
                 layout_binding.descriptorType = static_cast<VkDescriptorType>(refl_binding.descriptor_type);
                 layout_binding.descriptorCount = 1;
+                
+                if (refl_binding.type_description->type_name) {
+                    layout.binding_typename[i_binding] = refl_binding.type_description->type_name;
+                }
+
                 for (uint32_t i_dim = 0; i_dim < refl_binding.array.dims_count; ++i_dim) {
                     layout_binding.descriptorCount *= refl_binding.array.dims[i_dim];
                 }
@@ -45,52 +52,70 @@ namespace vkjs {
 
     std::vector<DescriptorSetLayoutData> merge_descriptor_set_layout_data(const std::vector<DescriptorSetLayoutData>& layoutData)
     {
-        
+        struct bind_t {
+            VkDescriptorSetLayoutBinding binding;
+            std::string type_name;
+        };
+
         std::vector<DescriptorSetLayoutData> out;
+        std::map<size_t, bind_t> bindingMap;
+        bool set_exists[16] = {};
 
-        DescriptorSetLayoutData tmpsets[4] = {};
-        
-        for (size_t i(0); i < 4; ++i) tmpsets[i].set_number = ~0;
-
-        for (const auto& it : layoutData)
+        for (size_t i_layoutData(0); i_layoutData < layoutData.size(); ++i_layoutData)
         {
-            assert(it.set_number < 4);
-            tmpsets[it.set_number].set_number = it.set_number;
-            for (const auto& it_bind : it.bindings)
-            {
-                bool skip = true;
-                for (const auto& it_search : tmpsets[it.set_number].bindings) {
-                    if (it_search.binding == it_bind.binding) break;
-                    skip = false;
-                }
+            auto& layout = layoutData[i_layoutData];
 
-                if (!skip) {
-                    tmpsets[it.set_number].bindings.push_back(it_bind);
+            assert(layout.set_number < 16);
+            if (!set_exists[layout.set_number])
+            {
+                set_exists[layout.set_number] = true;
+                if (out.size() < (layout.set_number + 1)) {
+                    out.resize(layout.set_number + 1);
+                    out[layout.set_number] = {};
+                    out[layout.set_number].set_number = layout.set_number;
                 }
+            }
+
+            for (size_t i_binding(0); i_binding < layout.bindings.size(); ++i_binding)
+            {
+                const auto& srcBinding = layout.bindings[i_binding];
+                const size_t bindKey = (layout.set_number << 16 | srcBinding.binding);
+
+                if (bindingMap.find(bindKey) == bindingMap.end()) {
+                    bindingMap[bindKey].binding = srcBinding;
+                    bindingMap[bindKey].type_name = layout.binding_typename[i_binding];
+                }
+                else {
+                    bindingMap[bindKey].binding.stageFlags |= srcBinding.stageFlags;
+                }                    
             }
         }
 
-        for (size_t i(0); i < 4; ++i) 
+
+        for (const auto& it : bindingMap)
         {
-            if (tmpsets[i].set_number == ~0)
-            {
-                continue;
-            }
-            
-            out.emplace_back(DescriptorSetLayoutData{});
-            auto& e = out.back();
-            e.set_number = i;
-            e.bindings = tmpsets[i].bindings;
-            e.create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-            e.create_info.bindingCount = (uint32_t) e.bindings.size();
-            e.create_info.pBindings = e.bindings.data();
+            size_t set = it.first >> 16;
+            size_t binding = it.first & 0xffff;
+            out[set].bindings.push_back(it.second.binding);
+            out[set].binding_typename.push_back(it.second.type_name);
         }
 
-        std::sort(out.begin(), out.end(), [](const DescriptorSetLayoutData& a, const DescriptorSetLayoutData& b)
-            {
-                return a.set_number < b.set_number;
-            });
+        for (auto& it : out)
+        {
+            it.create_info = vks::initializers::descriptorSetLayoutCreateInfo(it.bindings);
+        }
 
         return out;
+    }
+    std::vector<DescriptorSetLayoutData> extract_descriptor_set_layout_data(const std::vector<const ShaderModule*>& modules)
+    {
+
+        std::vector<DescriptorSetLayoutData> in;
+        for (const auto& module : modules) {
+            auto tmp = get_descriptor_set_layout_data(module->size(), module->data());
+            in.insert(in.end(), tmp.begin(), tmp.end());
+        }
+
+        return merge_descriptor_set_layout_data(in);
     }
 }
