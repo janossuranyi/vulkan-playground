@@ -83,7 +83,7 @@ private:
     std::array<vkjs::Buffer, MAX_CONCURRENT_FRAMES> uboPassData;
     std::array<vkjs::Buffer, MAX_CONCURRENT_FRAMES> uboPostProcessData;
 
-    size_t drawDataBufferSize = 128 * sizeof(DrawData);
+    size_t drawDataBufferSize = 1024 * sizeof(DrawData);
     vkjs::Buffer uboDrawData;
 
     size_t dynamicAlignment = 0;
@@ -304,7 +304,7 @@ void App::setup_descriptor_sets()
 {
     for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
     {
-        uboDrawData.descriptor.range = sizeof(DrawData) * 128;
+        uboDrawData.descriptor.range = drawDataBufferSize;
         uboDrawData.descriptor.offset = i * drawDataBufferSize;
 
         uboPassData[i].descriptor.range = sizeof(PassData);
@@ -313,7 +313,7 @@ void App::setup_descriptor_sets()
 
         vkutil::DescriptorBuilder::begin(&descLayoutCache, &descAllocator)
             .bind_buffer(0, &uboPassData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
-            .bind_buffer(1, &uboDrawData.descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
+            .bind_buffer(1, &uboDrawData.descriptor, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
             .bind_image(2, &ssaoNoise.descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .build(triangleDescriptors[i]);
 
@@ -850,7 +850,7 @@ void App::setup_triangle_pipeline(RenderPass& pass)
 
     auto merged_sets = vkjs::extract_descriptor_set_layout_data({ &frag_module,&vert_module });
     
-    assert((merged_sets[0].binding_typename[1] == "DrawData_ubo"));
+    assert((merged_sets[0].binding_typename[1] == "rb_DrawData"));
     //merged_sets[0].bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
     
     pb._shaderStages.resize(2);
@@ -1473,14 +1473,16 @@ void App::prepare()
     setup_objects();
 
     const size_t size = drawDataBufferSize * MAX_CONCURRENT_FRAMES;
-    device->create_uniform_buffer(size, false, &uboDrawData);
-    uboDrawData.map();
-    device->set_buffer_name(&uboDrawData, "DrawData UBO");
-
+    device->create_storage_buffer(size, &uboDrawData);
+    device->set_buffer_name(&uboDrawData, "DrawData SSBO");
+    vkjs::Buffer stage;
+    device->create_staging_buffer(size, &stage);
+    stage.copyTo(0, drawData.size(), drawData.data());
     for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
     {
-        uboDrawData.copyTo(i * drawDataBufferSize, drawData.size(), drawData.data());
+        device->buffer_copy(&stage, &uboDrawData, 0, i * drawDataBufferSize, drawData.size());
     }
+    device->destroy_buffer(&stage);
     setup_descriptor_sets();
 
     const int kernelSize = sizeof(passData.avSSAOkernel) / sizeof(passData.avSSAOkernel[0]);
