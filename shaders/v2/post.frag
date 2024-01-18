@@ -19,19 +19,19 @@ layout(location = 0) in vec2 texcoord;
 layout(set = 0, binding = 0) uniform sampler2D samp_input;  
 layout(set = 0, binding = 1) uniform sampler2D samp_depth;
 layout(set = 0, binding = 2) uniform ubo_PostProcessData {
-    S_POSTPROC pp;
+    S_POSTPROC ppdata;
 };
 
 layout(location = 0) out vec4 fragColor0;
 
 void main() {
-    vec4 inColor = textureLod( samp_input, texcoord, 0.0 );
-    float znorm = textureLod( samp_depth, texcoord, 0.0 ).x;
-    float linearZ = linearize_depth( znorm, pp.fZnear, pp.fZfar );
-    float fogFactor = getFogFactor( pp.sFogParams, abs( linearZ ) );
+    vec4 inColor = texelFetch( samp_input, ivec2(gl_FragCoord.xy), 0 );
+    float znorm = texelFetch( samp_depth, ivec2(gl_FragCoord.xy), 0 ).x;
+    float linearZ = linearize_depth_rev( znorm, ppdata.fZnear, ppdata.fZfar );
+    float fogFactor = getFogFactor( ppdata.sFogParams, abs( linearZ ) );
 
     fogFactor = mix( fogFactor, 1.0, znorm == 1.0 );
-    inColor.rgb = ACESFitted( mix( pp.sFogParams.color, pp.fExposure * inColor.rgb, fogFactor ) );
+    inColor.rgb = ACESFitted( mix( ppdata.sFogParams.color, ppdata.fExposure * inColor.rgb, fogFactor ) );
     inColor.rgb = linearTosRGB( inColor.rgb );
     fragColor0 = vec4( inColor.rgb, 1.0 );
 }

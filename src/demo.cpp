@@ -167,6 +167,15 @@ private:
 
 public:
 
+    mat4 perspective_revZ(float fovy, float aspect, float zNear, float zFar)
+    {
+
+        mat4 Result = glm::perspective(fovy, aspect, zNear, zFar);
+        Result[2][2] = zNear / (zFar - zNear);
+        Result[3][2] = (zFar * zNear) / (zFar - zNear);
+        return Result;
+    }
+
     virtual void on_update_gui() override
     { 
         static const char* items[] = { "Off","MSAAx2","MSAAx4","MSAAx8" };
@@ -214,7 +223,7 @@ public:
 
 
     App(bool b) : AppBase(b) {
-        depth_format = VK_FORMAT_D24_UNORM_S8_UINT;
+        depth_format = VK_FORMAT_D32_SFLOAT_S8_UINT;
         settings.validation = b;
     }
 
@@ -473,7 +482,7 @@ void App::build_command_buffers()
 
     clearVal[0].color = { sky.r,sky.g,sky.b,sky.a };
     clearVal[1].color = { 0.0f,0.0f,0.0f,0.0f };
-    clearVal[2].depthStencil.depth = 1.0f;
+    clearVal[2].depthStencil.depth = 0.0f;
     //clearVal[3].color = { 0.0f,0.0f,0.0f,0.0f };
     //clearVal[4].color = { 0.0f,0.0f,0.0f,0.0f };
 
@@ -649,7 +658,7 @@ void App::render()
     }
 
     passData.mtxView = camera.GetViewMatrix();
-    passData.mtxProjection = glm::perspective(radians(camera.Zoom), (float)width / height, .01f, 500.f);
+    passData.mtxProjection = perspective_revZ(radians(camera.Zoom), (float)width / height, .01f, 500.f);
     passData.vScaleBias.x = 1.0f / swapchain.extent().width;
     passData.vScaleBias.y = 1.0f / swapchain.extent().height;
     passData.vScaleBias.z = 0.f;
@@ -834,7 +843,7 @@ void App::setup_triangle_pipeline(RenderPass& pass)
 
     vkjs::PipelineBuilder pb = {};
     pb._rasterizer = vks::initializers::pipelineRasterizationStateCreateInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
-    pb._depthStencil = vks::initializers::pipelineDepthStencilStateCreateInfo(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
+    pb._depthStencil = vks::initializers::pipelineDepthStencilStateCreateInfo(VK_TRUE, VK_TRUE, VK_COMPARE_OP_GREATER_OR_EQUAL);
     pb._dynamicStates = vks::initializers::pipelineDynamicStateCreateInfo(dynamicStates);
     pb._inputAssembly = vks::initializers::pipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
     pb._multisampling = vks::initializers::pipelineMultisampleStateCreateInfo(settings.msaaSamples, 0);
@@ -868,55 +877,16 @@ void App::setup_triangle_pipeline(RenderPass& pass)
  layout:
  set 0
      0: ubo
-     1: dyn. ubo
+     1: ssbo
      2: combined image
  */
 
-    std::vector<VkDescriptorSetLayoutBinding> set0bind(3);
-    std::vector<VkDescriptorSetLayoutBinding> set1bind(3);
-
-    const VkShaderStageFlags stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-    set0bind[0].binding = 0;
-    set0bind[0].descriptorCount = 1;
-    set0bind[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    set0bind[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-    set0bind[1].binding = 1;
-    set0bind[1].descriptorCount = 1;
-    set0bind[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-    set0bind[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    set0bind[2].binding = 2;
-    set0bind[2].descriptorCount = 1;
-    set0bind[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    set0bind[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-
-    set1bind[0].binding = 0;
-    set1bind[0].descriptorCount = 1;
-    set1bind[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    set1bind[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    set1bind[1].binding = 1;
-    set1bind[1].descriptorCount = 1;
-    set1bind[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    set1bind[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    set1bind[2].binding = 2;
-    set1bind[2].descriptorCount = 1;
-    set1bind[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    set1bind[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-#if 1
     std::vector<VkDescriptorSetLayout> dsls;
     for (const auto& dsl : merged_sets)
     {
         dsls.push_back(descLayoutCache.create_descriptor_layout(&dsl.create_info));
     }
-#else    
-    VkDescriptorSetLayoutCreateInfo ds0ci = vks::initializers::descriptorSetLayoutCreateInfo(set0bind);
-    VkDescriptorSetLayoutCreateInfo ds1ci = vks::initializers::descriptorSetLayoutCreateInfo(set1bind);
-    std::array<VkDescriptorSetLayout, 2> dsls;
-    dsls[0] = descLayoutCache.create_descriptor_layout(&ds0ci);
-    dsls[1] = descLayoutCache.create_descriptor_layout(&ds1ci);
-    assert(dsls[0] && dsls[1]);
-#endif
+
     VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo((uint32_t)dsls.size());
     plci.pSetLayouts = dsls.data();
     VK_CHECK(vkCreatePipelineLayout(d, &plci, nullptr, &pass.layout));
