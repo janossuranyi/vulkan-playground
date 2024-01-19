@@ -24,7 +24,7 @@ layout(set = 0, binding = 1) readonly buffer rb_DrawData {
     S_DRAW_DATA drawdata[];
 };
 
-layout(location = 0) out INTERFACE {
+struct S_INTERFACE {
     vec4 Color;
     vec3 FragCoordVS;
     vec3 LightVS;
@@ -33,15 +33,18 @@ layout(location = 0) out INTERFACE {
     vec3 NormalVS;
     vec3 TangentVS;
     vec3 BitangentVS;
-} Out;
+};
+
+layout(location = 0) out INTERFACE {
+    S_INTERFACE Out;
+};
 
 void main() {
     vec3 light = passdata.vLightPos.xyz;
-    mat4 mvp = passdata.mtxProjection * passdata.mtxView * drawdata[ gl_InstanceIndex ].mtxModel;
     vec4 posVS = ( passdata.mtxView * drawdata[ gl_InstanceIndex ].mtxModel ) * vec4( inPosition, 1.0 );
     
     //output the position of each vertex
-    gl_Position = mvp * vec4( inPosition, 1.0 );
+    gl_Position = passdata.mtxProjection * posVS;
     gl_Position.y = -gl_Position.y;
 
 	mat3 mNormal = mat3( passdata.mtxView * drawdata[ gl_InstanceIndex ].mtxNormal );

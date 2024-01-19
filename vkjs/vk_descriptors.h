@@ -52,7 +52,8 @@ namespace vkutil {
 		void init(VkDevice newDevice);
 		void cleanup();
 
-		VkDescriptorSetLayout create_descriptor_layout(const VkDescriptorSetLayoutCreateInfo* info);
+		VkDescriptorSetLayout create_descriptor_layout(const VkDescriptorSetLayoutCreateInfo* info, uint32_t id = ~0);
+		VkDescriptorSetLayout getByID(uint32_t id) const;
 
 		struct DescriptorLayoutInfo {
 			//good idea to turn this into a inlined array
@@ -77,6 +78,7 @@ namespace vkutil {
 		};
 
 		std::unordered_map<DescriptorLayoutInfo, VkDescriptorSetLayout, DescriptorLayoutHash> layoutCache;
+		std::unordered_map<uint32_t, VkDescriptorSetLayout> layoutByID;
 		VkDevice device;
 	};
 

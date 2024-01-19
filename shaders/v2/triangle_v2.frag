@@ -12,7 +12,7 @@
 layout(location = 0) out vec4 out_Color0;
 layout(location = 1) out vec2 out_Normal;
 
-layout(location = 0) in INTERFACE {
+struct S_INTERFACE {
     vec4 Color;
     vec3 FragCoordVS;
     vec3 LightVS;
@@ -21,7 +21,11 @@ layout(location = 0) in INTERFACE {
     vec3 NormalVS;
     vec3 TangentVS;
     vec3 BitangentVS;
-} In;
+};
+
+layout(location = 0) in INTERFACE {
+    S_INTERFACE In;
+};
 
 layout(set = 0, binding = 0) uniform PassData_ubo {
     S_PASS passdata;

@@ -165,14 +165,15 @@ private:
     } passes;
     uint32_t visibleObjectCount{};
 
+    static const uint32_t TRIANGLE_DESCRIPTOR_ID = 100;
 public:
 
     mat4 perspective_revZ(float fovy, float aspect, float zNear, float zFar)
     {
 
-        mat4 Result = glm::perspective(fovy, aspect, zNear, zFar);
-        Result[2][2] = zNear / (zFar - zNear);
-        Result[3][2] = (zFar * zNear) / (zFar - zNear);
+        mat4 Result = glm::perspective(fovy, aspect, zFar, zNear);
+        //Result[2][2] = zNear / (zFar - zNear);
+        Result[3][2] = -Result[3][2]; // (zFar * zNear) / (zFar - zNear);
         return Result;
     }
 

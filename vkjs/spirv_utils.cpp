@@ -63,7 +63,7 @@ namespace vkjs {
 
         for (size_t i_layoutData(0); i_layoutData < layoutData.size(); ++i_layoutData)
         {
-            auto& layout = layoutData[i_layoutData];
+            const auto& layout = layoutData[i_layoutData];
 
             assert(layout.set_number < 16);
             if (!set_exists[layout.set_number])

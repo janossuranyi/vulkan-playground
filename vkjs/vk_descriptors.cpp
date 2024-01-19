@@ -128,7 +128,7 @@ namespace vkutil {
 		device = newDevice;
 	}
 
-	VkDescriptorSetLayout DescriptorLayoutCache::create_descriptor_layout(const VkDescriptorSetLayoutCreateInfo* info)
+	VkDescriptorSetLayout DescriptorLayoutCache::create_descriptor_layout(const VkDescriptorSetLayoutCreateInfo* info, uint32_t id)
 	{
 		DescriptorLayoutInfo layoutinfo;
 		layoutinfo.bindings.reserve(info->bindingCount);
@@ -152,11 +152,12 @@ namespace vkutil {
 				return a.binding < b.binding;
 			});
 		}
-		
+
 		auto it = layoutCache.find(layoutinfo);
 		if (it != layoutCache.end())
 		{
-			return (*it).second;
+			if (id != ~0) layoutByID[id] = it->second;
+			return it->second;
 		}
 		else {
 			VkDescriptorSetLayout layout;
@@ -166,6 +167,17 @@ namespace vkutil {
 			//add to cache
 			layoutCache[layoutinfo] = layout;
 			return layout;
+		}
+	}
+
+	VkDescriptorSetLayout DescriptorLayoutCache::getByID(uint32_t id) const
+	{
+		auto it = layoutByID.find(id);
+		if (it != layoutByID.end()) {
+			return it->second;
+		}
+		else {
+			return VK_NULL_HANDLE;
 		}
 	}
 

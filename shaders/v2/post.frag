@@ -27,7 +27,7 @@ layout(location = 0) out vec4 fragColor0;
 void main() {
     vec4 inColor = texelFetch( samp_input, ivec2(gl_FragCoord.xy), 0 );
     float znorm = texelFetch( samp_depth, ivec2(gl_FragCoord.xy), 0 ).x;
-    float linearZ = linearize_depth_rev( znorm, ppdata.fZnear, ppdata.fZfar );
+    float linearZ = linearize_depth( znorm, ppdata.fZfar, ppdata.fZnear );
     float fogFactor = getFogFactor( ppdata.sFogParams, abs( linearZ ) );
 
     fogFactor = mix( fogFactor, 1.0, znorm == 1.0 );

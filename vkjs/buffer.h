@@ -11,7 +11,8 @@ namespace vkjs {
 		VmaAllocation			mem{};
 		VkDeviceSize			size{};
 		VkDescriptorBufferInfo	descriptor{};
-		VkMemoryPropertyFlags	mem_flags;
+		VkBufferUsageFlags		usage = VK_BUFFER_USAGE_FLAG_BITS_MAX_ENUM;
+		VkMemoryPropertyFlags	mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		Device*					device_{};
 		uint8_t*				mapped{};
 		bool					alias = false;

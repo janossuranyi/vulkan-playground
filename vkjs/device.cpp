@@ -330,6 +330,7 @@ namespace vkjs {
 			result->size = size;
 			result->alias = true;
 			result->setup_descriptor();
+			result->usage = usage;
 			buffers.push_back({ result->buffer, result->mem });
 		}
 
