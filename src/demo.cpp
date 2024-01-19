@@ -128,6 +128,7 @@ private:
 
     
     struct PostProcessData {
+        mat4 mtxInvProj;
         glm::vec3 fogColor;
         float fogLinearStart;
         float fogLinearEnd;
@@ -171,9 +172,8 @@ public:
     mat4 perspective_revZ(float fovy, float aspect, float zNear, float zFar)
     {
 
-        mat4 Result = glm::perspective(fovy, aspect, zFar, zNear);
-        //Result[2][2] = zNear / (zFar - zNear);
-        Result[3][2] = -Result[3][2]; // (zFar * zNear) / (zFar - zNear);
+        mat4 Result = glm::perspective(fovy, aspect, zFar,zNear);
+
         return Result;
     }
 
@@ -659,11 +659,13 @@ void App::render()
     }
 
     passData.mtxView = camera.GetViewMatrix();
-    passData.mtxProjection = perspective_revZ(radians(camera.Zoom), (float)width / height, .01f, 500.f);
+    passData.mtxProjection = perspective(radians(camera.Zoom), (float)width / height, 500.f, .1f);
     passData.vScaleBias.x = 1.0f / swapchain.extent().width;
     passData.vScaleBias.y = 1.0f / swapchain.extent().height;
     passData.vScaleBias.z = 0.f;
     passData.vScaleBias.w = 0.f;
+
+    postProcessData.mtxInvProj = inverse(passData.mtxProjection * passData.mtxView);
     postProcessData.fZnear = .01f;
     postProcessData.fZfar = 500.f;
 
