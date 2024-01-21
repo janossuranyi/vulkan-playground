@@ -6,9 +6,11 @@
 #include "../v1/fog.glsl"
 #include "../v1/linearDepth.glsl"
 
-struct S_POSTPROC {
+struct S_PPDATA {
     mat4 mtxInvProj;
-    FogParameters sFogParams;
+    vec4 vCameraPos;
+    vec4 vFogParams;
+    vec4 vSunPos;
     float fExposure;
     float fZnear;
     float fZfar;
@@ -19,26 +21,64 @@ layout(location = 0) in vec2 texcoord;
 
 layout(set = 0, binding = 0) uniform sampler2D samp_input;  
 layout(set = 0, binding = 1) uniform sampler2D samp_depth;
-layout(set = 0, binding = 2) uniform ubo_PostProcessData {
-    S_POSTPROC ppdata;
+layout(set = 0, binding = 2) uniform stc_ubo_PostProcessData {
+    S_PPDATA ppdata;
 };
 
 layout(location = 0) out vec4 fragColor0;
+
+const float FT = 1.8;
+
+vec3 applyFog(  in float a,
+                in float b,        // density
+                in vec3  rgb,      // original color of the pixel
+                in float d,        // camera to point distance
+                in vec3  rayOri,   // camera position
+                in vec3  rayDir )  // camera to point vector
+{
+    vec3 sunDir = normalize(ppdata.vSunPos.xyz);
+
+    float fogAmount = a * exp(-rayOri.y * b) * (1.0 - exp( -d * rayDir.y * b )) / rayDir.y;
+    //float fogAmount = 1.0 - exp(-d * b);
+    float sunAmount = max( dot(rayDir, sunDir), 0.0 );
+    vec3  fogColor  = mix( vec3(0.5,0.6,0.7), // blue
+                           vec3(1.0,0.9,0.7), // yellow
+                           pow(sunAmount,8.0) );
+
+    return mix( rgb, fogColor, clamp(fogAmount,0.0,1.0) );
+}
+
+float rec(float x) {return 1.0/x; }
 
 void main() {
 
     vec4 inColor = texelFetch( samp_input, ivec2(gl_FragCoord.xy), 0 );
     float znorm = texelFetch( samp_depth, ivec2(gl_FragCoord.xy), 0 ).x;
     float linearZ = linearize_depth( znorm, ppdata.fZfar, ppdata.fZnear );
-    float fogFactor = getFogFactor( ppdata.sFogParams, abs( linearZ ) );
+    float fogFactor = 1.0;
 
     vec4 ndc = vec4(texcoord * 2.0 - 1.0, znorm, 1.0);
     ndc.y = -ndc.y;
-    vec4 posWS = ppdata.mtxInvProj * ndc;
-    posWS.xyz /= posWS.w;
+    vec4 worldPosition = ppdata.mtxInvProj * ndc;
+    worldPosition /= worldPosition.w;
 
-    fogFactor = mix(1.0, fogFactor, znorm > 0.0);
-    inColor.rgb = ACESFitted( mix( ppdata.sFogParams.color, ppdata.fExposure * inColor.rgb, fogFactor ) );
+    vec3 cameraToPixel = worldPosition.xyz - ppdata.vCameraPos.xyz;
+    float distanceToPixel = length ( cameraToPixel );
+    // fogFactor = getFogFactor( ppdata.sFogParams, distanceToPixel );
+    
+    inColor.rgb *= ppdata.fExposure;
+
+    inColor.rgb = applyFog(
+        ppdata.vFogParams.y,
+        ppdata.vFogParams.x,
+        inColor.rgb,
+        distanceToPixel,
+        ppdata.vCameraPos.xyz,
+        cameraToPixel / distanceToPixel);
+  
+
+//    inColor.rgb = ACESFitted( mix( ppdata.sFogParams.color, ppdata.fExposure * inColor.rgb, fogFactor ) );
+    inColor.rgb = ACESFitted( inColor.rgb );
     inColor.rgb = linearTosRGB( inColor.rgb );
     fragColor0 = vec4( inColor.rgb, 1.0 );
 }

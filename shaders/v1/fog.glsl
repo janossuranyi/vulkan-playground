@@ -6,8 +6,7 @@ struct FogParameters
 	vec3 color;
 	float linearStart;
 	float linearEnd;
-	float density;
-	
+	float density;	
 	int equation;
 	bool isEnabled;
 };

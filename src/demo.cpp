@@ -129,12 +129,17 @@ private:
     
     struct PostProcessData {
         mat4 mtxInvProj;
+        glm::vec4 vCameraPos;
+        glm::vec4 vFogParams;
+        glm::vec4 vSunPos;
+        /*
         glm::vec3 fogColor;
         float fogLinearStart;
         float fogLinearEnd;
         float fogDensity;
         int fogEquation;
         int fogEnabled;
+        */
         float fExposure;
         float fZnear;
         float fZfar;
@@ -185,6 +190,7 @@ public:
         static const VkSampleCountFlagBits smaaBits[] = { VK_SAMPLE_COUNT_1_BIT,VK_SAMPLE_COUNT_2_BIT,VK_SAMPLE_COUNT_4_BIT,VK_SAMPLE_COUNT_8_BIT };
 
         ImGui::Text("Fps: %.2f", fps);
+        ImGui::Text("ViewOrg: X: %.3f  Y: %.3f  Z: %.3f", camera.Position.x, camera.Position.y, camera.Position.z);
         ImGui::Text("obj in frustum: %d", visibleObjectCount);
         ImGui::Text("maxZ: %.2f, minZ: %.2f", maxZ, minZ);
         ImGui::DragFloat3("Light pos", &passData.vLightPos[0], 0.05f, -20.0f, 20.0f);
@@ -192,9 +198,10 @@ public:
         ImGui::DragFloat("Light intensity", &passData.vLightColor[3], 0.5f, 0.0f, 10000.0f);
         ImGui::DragFloat("Light range", &passData.vLightPos[3], 0.05f, 0.0f, 100.0f);
         ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.01f, 1.0f, 50.0f);
-        ImGui::Checkbox("Fog On/Off", (bool*) & postProcessData.fogEnabled);
-        ImGui::DragFloat("Fog density", &postProcessData.fogDensity, 0.0002, 0.0f, 1.0f, "%.4f");
-        ImGui::DragInt("Fog equation", &postProcessData.fogEquation, 1.f, 1, 2);
+        //ImGui::Checkbox("Fog On/Off", (bool*) & postProcessData.fogEnabled);
+        ImGui::DragFloat("Fog density", &postProcessData.vFogParams.x, 0.001f, 0.0f, 10.0f, "%.4f");
+        ImGui::DragFloat("Fog A", &postProcessData.vFogParams.y, 0.0001, 0.0001f, 2.0f, "%.4f");
+        ImGui::DragFloat3("Sun dir", &postProcessData.vSunPos[0], 1.0f);
         if (ImGui::BeginCombo("MSAA", current_msaa_item, ImGuiComboFlags_HeightRegular))
         {
             for (int n = 0; n < IM_ARRAYSIZE(items); ++n)
@@ -479,7 +486,7 @@ void App::build_command_buffers()
     device->begin_debug_marker_region(cmd, vec4(1.f, .5f, 0.f, 1.f), "Forward Pass");
     VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
     VkClearValue clearVal[3];
-    glm::vec4 sky = glm::vec4{ 135, 206, 235, 255 } / 255.f;
+    glm::vec4 sky = glm::vec4{ 0.5f, 0.6f, 0.7f, 1.0f };
 
     clearVal[0].color = { sky.r,sky.g,sky.b,sky.a };
     clearVal[1].color = { 0.0f,0.0f,0.0f,0.0f };
@@ -658,17 +665,20 @@ void App::render()
         smaaChanged = false;
     }
 
+    const float zFar = 200.0f;
+    const float zNear = 0.1f;
+
     passData.mtxView = camera.GetViewMatrix();
-    passData.mtxProjection = perspective(radians(camera.Zoom), (float)width / height, 500.f, .1f);
+    passData.mtxProjection = perspective(radians(camera.Zoom), (float)width / height, zFar, zNear);
     passData.vScaleBias.x = 1.0f / swapchain.extent().width;
     passData.vScaleBias.y = 1.0f / swapchain.extent().height;
     passData.vScaleBias.z = 0.f;
     passData.vScaleBias.w = 0.f;
 
     postProcessData.mtxInvProj = inverse(passData.mtxProjection * passData.mtxView);
-    postProcessData.fZnear = .01f;
-    postProcessData.fZfar = 500.f;
-
+    postProcessData.fZnear = zNear;
+    postProcessData.fZfar = zFar;
+    postProcessData.vCameraPos = vec4(camera.Position, 1.0f);
     update_uniforms();
 
     if (fb[currentFrame] != VK_NULL_HANDLE) {
@@ -845,7 +855,7 @@ void App::setup_triangle_pipeline(RenderPass& pass)
     const std::vector<VkDynamicState> dynamicStates = { VK_DYNAMIC_STATE_SCISSOR,VK_DYNAMIC_STATE_VIEWPORT };
 
     vkjs::PipelineBuilder pb = {};
-    pb._rasterizer = vks::initializers::pipelineRasterizationStateCreateInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
+    pb._rasterizer = vks::initializers::pipelineRasterizationStateCreateInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
     pb._depthStencil = vks::initializers::pipelineDepthStencilStateCreateInfo(VK_TRUE, VK_TRUE, VK_COMPARE_OP_GREATER_OR_EQUAL);
     pb._dynamicStates = vks::initializers::pipelineDynamicStateCreateInfo(dynamicStates);
     pb._inputAssembly = vks::initializers::pipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
@@ -1307,7 +1317,7 @@ void App::prepare()
     camera.MovementSpeed = 0.003f;
     passData.vLightPos = glm::vec4(0.f, 1.5f, 0.f, 10.f);
     passData.vLightColor = glm::vec4(0.800f, 0.453f, 0.100f, 15.f);
-
+    postProcessData.vSunPos = { 0.0f, -1.0f, 0.0f, 0.0f };
     d = *device;
     int w, h, nc;
 
@@ -1319,8 +1329,8 @@ void App::prepare()
 
     setup_images();
 
-    device->create_buffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 32ULL * 1024 * 1024, &vtxbuf);
-    device->create_buffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 32ULL * 1024 * 1024, &idxbuf);
+    device->create_buffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 128ULL * 1024 * 1024, &vtxbuf);
+    device->create_buffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 128ULL * 1024 * 1024, &idxbuf);
 
     device->create_staging_buffer(static_cast<VkDeviceSize>(1 * 1024) * 1024, &vtxStagingBuffer);
 
@@ -1363,9 +1373,10 @@ void App::prepare()
         S_Scene(const fs::path& a, const std::string& b) : dir(a), file(b) {}
     };
 
-    std::array<S_Scene, 2> scenes = {
+    std::array<S_Scene, 3> scenes = {
         S_Scene{fs::path("../../resources/models/sponza"), "sponza_j.gltf"},
-        S_Scene{fs::path("../../resources/models/sw_venator"), "scene.gltf"}
+        S_Scene{fs::path("../../resources/models/sw_venator"), "scene.gltf"},
+        S_Scene{fs::path("D:/DATA/models/crq376zqdkao-Castelia-City/OBJ"), "city.gltf"}
     };
 
     const int sceneIdx = 0;
@@ -1384,17 +1395,28 @@ void App::prepare()
     jsrlib::Info("Loading images...");
     for (auto& it : scene->materials)
     {
-        std::string fname1 = (scenePath / it.texturePaths.albedoTexturePath).u8string();
-        std::string fname2 = (scenePath / it.texturePaths.normalTexturePath).u8string();
-        std::string fname3 = (scenePath / it.texturePaths.specularTexturePath).u8string();
-        create_material_texture(fname1);
-        create_material_texture(fname2);
-        create_material_texture(fname3);
+        std::string fname[3];
+        fname[0] = (scenePath / it.texturePaths.albedoTexturePath).u8string();
+        fname[1] = (scenePath / it.texturePaths.normalTexturePath).u8string();
+        fname[2] = (scenePath / it.texturePaths.specularTexturePath).u8string();
+
+        for (int i = 0; i < 3; ++i) {
+            while (true) {
+                auto found = fname[i].find("%20");
+                if (found == std::string::npos) {
+                    break;
+                }
+                fname[i] = fname[i].replace(found, 3, " ");
+            }
+        }
+        create_material_texture(fname[0]);
+        create_material_texture(fname[1]);
+        create_material_texture(fname[2]);
 
         vkutil::DescriptorBuilder::begin(&descLayoutCache, &descAllocator)
-            .bind_image(0, &imageCache.at(fname1).descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
-            .bind_image(1, &imageCache.at(fname2).descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
-            .bind_image(2, &imageCache.at(fname3).descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+            .bind_image(0, &imageCache.at(fname[0]).descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+            .bind_image(1, &imageCache.at(fname[1]).descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+            .bind_image(2, &imageCache.at(fname[2]).descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .build(materials[i++].resources);
     }
 
@@ -1478,10 +1500,13 @@ void App::prepare()
     }
 
     postProcessData.fExposure = 1.0f;
+    postProcessData.vFogParams = { 0.0845f,0.0089f,0.0f,0.0f };
+    /*
     postProcessData.fogColor = vec3(0.8f);
     postProcessData.fogEquation = 1;
     postProcessData.fogDensity = 0.01f;
     postProcessData.fogEnabled = 1;
+    */
     prepared = true;
 }
 
@@ -1525,13 +1550,15 @@ void App::get_enabled_extensions()
 
 void App::create_material_texture(const std::string& filename)
 {
-    if (imageCache.find(filename) == imageCache.end())
+    std::string fn = filename;
+
+    if (imageCache.find(fn) == imageCache.end())
     {
         int w, h, nc;
         // load image
         vkjs::Image newImage;
-        fs::path base = fs::path(filename).parent_path();
-        fs::path name = fs::path(filename).filename();
+        fs::path base = fs::path(fn).parent_path();
+        fs::path name = fs::path(fn).filename();
         name.replace_extension("dds");
         auto dds = base / "dds" / name;
 
@@ -1552,19 +1579,19 @@ void App::create_material_texture(const std::string& filename)
             device->destroy_buffer(&stagebuf);
             jsrlib::Info("%s Loaded", dds.u8string().c_str());
         }
-        else if (!load_texture2d(filename, &newImage, true, w, h, nc))
+        else if (!load_texture2d(fn, &newImage, true, w, h, nc))
         {
-            jsrlib::Error("%s notfund", filename.c_str());
+            jsrlib::Error("%s notfund", fn.c_str());
             device->create_texture2d(VK_FORMAT_R8G8B8A8_UNORM, { 1,1,1 }, &newImage);
             newImage.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         }
         else
         {
-            jsrlib::Info("%s Loaded", filename.c_str());
+            jsrlib::Info("%s Loaded", fn.c_str());
         }
         newImage.setup_descriptor();
         newImage.descriptor.sampler = sampLinearRepeat;
-        imageCache.insert({ filename,newImage });
+        imageCache.insert({ fn,newImage });        
     }
 }
 
