@@ -255,7 +255,7 @@ namespace vkjs
 		cpci.queueFamilyIndex = device->queue_family_indices.graphics;
 		VK_CHECK(vkCreateCommandPool(*device, &cpci, nullptr, &cmd_pool));
 
-		VkCommandBufferAllocateInfo cbai = vks::initializers::commandBufferAllocateInfo(cmd_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 2);
+		VkCommandBufferAllocateInfo cbai = vks::initializers::commandBufferAllocateInfo(cmd_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, MAX_CONCURRENT_FRAMES);
 
 		vkAllocateCommandBuffers(*device, &cbai, drawCmdBuffers.data());
 	}

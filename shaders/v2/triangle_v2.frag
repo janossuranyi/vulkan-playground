@@ -27,7 +27,7 @@ layout(location = 0) in INTERFACE {
     S_INTERFACE In;
 };
 
-layout(set = 0, binding = 0) uniform PassData_ubo {
+layout(set = 0, binding = 0) uniform stc_PassDataUBO {
     S_PASS passdata;
 };
 

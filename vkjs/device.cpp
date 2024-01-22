@@ -339,16 +339,16 @@ namespace vkjs {
 
 	VkResult Device::create_uniform_buffer(VkDeviceSize size, bool deviceLocal, Buffer* result)
 	{
-		VkMemoryPropertyFlags mflags;
+		VkMemoryPropertyFlags mflags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 		VkBufferUsageFlags usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 
 		if (deviceLocal)
 		{
-			mflags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+			mflags |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		}
 		else 
 		{
-			mflags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+			mflags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 		}
 
 		return create_buffer(

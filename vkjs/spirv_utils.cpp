@@ -83,7 +83,7 @@ namespace vkjs {
 
                 if (bindingMap.find(bindKey) == bindingMap.end()) {
                     bindingMap[bindKey].binding = srcBinding;
-                    bindingMap[bindKey].type_name = layout.binding_typename[i_binding];
+                    bindingMap[bindKey].type_name = layout.binding_typename[i_binding];                   
                 }
                 else {
                     bindingMap[bindKey].binding.stageFlags |= srcBinding.stageFlags;
@@ -102,7 +102,19 @@ namespace vkjs {
 
         for (auto& it : out)
         {
+            for (auto& bind : it.bindings) {
+                if (bind.descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER && it.binding_typename[bind.binding].substr(0, 3) == "dyn")
+                {   
+                    bind.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+                }
+                else if (bind.descriptorType == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER && it.binding_typename[bind.binding].substr(0, 3) == "dyn")
+                {
+                    bind.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
+                }
+            }
+
             it.create_info = vks::initializers::descriptorSetLayoutCreateInfo(it.bindings);
+            
         }
 
         return out;

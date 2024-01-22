@@ -27,7 +27,7 @@ layout(set = 0, binding = 2) uniform stc_ubo_PostProcessData {
 
 layout(location = 0) out vec4 fragColor0;
 
-const float FT = 1.8;
+float saturate( float x ){ return clamp( x, 0.0, 1.0 ) ; }
 
 vec3 applyFog(  in float a,
                 in float b,        // density
@@ -38,17 +38,17 @@ vec3 applyFog(  in float a,
 {
     vec3 sunDir = normalize(ppdata.vSunPos.xyz);
 
-    float fogAmount = a * exp(-rayOri.y * b) * (1.0 - exp( -d * rayDir.y * b )) / rayDir.y;
+    float fogAmount = a * exp( -rayOri.y * b ) * ( 1.0 - exp( -d * rayDir.y * b ) ) / rayDir.y;
+    fogAmount = saturate( fogAmount );
+
     //float fogAmount = 1.0 - exp(-d * b);
     float sunAmount = max( dot(rayDir, sunDir), 0.0 );
     vec3  fogColor  = mix( vec3(0.5,0.6,0.7), // blue
                            vec3(1.0,0.9,0.7), // yellow
                            pow(sunAmount,8.0) );
 
-    return mix( rgb, fogColor, clamp(fogAmount,0.0,1.0) );
+    return mix( rgb, fogColor, fogAmount );
 }
-
-float rec(float x) {return 1.0/x; }
 
 void main() {
 
@@ -68,7 +68,7 @@ void main() {
     
     inColor.rgb *= ppdata.fExposure;
 
-    inColor.rgb = applyFog(
+    vec3 fogColor = applyFog(
         ppdata.vFogParams.y,
         ppdata.vFogParams.x,
         inColor.rgb,
@@ -77,8 +77,10 @@ void main() {
         cameraToPixel / distanceToPixel);
   
 
+    inColor.rgb = mix(inColor.rgb, fogColor, bvec3(ppdata.vFogParams.z > 0.0) );
+
 //    inColor.rgb = ACESFitted( mix( ppdata.sFogParams.color, ppdata.fExposure * inColor.rgb, fogFactor ) );
     inColor.rgb = ACESFitted( inColor.rgb );
     inColor.rgb = linearTosRGB( inColor.rgb );
-    fragColor0 = vec4( inColor.rgb, 1.0 );
+    fragColor0 = vec4( inColor.rgb, inColor.a );
 }

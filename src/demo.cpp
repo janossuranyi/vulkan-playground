@@ -41,18 +41,62 @@ using namespace jsr;
 #define asfloat(x) static_cast<float>(x)
 #define asuint(x) static_cast<uint32_t>(x)
 
+struct UniformBufferPool {
+    vkjs::Buffer* buffer{};
+    std::atomic_uint32_t bytesAlloced = 0u;
+    uint32_t offsetAligment = 64u;
+    uint32_t internalOffset = 0u;
+    size_t _size = 0;
+    VkDescriptorBufferInfo descriptor = {};
+    
+    UniformBufferPool() = default;
+    UniformBufferPool(vkjs::Buffer* buffer, size_t size, uint32_t startOffset, uint32_t offsetAligment) :
+        buffer(buffer), _size(size), offsetAligment(offsetAligment), bytesAlloced(0) {
+    
+        descriptor.buffer = buffer->buffer;
+        descriptor.offset = internalOffset;
+        descriptor.range = size;
+    }
+
+    template<class T>
+    VkDescriptorBufferInfo alloc(uint32_t count, const T* data)
+    {        
+        const uint32_t size = (count * sizeof(T) + offsetAligment - 1) & ~(offsetAligment - 1);
+        const uint32_t offset = bytesAlloced.fetch_add(size);
+        const uint32_t alignedSize = (sizeof(T) + offsetAligment - 1) & ~(offsetAligment - 1);
+
+        assert((internalOffset + offset + size) < buffer->size);
+
+        VkDescriptorBufferInfo out = {};
+        out.buffer = buffer->buffer;
+        out.offset = offset + internalOffset;
+        out.range = sizeof(T);
+
+        if (data)
+        {
+            size_t it_offset = internalOffset + offset;
+            for (uint32_t it = 0; it < count; ++it)
+            {
+                buffer->copyTo(it_offset, sizeof(T), &data[it]);
+                it_offset += alignedSize;
+            }
+        }
+        return out;
+    }
+    void reset() { bytesAlloced = 0; }
+};
+
 class App : public vkjs::AppBase {
 private:
     //const VkFormat HDR_FMT = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
     const VkFormat HDR_RT_FMT = VK_FORMAT_R16G16B16A16_SFLOAT;
     const VkFormat NORMAL_RT_FMT = VK_FORMAT_R16G16_SFLOAT;
-
+    bool fogEnabled = true;
     float fps = 0.f;
     float maxZ = 0.0f, minZ = 0.0f;
     VkDevice d;
     bool smaaChanged = false;
     bool firstRun = true;
-
 
     vkjs::Image uvChecker;
     vkjs::Image ssaoNoise;
@@ -64,6 +108,7 @@ private:
     std::array<vkjs::Image, MAX_CONCURRENT_FRAMES> HDR_NormalImage{};
     std::array<VkFramebuffer, MAX_CONCURRENT_FRAMES> HDRFramebuffer{};
     std::array<VkDescriptorSet, MAX_CONCURRENT_FRAMES> HDRDescriptor{};
+    std::array<UniformBufferPool*, MAX_CONCURRENT_FRAMES> drawPool{};
 
     VkSampler sampLinearRepeat;
     VkSampler sampNearestClampBorder;
@@ -83,7 +128,8 @@ private:
     std::array<vkjs::Buffer, MAX_CONCURRENT_FRAMES> uboPassData;
     std::array<vkjs::Buffer, MAX_CONCURRENT_FRAMES> uboPostProcessData;
 
-    size_t drawDataBufferSize = 1024 * sizeof(DrawData);
+    size_t drawDataBufferSize = 0;
+
     vkjs::Buffer uboDrawData;
 
     size_t dynamicAlignment = 0;
@@ -116,6 +162,7 @@ private:
     std::vector<MeshBinary> meshes;
     std::vector<Object> objects;
     std::vector<uint8_t> drawData;
+    std::vector<DrawData> drawDataStruct;
 
     struct PassData {
         glm::mat4 mtxView;
@@ -198,9 +245,9 @@ public:
         ImGui::DragFloat("Light intensity", &passData.vLightColor[3], 0.5f, 0.0f, 10000.0f);
         ImGui::DragFloat("Light range", &passData.vLightPos[3], 0.05f, 0.0f, 100.0f);
         ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.01f, 1.0f, 50.0f);
-        //ImGui::Checkbox("Fog On/Off", (bool*) & postProcessData.fogEnabled);
+        ImGui::Checkbox("Fog On/Off", &fogEnabled);
         ImGui::DragFloat("Fog density", &postProcessData.vFogParams.x, 0.001f, 0.0f, 10.0f, "%.4f");
-        ImGui::DragFloat("Fog A", &postProcessData.vFogParams.y, 0.0001, 0.0001f, 2.0f, "%.4f");
+        ImGui::DragFloat("Fog scale", &postProcessData.vFogParams.y, 0.001, 0.001f, 1.0f, "%.4f");
         ImGui::DragFloat3("Sun dir", &postProcessData.vSunPos[0], 1.0f);
         if (ImGui::BeginCombo("MSAA", current_msaa_item, ImGuiComboFlags_HeightRegular))
         {
@@ -321,8 +368,9 @@ void App::setup_descriptor_sets()
 {
     for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
     {
-        uboDrawData.descriptor.range = drawDataBufferSize;
-        uboDrawData.descriptor.offset = i * drawDataBufferSize;
+        
+        VkDescriptorBufferInfo drawbufInfo = uboDrawData.descriptor; //drawPool[i]->descriptor;
+        drawbufInfo.range = sizeof(DrawData);
 
         uboPassData[i].descriptor.range = sizeof(PassData);
         uboPassData[i].descriptor.offset = 0;
@@ -330,7 +378,7 @@ void App::setup_descriptor_sets()
 
         vkutil::DescriptorBuilder::begin(&descLayoutCache, &descAllocator)
             .bind_buffer(0, &uboPassData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
-            .bind_buffer(1, &uboDrawData.descriptor, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
+            .bind_buffer(1, &drawbufInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT)
             .bind_image(2, &ssaoNoise.descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .build(triangleDescriptors[i]);
 
@@ -377,7 +425,7 @@ void App::setup_objects()
         dynamicAlignment = (dynamicAlignment + minUboAlignment - 1) & ~(minUboAlignment - 1);
     }
 
-    std::vector<DrawData> ddlst;
+    drawDataStruct.clear();
     while (nodesToProcess.empty() == false)
     {
         int idx = nodesToProcess.back();
@@ -393,7 +441,7 @@ void App::setup_objects()
                 obj.aabb = scene->meshes[e].aabb.Transform(mtxModel);
                 obj.vkResources = materials[scene->meshes[e].material].resources;
 
-                ddlst.emplace_back(DrawData{ mtxModel,
+                drawDataStruct.emplace_back(DrawData{ mtxModel,
                     mat4(transpose(inverse(mat3(mtxModel)))),
                     vec4(range(reng), range(reng), range(reng), 1.0f) });
                 objects.push_back(obj);
@@ -404,15 +452,15 @@ void App::setup_objects()
         }
     }
     
-    drawData.resize(ddlst.size() * sizeof(DrawData) /** dynamicAlignment*/);
-/*
+    drawData.resize(drawDataStruct.size() * dynamicAlignment);
+
     size_t offset = 0;
-    for (size_t i(0); i < ddlst.size(); ++i) {
-        memcpy(&drawData[offset], &ddlst[i], sizeof(DrawData));
+    for (size_t i(0); i < drawDataStruct.size(); ++i) {
+        memcpy(&drawData[offset], &drawDataStruct[i], sizeof(DrawData));
         offset += dynamicAlignment;
     }
-*/
-    memcpy(drawData.data(), ddlst.data(), ddlst.size() * sizeof(DrawData));
+
+//    memcpy(drawData.data(), drawDataStruct.data(), drawDataStruct.size() * sizeof(DrawData));
 }
 
 void App::setup_samplers()
@@ -483,6 +531,8 @@ void App::build_command_buffers()
     VkCommandBuffer cmd = drawCmdBuffers[currentFrame];
     const VkDeviceSize offset = 0;
 
+    drawPool[currentFrame]->reset();
+
     device->begin_debug_marker_region(cmd, vec4(1.f, .5f, 0.f, 1.f), "Forward Pass");
     VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
     VkClearValue clearVal[3];
@@ -541,12 +591,14 @@ void App::build_command_buffers()
                 vec4 p = vp * corners[i];
                 p /= p.w;
                 v.xyz = p;
+                assert((transientVtxOffset + sizeof(vkjs::Vertex)) < vtxStagingBuffer.size);
                 vtxStagingBuffer.copyTo(transientVtxOffset, sizeof(vkjs::Vertex), &v);
                 transientVtxOffset += sizeof(vkjs::Vertex);
             }
 
+            //auto bufferDescr = drawPool[currentFrame]->alloc<DrawData>(1, &drawDataStruct[objIdx]);
             const VkDescriptorSet dsets[2] = { triangleDescriptors[currentFrame], obj.vkResources };
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.triangle.layout, 0, 2, dsets, 0, &dynOffset);
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.triangle.layout, 0, 2, dsets, 1, &dynOffset);
 
             vkCmdDrawIndexed(cmd, mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, objIdx);
         }
@@ -620,14 +672,14 @@ void App::build_command_buffers()
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.tonemap.pipeline);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.tonemap.layout, 0, 1, &HDRDescriptor[currentFrame], 0, nullptr);
     vkCmdDraw(cmd, 3, 1, 0, 0);
-
+#if 0
     if (visibleObjectCount > 0)
     {
         vkCmdBindVertexBuffers(cmd, 0, 1, &transientVtxBuf[currentFrame].buffer, &offset);
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, debugPipeline);
         vkCmdDraw(cmd, (transientVtxOffset / sizeof(vkjs::Vertex)), 1, 0, 0);
     }
-
+#endif
     //vkCmdEndRenderPass(cmd);
     // End dynamic rendering
     vkCmdEndRenderingKHR(cmd);
@@ -679,6 +731,7 @@ void App::render()
     postProcessData.fZnear = zNear;
     postProcessData.fZfar = zFar;
     postProcessData.vCameraPos = vec4(camera.Position, 1.0f);
+    postProcessData.vFogParams.z = fogEnabled ? 1.0f : 0.0f;
     update_uniforms();
 
     if (fb[currentFrame] != VK_NULL_HANDLE) {
@@ -872,7 +925,7 @@ void App::setup_triangle_pipeline(RenderPass& pass)
 
     auto merged_sets = vkjs::extract_descriptor_set_layout_data({ &frag_module,&vert_module });
     
-    assert((merged_sets[0].binding_typename[1] == "rb_DrawData"));
+    //assert((merged_sets[0].binding_typename[1] == "rb_DrawData"));
     //merged_sets[0].bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
     
     pb._shaderStages.resize(2);
@@ -1096,7 +1149,7 @@ void App::setup_triangle_pass()
 
     VkSubpassDescriptionDepthStencilResolve depthResolveDesc = {};
     depthResolveDesc.sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_DEPTH_STENCIL_RESOLVE;
-    depthResolveDesc.depthResolveMode = VK_RESOLVE_MODE_MIN_BIT;
+    depthResolveDesc.depthResolveMode = VK_RESOLVE_MODE_MAX_BIT;
     depthResolveDesc.pDepthStencilResolveAttachment = &ZResolveRef;
 
     const uint32_t attachmentCount = msaaEnabled ? 6 : 3;
@@ -1313,11 +1366,11 @@ void App::prepare()
 
     // Calculate required alignment based on minimum device offset alignment
     minUboAlignment = device->vkbPhysicalDevice.properties.limits.minUniformBufferOffsetAlignment;
-
+    drawDataBufferSize = 1024 * ((sizeof(DrawData) + minUboAlignment - 1) & ~(minUboAlignment - 1));
     camera.MovementSpeed = 0.003f;
     passData.vLightPos = glm::vec4(0.f, 1.5f, 0.f, 10.f);
     passData.vLightColor = glm::vec4(0.800f, 0.453f, 0.100f, 15.f);
-    postProcessData.vSunPos = { 0.0f, -1.0f, 0.0f, 0.0f };
+    postProcessData.vSunPos = { 100.0f, -100.0f, -100.0f, 0.0f };
     d = *device;
     int w, h, nc;
 
@@ -1349,6 +1402,9 @@ void App::prepare()
     uvChecker.setup_descriptor();
     uvChecker.descriptor.sampler = sampLinearRepeat;
 
+    vkjs::Buffer* drawBuf = new vkjs::Buffer();
+    device->create_uniform_buffer(drawDataBufferSize * MAX_CONCURRENT_FRAMES, false, drawBuf); drawBuf->map();
+
     for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
     {
         VK_CHECK(device->create_buffer(
@@ -1363,6 +1419,8 @@ void App::prepare()
         device->create_uniform_buffer(sizeof(PostProcessData), false, &uboPostProcessData[i]);
         uboPostProcessData[i].map();
         device->set_buffer_name(&uboPostProcessData[i], "PostProcData UBO " + std::to_string(i));
+        
+        drawPool[i] = new UniformBufferPool(drawBuf, drawDataBufferSize, i * drawDataBufferSize, minUboAlignment);
     }
 
     scene = std::make_unique<World>();
@@ -1468,8 +1526,8 @@ void App::prepare()
     setup_objects();
 
     const size_t size = drawDataBufferSize * MAX_CONCURRENT_FRAMES;
-    device->create_storage_buffer(size, &uboDrawData);
-    device->set_buffer_name(&uboDrawData, "DrawData SSBO");
+    device->create_uniform_buffer(size, false, &uboDrawData);
+    device->set_buffer_name(&uboDrawData, "DrawData UBO");
     vkjs::Buffer stage;
     device->create_staging_buffer(size, &stage);
     stage.copyTo(0, drawData.size(), drawData.data());
