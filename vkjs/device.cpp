@@ -340,7 +340,7 @@ namespace vkjs {
 	VkResult Device::create_uniform_buffer(VkDeviceSize size, bool deviceLocal, Buffer* result)
 	{
 		VkMemoryPropertyFlags mflags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-		VkBufferUsageFlags usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+		VkBufferUsageFlags usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
 		if (deviceLocal)
 		{
