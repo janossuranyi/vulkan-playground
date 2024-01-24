@@ -50,6 +50,18 @@ vec3 applyFog(  in float a,
     return mix( rgb, fogColor, fogAmount );
 }
 
+vec3 ComputePositionViewFromZ(vec2 positionScreen, float viewSpaceZ, mat4 mCameraProj)
+{
+    vec2 screenSpaceRay = vec2( positionScreen.x / mCameraProj[1][1],
+                                positionScreen.y / mCameraProj[2][2]);
+    
+    vec3 positionView;
+    positionView.z = viewSpaceZ;
+    // Solve the two projection equations
+    positionView.xy = screenSpaceRay.xy * positionView.z;
+    
+    return positionView;
+}
 void main() {
 
     vec4 inColor = texelFetch( samp_input, ivec2(gl_FragCoord.xy), 0 );

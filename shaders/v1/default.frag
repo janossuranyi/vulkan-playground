@@ -114,7 +114,7 @@ vec4 diffuse_pass()
         const vec4 lightPosVS = gvars.mView * vec4(g_cbLights[light].position,1.0);
         const vec3 lightDir = normalize(lightPosVS.xyz - In.fragPosVS.xyz);
         const float NoL = saturate(dot(normalVS, lightDir));
-        const vec3 directLight = getLighIntensity(g_cbLights[light], lightPosVS.xyz - In.fragPosVS.xyz) * NoL;
+        const vec3 directLight = getLightIntensity(g_cbLights[light], lightPosVS.xyz - In.fragPosVS.xyz) * NoL;
         
         if (computeLuminance(directLight) < 5.0/255.0) {
             continue;
@@ -222,7 +222,7 @@ vec4 forward_pass()
             L = normalize( lightPosVS.xyz - In.fragPosVS.xyz );
         }
 
-        vec3 directLight = getLighIntensity(GET_LIGHT(light), lightPosVS.xyz - In.fragPosVS.xyz);
+        vec3 directLight = getLightIntensity(GET_LIGHT(light), lightPosVS.xyz - In.fragPosVS.xyz);
         if (computeLuminance(directLight) < 5.0/255.0) {
             continue;
         }

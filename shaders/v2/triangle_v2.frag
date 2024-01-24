@@ -136,7 +136,7 @@ void main() {
     light.color = passdata.vLightColor.rgb;
     light.intensity = passdata.vLightColor.a;
     light.type = LightType_Point;
-    vec3 Attn = getLighIntensity( light, In.LightVS - In.FragCoordVS  );
+    vec3 Attn = getLightIntensity( light, In.LightVS - In.FragCoordVS  );
 
     if(albedoColor.a < 0.5) discard;
     albedoColor.rgb = sRGBToLinear(albedoColor.rgb /* In.Color.rgb*/);

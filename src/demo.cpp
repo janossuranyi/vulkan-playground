@@ -41,6 +41,10 @@ using namespace jsr;
 #define asfloat(x) static_cast<float>(x)
 #define asuint(x) static_cast<uint32_t>(x)
 
+inline static size_t align_size(size_t size, size_t alignment) {
+    return (size + alignment - 1) & ~(alignment - 1);
+}
+
 struct UniformBufferPool {
     vkjs::Buffer* buffer{};
     std::atomic_uint32_t bytesAlloced = 0u;
@@ -49,27 +53,29 @@ struct UniformBufferPool {
     size_t _size = 0;
     VkDescriptorBufferInfo descriptor = {};
     
-    UniformBufferPool() = default;
+    UniformBufferPool() = delete;
     UniformBufferPool(vkjs::Buffer* buffer, size_t size, uint32_t startOffset, uint32_t offsetAligment) :
         buffer(buffer), _size(size), offsetAligment(offsetAligment), bytesAlloced(0) {
     
+        internalOffset = startOffset;
         descriptor.buffer = buffer->buffer;
         descriptor.offset = internalOffset;
         descriptor.range = size;
     }
 
     template<class T>
-    VkDescriptorBufferInfo alloc(uint32_t count, const T* data)
-    {        
-        const uint32_t size = (count * sizeof(T) + offsetAligment - 1) & ~(offsetAligment - 1);
+    VkDescriptorBufferInfo Allocate(uint32_t count, const T* data)
+    {   
+        const uint32_t alignedSize = static_cast<uint32_t>( align_size(sizeof(T), offsetAligment) );
+        const uint32_t size = count * alignedSize;
         const uint32_t offset = bytesAlloced.fetch_add(size);
-        const uint32_t alignedSize = (sizeof(T) + offsetAligment - 1) & ~(offsetAligment - 1);
+        
 
         assert((internalOffset + offset + size) < buffer->size);
 
         VkDescriptorBufferInfo out = {};
         out.buffer = buffer->buffer;
-        out.offset = offset + internalOffset;
+        out.offset = offset;
         out.range = sizeof(T);
 
         if (data)
@@ -209,7 +215,7 @@ private:
     VkFramebuffer fb[MAX_CONCURRENT_FRAMES] = {};
     fs::path basePath = fs::path("../..");
 
-    std::unique_ptr<World> scene;
+    std::unique_ptr<World> world;
 
     struct {
         RenderPass tonemap = {};
@@ -369,7 +375,8 @@ void App::setup_descriptor_sets()
     for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
     {
         
-        VkDescriptorBufferInfo drawbufInfo = uboDrawData.descriptor; //drawPool[i]->descriptor;
+        //VkDescriptorBufferInfo drawbufInfo = uboDrawData.descriptor;
+        VkDescriptorBufferInfo drawbufInfo = drawPool[i]->descriptor;
         drawbufInfo.range = sizeof(DrawData);
 
         uboPassData[i].descriptor.range = sizeof(PassData);
@@ -413,7 +420,7 @@ void App::setup_descriptor_pools()
 
 void App::setup_objects()
 {
-    std::vector<int> nodesToProcess = scene->scene.rootNodes;
+    std::vector<int> nodesToProcess = world->scene.rootNodes;
     objects.clear();
 
     std::random_device rdev;
@@ -431,15 +438,15 @@ void App::setup_objects()
         int idx = nodesToProcess.back();
         nodesToProcess.pop_back();
 
-        auto& node = scene->scene.nodes[idx];
+        auto& node = world->scene.nodes[idx];
         mat4 mtxModel = node.getTransform();
         if (node.isMesh()) {
             for (auto& e : node.getEntities()) {
                 Object obj;
                 obj.mesh = e;
                 obj.mtxModel = mtxModel;
-                obj.aabb = scene->meshes[e].aabb.Transform(mtxModel);
-                obj.vkResources = materials[scene->meshes[e].material].resources;
+                obj.aabb = world->meshes[e].aabb.Transform(mtxModel);
+                obj.vkResources = materials[world->meshes[e].material].resources;
 
                 drawDataStruct.emplace_back(DrawData{ mtxModel,
                     mat4(transpose(inverse(mat3(mtxModel)))),
@@ -573,10 +580,12 @@ void App::build_command_buffers()
 
     visibleObjectCount = 0;
     uint32_t objIdx = 0;
+
+
     for (const auto& obj : objects) {
         const auto& mesh = meshes[obj.mesh];
-        const int materialIndex = scene->meshes[obj.mesh].material;
-        const auto& material = scene->materials[materialIndex];
+        const int materialIndex = world->meshes[obj.mesh].material;
+        const auto& material = world->materials[materialIndex];
 
         const bool visible = frustum.Intersects2(obj.aabb);
 
@@ -596,9 +605,10 @@ void App::build_command_buffers()
                 transientVtxOffset += sizeof(vkjs::Vertex);
             }
 
-            //auto bufferDescr = drawPool[currentFrame]->alloc<DrawData>(1, &drawDataStruct[objIdx]);
+            auto bufferDescr = drawPool[currentFrame]->Allocate<DrawData>(1, &drawDataStruct[objIdx]);
             const VkDescriptorSet dsets[2] = { triangleDescriptors[currentFrame], obj.vkResources };
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.triangle.layout, 0, 2, dsets, 1, &dynOffset);
+            //vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.triangle.layout, 0, 2, dsets, 1, &dynOffset);
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.triangle.layout, 0, 2, dsets, 1, (uint32_t*)(&bufferDescr.offset));
 
             vkCmdDrawIndexed(cmd, mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, objIdx);
         }
@@ -672,7 +682,7 @@ void App::build_command_buffers()
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.tonemap.pipeline);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.tonemap.layout, 0, 1, &HDRDescriptor[currentFrame], 0, nullptr);
     vkCmdDraw(cmd, 3, 1, 0, 0);
-#if 0
+#if 1
     if (visibleObjectCount > 0)
     {
         vkCmdBindVertexBuffers(cmd, 0, 1, &transientVtxBuf[currentFrame].buffer, &offset);
@@ -1357,6 +1367,7 @@ void App::setup_images()
     }
 }
 
+
 void App::prepare()
 {
     vkjs::AppBase::prepare();
@@ -1366,7 +1377,7 @@ void App::prepare()
 
     // Calculate required alignment based on minimum device offset alignment
     minUboAlignment = device->vkbPhysicalDevice.properties.limits.minUniformBufferOffsetAlignment;
-    drawDataBufferSize = 1024 * ((sizeof(DrawData) + minUboAlignment - 1) & ~(minUboAlignment - 1));
+    drawDataBufferSize = 1024 * align_size(sizeof(DrawData), minUboAlignment);
     camera.MovementSpeed = 0.003f;
     passData.vLightPos = glm::vec4(0.f, 1.5f, 0.f, 10.f);
     passData.vLightColor = glm::vec4(0.800f, 0.453f, 0.100f, 15.f);
@@ -1423,7 +1434,7 @@ void App::prepare()
         drawPool[i] = new UniformBufferPool(drawBuf, drawDataBufferSize, i * drawDataBufferSize, minUboAlignment);
     }
 
-    scene = std::make_unique<World>();
+    world = std::make_unique<World>();
 
     struct S_Scene {
         fs::path dir;
@@ -1439,7 +1450,7 @@ void App::prepare()
 
     const int sceneIdx = 0;
     auto scenePath = scenes[sceneIdx].dir;
-    jsr::gltfLoadWorld(scenePath / scenes[sceneIdx].file, *scene);
+    jsr::gltfLoadWorld(scenePath / scenes[sceneIdx].file, *world);
 
     std::vector<vkjs::Vertex> vertices;
     std::vector<uint16_t> indices;
@@ -1447,11 +1458,11 @@ void App::prepare()
     uint32_t firstIndex(0);
     uint32_t firstVertex(0);
 
-    materials.resize(scene->materials.size());
+    materials.resize(world->materials.size());
 
     int i = 0;
     jsrlib::Info("Loading images...");
-    for (auto& it : scene->materials)
+    for (auto& it : world->materials)
     {
         std::string fname[3];
         fname[0] = (scenePath / it.texturePaths.albedoTexturePath).u8string();
@@ -1478,9 +1489,9 @@ void App::prepare()
             .build(materials[i++].resources);
     }
 
-    for (size_t i(0); i < scene->meshes.size(); ++i)
+    for (size_t i(0); i < world->meshes.size(); ++i)
     {
-        auto& mesh = scene->meshes[i];
+        auto& mesh = world->meshes[i];
         for (size_t i(0); i < mesh.positions.size(); ++i)
         {
             vertices.emplace_back();

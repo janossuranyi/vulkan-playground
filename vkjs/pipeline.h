@@ -20,5 +20,12 @@ namespace vkjs {
 		VkPipeline build_pipeline(VkDevice device, VkRenderPass pass);
 	};
 
+	class VulkanPipeline {
+	public:
+		virtual ~VulkanPipeline() {}
+		virtual VkPipelineBindPoint pipeline_bind_point() const = 0;
+
+
+	};
 }
 #endif // !VKJS_PIPELINE_H_
