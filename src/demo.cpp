@@ -324,6 +324,14 @@ public:
 void demo()
 {
     jsrlib::gLogWriter.SetFileName("vulkan_engine.log");
+
+    vkjs::GraphicsPipeline::GraphicsShaderInfo shaders{};
+    vkjs::GraphicsPipeline gp(shaders);
+    VkDescriptorImageInfo img1;
+
+    gp.bind_image(0, 1, img1);
+    gp.bind_image(0, 3, img1);
+
     App* app = new App(true);
     app->settings.fullscreen = false;
     app->settings.exclusive = false;

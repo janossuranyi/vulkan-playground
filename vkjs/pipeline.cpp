@@ -1,5 +1,6 @@
 #include "pipeline.h"
 namespace vkjs {
+
 	VkPipeline PipelineBuilder::build_pipeline(VkDevice device, VkRenderPass pass)
 	{
 		//make viewport state from our stored viewport and scissor.
@@ -65,4 +66,58 @@ namespace vkjs {
 		}
 	}
 
+	VulkanPipeline& VulkanPipeline::bind_image(uint32_t index, uint32_t binding, const VkDescriptorImageInfo& inf)
+	{
+		assert(_activeResourceCount < _resourceBindings.size());
+
+		_resourceBindings[_activeResourceCount].index = index;
+		_resourceBindings[_activeResourceCount].binding = binding;
+		_resourceBindings[_activeResourceCount].type = DBT_IMAGE;
+		_resourceBindings[_activeResourceCount].image = inf;
+		++_activeResourceCount;
+
+		return *this;
+	}
+	VulkanPipeline& VulkanPipeline::bind_buffer(uint32_t index, uint32_t binding, const VkDescriptorBufferInfo& inf)
+	{
+		assert(_activeResourceCount < _resourceBindings.size());
+
+		_resourceBindings[_activeResourceCount].index = index;
+		_resourceBindings[_activeResourceCount].binding = binding;
+		_resourceBindings[_activeResourceCount].type = DBT_BUFFER;
+		_resourceBindings[_activeResourceCount].buffer = inf;
+		++_activeResourceCount;
+
+		return *this;
+	}
+	VulkanPipeline& VulkanPipeline::bind_sampler(uint32_t index, uint32_t binding, const VkDescriptorImageInfo& inf)
+	{
+		assert(_activeResourceCount < _resourceBindings.size());
+
+		_resourceBindings[_activeResourceCount].index = index;
+		_resourceBindings[_activeResourceCount].binding = binding;
+		_resourceBindings[_activeResourceCount].type = DBT_SAMPLER;
+		_resourceBindings[_activeResourceCount].image = inf;
+		++_activeResourceCount;
+
+		return *this;
+	}
+	VkPipelineBindPoint GraphicsPipeline::pipeline_bind_point() const
+	{
+		return VK_PIPELINE_BIND_POINT_GRAPHICS;
+	}
+	VkResult GraphicsPipeline::bind(VkCommandBuffer cmd)
+	{
+		return VK_ERROR_UNKNOWN;
+	}
+	void VulkanPipeline::prepare()
+	{
+		if (_activeResourceCount > 1)
+		{
+			std::sort(_resourceBindings.begin(), _resourceBindings.begin() + _activeResourceCount, [](const Resource& a, const Resource& b)
+				{
+					return a.binding < b.binding;
+				});
+		}
+	}
 }
