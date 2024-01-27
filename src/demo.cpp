@@ -735,9 +735,9 @@ void App::render()
         smaaChanged = false;
     }
 
-    const float zFar = 200.0f;
+    const float zFar = 60000.0f;
     const float zNear = 0.1f;
-
+    camera.MovementSpeed = .002f;
     passData.mtxView = camera.GetViewMatrix();
     passData.mtxProjection = perspective(radians(camera.Zoom), (float)width / height, zFar, zNear);
     passData.vScaleBias.x = 1.0f / swapchain.extent().width;
@@ -1456,7 +1456,7 @@ void App::prepare()
         S_Scene{fs::path("D:/DATA/models/crq376zqdkao-Castelia-City/OBJ"), "city.gltf"}
     };
 
-    const int sceneIdx = 0;
+    const int sceneIdx = 1;
     auto scenePath = scenes[sceneIdx].dir;
     jsr::gltfLoadWorld(scenePath / scenes[sceneIdx].file, *world);
 
@@ -1577,7 +1577,7 @@ void App::prepare()
     }
 
     postProcessData.fExposure = 1.0f;
-    postProcessData.vFogParams = { 0.0845f,0.0089f,0.0f,0.0f };
+    postProcessData.vFogParams = { 0.001f,0.0001f,0.0f,0.0f };
     /*
     postProcessData.fogColor = vec3(0.8f);
     postProcessData.fogEquation = 1;

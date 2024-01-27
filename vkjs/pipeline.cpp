@@ -112,12 +112,28 @@ namespace vkjs {
 	}
 	void VulkanPipeline::prepare()
 	{
-		if (_activeResourceCount > 1)
+		Resource* mapping[MAX_DESCRIPTOR_SET_COUNT][MAX_BINDING_COUNT] = {};
+
+		for (uint32_t i = 0; i < _activeResourceCount; ++i)
 		{
-			std::sort(_resourceBindings.begin(), _resourceBindings.begin() + _activeResourceCount, [](const Resource& a, const Resource& b)
+			Resource* rc = &this->_resourceBindings[i];
+			mapping[rc->index][rc->binding] = rc;
+		}
+		for (uint32_t set = 0; set < _descriptorSetCount; ++set)
+		{
+			size_t hash = 0;
+			const Bindings& b = _bindings[set];
+			for (uint32_t binding = 0; binding < b.bindingCount; ++binding)
+			{
+				const Resource* rc = mapping[set][binding];
+				if (rc == nullptr)
 				{
-					return a.binding < b.binding;
-				});
+					throw "Missing pipeline resource";
+				}
+				hash = ((size_t)rc->type << 63) | ((size_t)rc->index << 62) | ((size_t)rc->binding << 60);
+
+			}
+
 		}
 	}
 }

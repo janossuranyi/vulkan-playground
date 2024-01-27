@@ -30,7 +30,7 @@ layout(location = 0) out vec4 fragColor0;
 float saturate( float x ){ return clamp( x, 0.0, 1.0 ) ; }
 
 vec3 applyFog(  in float a,
-                in float b,        // density
+                in float b,        // density falloff
                 in vec3  rgb,      // original color of the pixel
                 in float d,        // camera to point distance
                 in vec3  rayOri,   // camera position
@@ -38,7 +38,7 @@ vec3 applyFog(  in float a,
 {
     vec3 sunDir = normalize(ppdata.vSunPos.xyz);
 
-    float fogAmount = a * exp( -rayOri.y * b ) * ( 1.0 - exp( -d * rayDir.y * b ) ) / rayDir.y;
+    float fogAmount = (a/b) * exp( -rayOri.y * b ) * ( 1.0 - exp( -d * rayDir.y * b ) ) / rayDir.y;
     fogAmount = saturate( fogAmount );
 
     //float fogAmount = 1.0 - exp(-d * b);
