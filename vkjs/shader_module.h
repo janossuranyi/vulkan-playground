@@ -6,7 +6,7 @@
 namespace vkjs {
 	class ShaderModule {
 	public:
-		ShaderModule(VkDevice device) : _device(device), _module(VK_NULL_HANDLE) {}
+		ShaderModule(VkDevice device) : _device(device), _module(VK_NULL_HANDLE), _size(0) {}
 		~ShaderModule();
 		VkResult create(std::filesystem::path filename);
 		VkShaderModule module() const { return _module; }

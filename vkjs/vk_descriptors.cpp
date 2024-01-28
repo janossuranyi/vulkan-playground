@@ -3,7 +3,7 @@
 #include <algorithm>
 
 namespace vkutil {
-
+	uint32_t DescriptorAllocator::allocatedDescriptorCount = 0;
 
 	VkDescriptorPool createPool(VkDevice device, const DescriptorAllocator::PoolSizes& poolSizes, int count, VkDescriptorPoolCreateFlags flags)
 	{
@@ -96,6 +96,11 @@ namespace vkutil {
 		device = newDevice;
 	}
 
+	void DescriptorAllocator::set_pool_sizes(const PoolSizes& sizes)
+	{
+		descriptorSizes = sizes;
+	}
+
 	void DescriptorAllocator::cleanup()
 	{
 		//delete every pool held
@@ -107,6 +112,13 @@ namespace vkutil {
 		{
 			vkDestroyDescriptorPool(device, p, nullptr);
 		}
+		freePools.clear();
+		usedPools.clear();
+	}
+
+	DescriptorAllocator::~DescriptorAllocator()
+	{
+		cleanup();
 	}
 
 	VkDescriptorPool DescriptorAllocator::grab_pool()
@@ -156,10 +168,10 @@ namespace vkutil {
 		auto it = layoutCache.find(layoutinfo);
 		if (it != layoutCache.end())
 		{
-			if (id != ~0) layoutByID[id] = it->second;
 			return it->second;
 		}
-		else {
+		else
+		{
 			VkDescriptorSetLayout layout;
 			vkCreateDescriptorSetLayout(device, info, nullptr, &layout);
 
@@ -170,18 +182,6 @@ namespace vkutil {
 		}
 	}
 
-	VkDescriptorSetLayout DescriptorLayoutCache::getByID(uint32_t id) const
-	{
-		auto it = layoutByID.find(id);
-		if (it != layoutByID.end()) {
-			return it->second;
-		}
-		else {
-			return VK_NULL_HANDLE;
-		}
-	}
-
-
 	void DescriptorLayoutCache::cleanup()
 	{
 		//delete every descriptor layout held
@@ -189,9 +189,15 @@ namespace vkutil {
 		{
 			vkDestroyDescriptorSetLayout(device, pair.second, nullptr);
 		}
+		layoutCache.clear();
 	}
 
-	vkutil::DescriptorBuilder DescriptorBuilder::begin(DescriptorLayoutCache* layoutCache, DescriptorAllocator* allocator)
+	DescriptorLayoutCache::~DescriptorLayoutCache()
+	{
+		cleanup();
+	}
+
+	DescriptorBuilder DescriptorBuilder::begin(DescriptorLayoutCache* layoutCache, DescriptorAllocator* allocator)
 	{
 		DescriptorBuilder builder;
 		
@@ -200,12 +206,33 @@ namespace vkutil {
 		return builder;
 	}
 
+	DescriptorBuilder DescriptorBuilder::begin(DescriptorManager* mgr)
+	{
+		DescriptorBuilder builder;
 
-	vkutil::DescriptorBuilder& DescriptorBuilder::bind_buffer(uint32_t binding, VkDescriptorBufferInfo* bufferInfo, VkDescriptorType type, VkShaderStageFlags stageFlags)
+		builder.mgr = mgr;
+		builder.alloc = nullptr;
+		builder.cache = nullptr;
+
+		return builder;
+	}
+
+
+	DescriptorBuilder& DescriptorBuilder::bind_buffer(uint32_t binding, const VkDescriptorBufferInfo* bufferInfo, VkDescriptorType type, VkShaderStageFlags stageFlags)
+	{
+		return bind_buffers(binding, 1, bufferInfo, type, stageFlags);
+	}
+
+	DescriptorBuilder& DescriptorBuilder::bind_image(uint32_t binding, const VkDescriptorImageInfo* imageInfo, VkDescriptorType type, VkShaderStageFlags stageFlags)
+	{
+		return bind_images(binding, 1, imageInfo, type, stageFlags);
+	}
+
+	DescriptorBuilder& DescriptorBuilder::bind_buffers(uint32_t binding, uint32_t bufferCount, const VkDescriptorBufferInfo* bufferInfo, VkDescriptorType type, VkShaderStageFlags stageFlags)
 	{
 		VkDescriptorSetLayoutBinding newBinding{};
 
-		newBinding.descriptorCount = 1;
+		newBinding.descriptorCount = bufferCount;
 		newBinding.descriptorType = type;
 		newBinding.pImmutableSamplers = nullptr;
 		newBinding.stageFlags = stageFlags;
@@ -217,21 +244,22 @@ namespace vkutil {
 		newWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		newWrite.pNext = nullptr;
 
-		newWrite.descriptorCount = 1;
+		newWrite.descriptorCount = bufferCount;
 		newWrite.descriptorType = type;
 		newWrite.pBufferInfo = bufferInfo;
 		newWrite.dstBinding = binding;
+		//newWrite.dstArrayElement = 0;
 
 		writes.push_back(newWrite);
+
 		return *this;
 	}
 
-
-	vkutil::DescriptorBuilder& DescriptorBuilder::bind_image(uint32_t binding,  VkDescriptorImageInfo* imageInfo, VkDescriptorType type, VkShaderStageFlags stageFlags)
+	DescriptorBuilder& DescriptorBuilder::bind_images(uint32_t binding, uint32_t imageCount, const VkDescriptorImageInfo* imageInfo, VkDescriptorType type, VkShaderStageFlags stageFlags)
 	{
 		VkDescriptorSetLayoutBinding newBinding{};
 
-		newBinding.descriptorCount = 1;
+		newBinding.descriptorCount = imageCount;
 		newBinding.descriptorType = type;
 		newBinding.pImmutableSamplers = nullptr;
 		newBinding.stageFlags = stageFlags;
@@ -243,16 +271,17 @@ namespace vkutil {
 		newWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		newWrite.pNext = nullptr;
 
-		newWrite.descriptorCount = 1;
+		newWrite.descriptorCount = imageCount;
 		newWrite.descriptorType = type;
 		newWrite.pImageInfo = imageInfo;
 		newWrite.dstBinding = binding;
+		//newWrite.dstArrayElement = 0;
 
 		writes.push_back(newWrite);
 		return *this;
 	}
 
-	bool DescriptorBuilder::build(VkDescriptorSet& set, VkDescriptorSetLayout& layout)
+	bool DescriptorBuilder::build(VkDescriptorSet& set, VkDescriptorSetLayout* layout)
 	{
 		//build layout first
 		VkDescriptorSetLayoutCreateInfo layoutInfo{};
@@ -262,11 +291,30 @@ namespace vkutil {
 		layoutInfo.pBindings = bindings.data();
 		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
 
-		layout = cache->create_descriptor_layout(&layoutInfo);
+		if (mgr) {
+			*layout = mgr->create_descriptor_layout(&layoutInfo);
+		}
+		else
+		{
+			*layout = cache->create_descriptor_layout(&layoutInfo);
+		}
 
+		return build(set, *layout);
+	}
 
+	bool DescriptorBuilder::build(VkDescriptorSet& set, VkDescriptorSetLayout layout)
+	{
 		//allocate descriptor
-		bool success = alloc->allocate(&set, layout);
+		bool success;
+		
+		if (mgr)
+		{
+			alloc = mgr->get_allocator(layout);
+		}
+		
+		assert(alloc);
+		success = alloc->allocate(&set, layout);
+
 		if (!success) { return false; };
 
 		//write descriptor
@@ -284,7 +332,7 @@ namespace vkutil {
 	bool DescriptorBuilder::build(VkDescriptorSet& set)
 	{
 		VkDescriptorSetLayout layout;
-		return build(set, layout);
+		return build(set, &layout);
 	}
 
 
@@ -335,6 +383,69 @@ namespace vkutil {
 		}
 
 		return result;
+	}
+
+	void DescriptorManager::init(vkjs::Device* device)
+	{
+		assert(device);
+		_device = device;
+		_pLayoutCache = std::make_unique<DescriptorLayoutCache>();
+		_pLayoutCache->init(*_device);
+	}
+
+	VkDescriptorSetLayout DescriptorManager::create_descriptor_layout(const VkDescriptorSetLayoutCreateInfo* info)
+	{
+		auto res = _pLayoutCache->create_descriptor_layout(info);
+
+		if (res != VK_NULL_HANDLE && _pAllocators.find((size_t)res) == _pAllocators.end())
+		{
+			
+			DescriptorAllocator::PoolSizes ps;
+			ps.sizes.clear();
+			
+			std::unordered_map<VkDescriptorType, uint32_t> typeCounter;
+			for (uint32_t i = 0; i < info->bindingCount; ++i)
+			{
+				typeCounter[info->pBindings[i].descriptorType] += info->pBindings[i].descriptorCount;
+			}
+
+			for (const auto& it : typeCounter)
+			{
+				ps.sizes.emplace_back(it.first, (float)it.second);
+			}
+
+			// Create an allocator
+			DescriptorAllocator* p = new DescriptorAllocator();
+			p->init(*_device);
+			p->set_pool_sizes(ps);
+			_pAllocators.emplace((size_t) res, p);
+		}
+		return res;
+	}
+
+	void DescriptorManager::reset_pool(VkDescriptorSetLayout layout)
+	{
+		auto it = _pAllocators.find((size_t)layout);
+		if (it != _pAllocators.end())
+		{
+			it->second->reset_pools();
+		}
+	}
+
+	DescriptorAllocator* DescriptorManager::get_allocator(VkDescriptorSetLayout layout)
+	{
+		auto it = _pAllocators.find((size_t)layout);
+		if (it != _pAllocators.end())
+		{
+			return it->second.get();
+		}
+
+		return nullptr;
+	}
+
+	DescriptorBuilder DescriptorManager::builder()
+	{
+		return DescriptorBuilder::begin(this);
 	}
 
 }

@@ -32,10 +32,18 @@ layout(set = 0, binding = 0) uniform stc_PassDataUBO {
 };
 
 layout(set = 0, binding = 2) uniform sampler2D samp0;
+layout(set = 1, binding = 0) uniform sampler2D samp_material[4];
+
+#define SAMP_ALBEDO 0
+#define SAMP_NORMAL 1
+#define SAMP_PBR 2
+#define SAMP_EMISSIVE 3
+
+/*
 layout(set = 1, binding = 0) uniform sampler2D samp_albedo;
 layout(set = 1, binding = 1) uniform sampler2D samp_normal;
 layout(set = 1, binding = 2) uniform sampler2D samp_pbr;
-
+*/
 
 const float PI = 3.14159265359;
 
@@ -107,9 +115,9 @@ void main() {
         normalize(In.NormalVS));
 
     vec4 checkerColor = texture(samp0,In.UV);
-    vec4 albedoColor = texture(samp_albedo, In.UV);
-    vec3 normalTS = texture(samp_normal, In.UV).xyz * 2.0 - 1.0;
-    vec4 pbrSample = texture(samp_pbr, In.UV);
+    vec4 albedoColor = texture(samp_material[SAMP_ALBEDO], In.UV);
+    vec3 normalTS = texture(samp_material[SAMP_NORMAL], In.UV).xyz * 2.0 - 1.0;
+    vec4 pbrSample = texture(samp_material[SAMP_PBR], In.UV);
     
     // b = 0.5 * sqrt(1 - ( 2 * r - 1)^2 - (2 * g - 1)^2) + 0.5
     //vec3 normalTS = vec3(normalSamp.xy, sqrt(1.0 - normalSamp.x * normalSamp.x - normalSamp.y * normalSamp.y));

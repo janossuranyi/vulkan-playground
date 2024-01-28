@@ -11,7 +11,8 @@ namespace vkutil {
 
 	class DescriptorAllocator {
 	public:
-		
+		static uint32_t allocatedDescriptorCount;
+
 		struct PoolSizes {
 			std::vector<std::pair<VkDescriptorType,float>> sizes =
 			{
@@ -33,8 +34,10 @@ namespace vkutil {
 		bool allocate(VkDescriptorSet* set, VkDescriptorSetLayout layout);
 		
 		void init(VkDevice newDevice);
-
+		void set_pool_sizes(const PoolSizes& sizes);
 		void cleanup();
+		
+		~DescriptorAllocator();
 
 		VkDevice device;
 	private:
@@ -51,9 +54,9 @@ namespace vkutil {
 	public:
 		void init(VkDevice newDevice);
 		void cleanup();
+		~DescriptorLayoutCache();
 
 		VkDescriptorSetLayout create_descriptor_layout(const VkDescriptorSetLayoutCreateInfo* info, uint32_t id = ~0);
-		VkDescriptorSetLayout getByID(uint32_t id) const;
 
 		struct DescriptorLayoutInfo {
 			//good idea to turn this into a inlined array
@@ -78,21 +81,23 @@ namespace vkutil {
 		};
 
 		std::unordered_map<DescriptorLayoutInfo, VkDescriptorSetLayout, DescriptorLayoutHash> layoutCache;
-		std::unordered_map<uint32_t, VkDescriptorSetLayout> layoutByID;
 		VkDevice device;
 	};
 
-
+	class DescriptorManager;
 	class DescriptorBuilder {
 	public:
 
 		static DescriptorBuilder begin(DescriptorLayoutCache* layoutCache, DescriptorAllocator* allocator );
+		static DescriptorBuilder begin(DescriptorManager* mgr);
 
-		DescriptorBuilder& bind_buffer(uint32_t binding, VkDescriptorBufferInfo* bufferInfo, VkDescriptorType type, VkShaderStageFlags stageFlags);
+		DescriptorBuilder& bind_buffer(uint32_t binding, const VkDescriptorBufferInfo* bufferInfo, VkDescriptorType type, VkShaderStageFlags stageFlags);
+		DescriptorBuilder& bind_image(uint32_t binding, const VkDescriptorImageInfo* imageInfo, VkDescriptorType type, VkShaderStageFlags stageFlags);
+		DescriptorBuilder& bind_buffers(uint32_t binding, uint32_t bufferCount, const VkDescriptorBufferInfo* bufferInfo, VkDescriptorType type, VkShaderStageFlags stageFlags);
+		DescriptorBuilder& bind_images(uint32_t binding, uint32_t imageCount, const VkDescriptorImageInfo* imageInfo, VkDescriptorType type, VkShaderStageFlags stageFlags);
 
-		DescriptorBuilder& bind_image(uint32_t binding, VkDescriptorImageInfo* imageInfo, VkDescriptorType type, VkShaderStageFlags stageFlags);
-
-		bool build(VkDescriptorSet& set, VkDescriptorSetLayout& layout);
+		bool build(VkDescriptorSet& set, VkDescriptorSetLayout* layout);
+		bool build(VkDescriptorSet& set, VkDescriptorSetLayout layout);
 		bool build(VkDescriptorSet& set);
 	private:
 		
@@ -102,6 +107,23 @@ namespace vkutil {
 		VkDescriptorSetLayout dsetLayout;
 		DescriptorLayoutCache* cache;
 		DescriptorAllocator* alloc;
+		DescriptorManager* mgr;
+	};
+
+	class DescriptorManager {
+	public:
+		DescriptorManager() = default;
+		~DescriptorManager() {};
+
+		void init(vkjs::Device* device);
+		VkDescriptorSetLayout create_descriptor_layout(const VkDescriptorSetLayoutCreateInfo* info);
+		void reset_pool(VkDescriptorSetLayout layout);
+		DescriptorAllocator* get_allocator(VkDescriptorSetLayout layout);
+		DescriptorBuilder builder();
+	private:
+		vkjs::Device* _device;
+		std::unique_ptr<DescriptorLayoutCache> _pLayoutCache;
+		std::unordered_map<size_t, std::unique_ptr<DescriptorAllocator>> _pAllocators;
 	};
 }
 

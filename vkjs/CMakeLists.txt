@@ -6,6 +6,7 @@ add_compile_definitions(
 
 target_sources(vkjs PRIVATE
     vkjs.h
+    span.h
     types.h
     vkcheck.h 
     vertex.h

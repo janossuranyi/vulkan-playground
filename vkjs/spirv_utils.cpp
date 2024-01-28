@@ -25,7 +25,8 @@ namespace vkjs {
             DescriptorSetLayoutData& layout = set_layouts[i_set];
             layout.bindings.resize(refl_set.binding_count);
             layout.binding_typename.resize(refl_set.binding_count);
-            for (uint32_t i_binding = 0; i_binding < refl_set.binding_count; ++i_binding) {
+            for (uint32_t i_binding = 0; i_binding < refl_set.binding_count; ++i_binding)
+            {
                 const SpvReflectDescriptorBinding& refl_binding = *(refl_set.bindings[i_binding]);
                 VkDescriptorSetLayoutBinding& layout_binding = layout.bindings[i_binding];
                 layout_binding.binding = refl_binding.binding;

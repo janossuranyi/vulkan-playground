@@ -119,9 +119,8 @@ private:
     VkSampler sampLinearRepeat;
     VkSampler sampNearestClampBorder;
 
-    vkutil::DescriptorAllocator descAllocator;
-    vkutil::DescriptorLayoutCache descLayoutCache;
-    vkutil::DescriptorBuilder staticDescriptorBuilder;
+    vkutil::DescriptorManager descMgr;
+
     std::unordered_map<std::string, vkjs::Image> imageCache;
 
     vkjs::Buffer vtxbuf;
@@ -202,8 +201,7 @@ private:
 
     struct RenderPass {
         VkRenderPass pass;
-        VkPipelineLayout layout;
-        VkPipeline pipeline;
+        vkjs::GraphicsPipeline* pPipeline;
     };
 
     VkDescriptorSet triangleDescriptors[MAX_CONCURRENT_FRAMES];
@@ -325,13 +323,6 @@ void demo()
 {
     jsrlib::gLogWriter.SetFileName("vulkan_engine.log");
 
-    vkjs::GraphicsPipeline::GraphicsShaderInfo shaders{};
-    vkjs::GraphicsPipeline gp(shaders);
-    VkDescriptorImageInfo img1;
-
-    gp.bind_image(0, 1, img1);
-    gp.bind_image(0, 3, img1);
-
     App* app = new App(true);
     app->settings.fullscreen = false;
     app->settings.exclusive = false;
@@ -351,6 +342,7 @@ void demo()
 
 int main(int argc, char* argv[])
 {
+
     demo();
 
     return 0;
@@ -391,7 +383,7 @@ void App::setup_descriptor_sets()
         uboPassData[i].descriptor.offset = 0;
         const VkShaderStageFlags stageBits = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
-        vkutil::DescriptorBuilder::begin(&descLayoutCache, &descAllocator)
+        descMgr.builder()
             .bind_buffer(0, &uboPassData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
             .bind_buffer(1, &drawbufInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT)
             .bind_image(2, &ssaoNoise.descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
@@ -409,7 +401,7 @@ void App::setup_descriptor_sets()
         uboPostProcessData[i].setup_descriptor();
         uboPostProcessData[i].descriptor.range = sizeof(PostProcessData);
 
-        vkutil::DescriptorBuilder::begin(&descLayoutCache, &descAllocator)
+        descMgr.builder()
             .bind_image(0, &HDRImage[i].descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .bind_image(1, &zinf, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .bind_buffer(2, &uboPostProcessData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT)
@@ -422,8 +414,7 @@ void App::setup_descriptor_sets()
 
 void App::setup_descriptor_pools()
 {
-    descAllocator.init(*device);
-    descLayoutCache.init(*device);
+    descMgr.init(device);
 }
 
 void App::setup_objects()
@@ -517,10 +508,11 @@ App::~App()
     vkDeviceWaitIdle(d);
 
     std::array<RenderPass*, 3> rpasses = { &passes.preZ,&passes.tonemap,&passes.triangle };
-    for (const auto* pass : rpasses) {
-        if (pass->pipeline) vkDestroyPipeline(d, pass->pipeline, nullptr);
-        if (pass->layout) vkDestroyPipelineLayout(d, pass->layout, nullptr);
+    for (const auto* pass : rpasses)
+    {
+        if (pass->pPipeline) delete pass->pPipeline;
     }
+    
     if (debugPipeline) vkDestroyPipeline(d, debugPipeline, nullptr);
     if (debugPipelineLayout) vkDestroyPipelineLayout(d, debugPipelineLayout, nullptr);
 
@@ -528,8 +520,8 @@ App::~App()
     vkDestroyRenderPass(d, passes.preZ.pass, nullptr);
     vkDestroyRenderPass(d, passes.triangle.pass, nullptr);
 
-    descLayoutCache.cleanup();
-    descAllocator.cleanup();
+    //descLayoutCache.cleanup();
+    //descAllocator.cleanup();
 
     for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
     {
@@ -537,6 +529,7 @@ App::~App()
         vkDestroyFramebuffer(d, HDRFramebuffer[i], 0);
         vkDestroyImageView(d, depthResolvedView[i], 0);
     }
+    jsrlib::Info("Allocated descriptors: %d", vkutil::DescriptorAllocator::allocatedDescriptorCount);
 }
 
 void App::build_command_buffers()
@@ -570,7 +563,9 @@ void App::build_command_buffers()
     
     vkCmdBeginRenderPass(cmd, &beginPass, VK_SUBPASS_CONTENTS_INLINE);
 
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.triangle.pipeline);
+    // vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.triangle.pipeline);
+    passes.triangle.pPipeline->bind(cmd);
+
     vkCmdBindVertexBuffers(cmd, 0, 1, &vtxbuf.buffer, &offset);
     vkCmdBindIndexBuffer(cmd, idxbuf.buffer, 0ull, VK_INDEX_TYPE_UINT16);
     VkViewport viewport{ 0.f,0.f,float(width),float(height),0.0f,1.0f };
@@ -615,8 +610,7 @@ void App::build_command_buffers()
 
             auto bufferDescr = drawPool[currentFrame]->Allocate<DrawData>(1, &drawDataStruct[objIdx]);
             const VkDescriptorSet dsets[2] = { triangleDescriptors[currentFrame], obj.vkResources };
-            //vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.triangle.layout, 0, 2, dsets, 1, &dynOffset);
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.triangle.layout, 0, 2, dsets, 1, (uint32_t*)(&bufferDescr.offset));
+            passes.triangle.pPipeline->bind_descriptor_sets(cmd, 2, dsets, 1, (uint32_t*)(&bufferDescr.offset));
 
             vkCmdDrawIndexed(cmd, mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, objIdx);
         }
@@ -687,8 +681,10 @@ void App::build_command_buffers()
     vkCmdSetViewport(cmd, 0, 1, &viewport);
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.tonemap.pipeline);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.tonemap.layout, 0, 1, &HDRDescriptor[currentFrame], 0, nullptr);
+    //vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.tonemap.pipeline);
+    passes.tonemap.pPipeline->bind(cmd);
+    passes.tonemap.pPipeline->bind_descriptor_sets(cmd, 1, &HDRDescriptor[currentFrame]);
+    //vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.tonemap.layout, 0, 1, &HDRDescriptor[currentFrame], 0, nullptr);
     vkCmdDraw(cmd, 3, 1, 0, 0);
 #if 1
     if (visibleObjectCount > 0)
@@ -836,19 +832,6 @@ void App::setup_debug_pipeline(RenderPass& pass)
 
 void App::setup_tonemap_pipeline(RenderPass& pass)
 {
-    auto vertexInput = vkjs::Vertex::vertex_input_description_position_only();
-
-    const std::vector<VkDynamicState> dynStates = { VK_DYNAMIC_STATE_SCISSOR,VK_DYNAMIC_STATE_VIEWPORT };
-    vkjs::PipelineBuilder pb = {};
-    pb._rasterizer = vks::initializers::pipelineRasterizationStateCreateInfo(
-        VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
-    pb._depthStencil = vks::initializers::pipelineDepthStencilStateCreateInfo(VK_FALSE, VK_FALSE, VK_COMPARE_OP_ALWAYS);
-    pb._dynamicStates = vks::initializers::pipelineDynamicStateCreateInfo(dynStates);
-    pb._inputAssembly = vks::initializers::pipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
-    pb._multisampling = vks::initializers::pipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT, 0);
-    pb._vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-
-    pb._colorBlendAttachments.push_back(vks::initializers::pipelineColorBlendAttachmentState(0x0f, VK_FALSE));
 
     vkjs::ShaderModule vert_module(*device);
     vkjs::ShaderModule frag_module(*device);
@@ -856,46 +839,11 @@ void App::setup_tonemap_pipeline(RenderPass& pass)
     const fs::path frag_spirv_filename = basePath / "shaders/post.frag.spv";
     VK_CHECK(vert_module.create(vert_spirv_filename));
     VK_CHECK(frag_module.create(frag_spirv_filename));
+    vkjs::GraphicsShaderInfo shaders{};
+    shaders.vert = &vert_module;
+    shaders.frag = &frag_module;
 
-    pb._shaderStages.resize(2);
-    pb._shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    pb._shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-    pb._shaderStages[0].pName = "main";
-    pb._shaderStages[0].module = vert_module.module();
-    pb._shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    pb._shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    pb._shaderStages[1].pName = "main";
-    pb._shaderStages[1].module = frag_module.module();
-
-    /*
-    layout:
-        set 0:0 input sampler
-    */
-
-    std::vector<VkDescriptorSetLayoutBinding> set0bind(3);
-
-    set0bind[0].binding = 0;
-    set0bind[0].descriptorCount = 1;
-    set0bind[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    set0bind[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    set0bind[1].binding = 1;
-    set0bind[1].descriptorCount = 1;
-    set0bind[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    set0bind[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    set0bind[2].binding = 2;
-    set0bind[2].descriptorCount = 1;
-    set0bind[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    set0bind[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-    VkDescriptorSetLayoutCreateInfo ds0ci = vks::initializers::descriptorSetLayoutCreateInfo(set0bind);
-    
-    tonemapLayout = descLayoutCache.create_descriptor_layout(&ds0ci);
-    assert(tonemapLayout);
-
-    VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo(1);
-    plci.pSetLayouts = &tonemapLayout;
-    VK_CHECK(vkCreatePipelineLayout(d, &plci, nullptr, &pass.layout));
-    pb._pipelineLayout = pass.layout;
+    pass.pPipeline = new vkjs::GraphicsPipeline(device, shaders, &descMgr);
 
     // New create info to define color, depth and stencil attachments at pipeline create time
     VkPipelineRenderingCreateInfoKHR pipelineRenderingCreateInfo{};
@@ -904,88 +852,65 @@ void App::setup_tonemap_pipeline(RenderPass& pass)
     pipelineRenderingCreateInfo.pColorAttachmentFormats = &swapchain.vkb_swapchain.image_format;
     pipelineRenderingCreateInfo.depthAttachmentFormat = VK_FORMAT_UNDEFINED;
     pipelineRenderingCreateInfo.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
-    // Chain into the pipeline creat einfo
-    pb._pNext = &pipelineRenderingCreateInfo;
+    // Chain into the pipeline create info
+    pass.pPipeline->set_next_chain(&pipelineRenderingCreateInfo);
+    pass.pPipeline->set_name("Tonemap pipeline");
+    pass.pPipeline->set_cull_mode(VK_CULL_MODE_NONE)
+        .set_depth_func(VK_COMPARE_OP_ALWAYS)
+        .set_depth_mask(false)
+        .set_depth_test(false)
+        .set_render_pass(VK_NULL_HANDLE)
+        .set_polygon_mode(VK_POLYGON_MODE_FILL)
+        .set_draw_mode(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+        .add_dynamic_state(VK_DYNAMIC_STATE_SCISSOR)
+        .add_dynamic_state(VK_DYNAMIC_STATE_VIEWPORT)
+        .set_sample_count(VK_SAMPLE_COUNT_1_BIT)
+        .add_attachment_blend_state(vks::initializers::pipelineColorBlendAttachmentState(0x0f, VK_FALSE));
 
-    pass.pipeline = pb.build_pipeline(d, /*pass.pass*/VK_NULL_HANDLE);
-
-    assert(pass.pipeline);
-    device->set_object_name((uint64_t)pass.pipeline, VK_DEBUG_REPORT_OBJECT_TYPE_PIPELINE_EXT, "Tonemap pipeline");
+    VK_CHECK(pass.pPipeline->build_pipeline());
 }
 
 void App::setup_triangle_pipeline(RenderPass& pass)
 {
-    if (pass.pipeline != VK_NULL_HANDLE) {
-        vkDestroyPipeline(d, pass.pipeline, 0);
-        vkDestroyPipelineLayout(d, pass.layout, 0);
-        pass.pipeline = VK_NULL_HANDLE;
-        pass.layout = VK_NULL_HANDLE;
-    }
+
+    if (pass.pPipeline) delete pass.pPipeline;
 
     auto vertexInput = vkjs::Vertex::vertex_input_description();
-    const std::vector<VkDynamicState> dynamicStates = { VK_DYNAMIC_STATE_SCISSOR,VK_DYNAMIC_STATE_VIEWPORT };
-
-    vkjs::PipelineBuilder pb = {};
-    pb._rasterizer = vks::initializers::pipelineRasterizationStateCreateInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
-    pb._depthStencil = vks::initializers::pipelineDepthStencilStateCreateInfo(VK_TRUE, VK_TRUE, VK_COMPARE_OP_GREATER_OR_EQUAL);
-    pb._dynamicStates = vks::initializers::pipelineDynamicStateCreateInfo(dynamicStates);
-    pb._inputAssembly = vks::initializers::pipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
-    pb._multisampling = vks::initializers::pipelineMultisampleStateCreateInfo(settings.msaaSamples, 0);
-    pb._multisampling.minSampleShading = .2f;
-    pb._multisampling.sampleShadingEnable = settings.msaaSamples > VK_SAMPLE_COUNT_1_BIT ? VK_TRUE : VK_FALSE;
-
-    pb._vertexInputInfo = vks::initializers::pipelineVertexInputStateCreateInfo(vertexInput.bindings, vertexInput.attributes);
 
     vkjs::ShaderModule vert_module(*device);
     vkjs::ShaderModule frag_module(*device);
     VK_CHECK(vert_module.create(basePath / "shaders/triangle_v2.vert.spv"));
     VK_CHECK(frag_module.create(basePath / "shaders/triangle_v2.frag.spv"));
 
-    auto merged_sets = vkjs::extract_descriptor_set_layout_data({ &frag_module,&vert_module });
-    
-    //assert((merged_sets[0].binding_typename[1] == "rb_DrawData"));
-    //merged_sets[0].bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-    
-    pb._shaderStages.resize(2);
-    pb._shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    pb._shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-    pb._shaderStages[0].pName = "main";
-    pb._shaderStages[0].module = vert_module.module();
-    pb._shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    pb._shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    pb._shaderStages[1].pName = "main";
-    pb._shaderStages[1].module = frag_module.module();
+    vkjs::GraphicsShaderInfo shaders = {};
+    shaders.vert = &vert_module;
+    shaders.frag = &frag_module;
 
 
-    /*
- layout:
- set 0
-     0: ubo
-     1: ssbo
-     2: combined image
- */
+    VkPipelineColorBlendAttachmentState blend0 = vks::initializers::pipelineColorBlendAttachmentState(0x0f, VK_FALSE);
 
-    std::vector<VkDescriptorSetLayout> dsls;
-    for (const auto& dsl : merged_sets)
     {
-        dsls.push_back(descLayoutCache.create_descriptor_layout(&dsl.create_info));
+        pass.pPipeline = new vkjs::GraphicsPipeline(device, shaders, &descMgr);
+        vkjs::GraphicsPipeline& p = *pass.pPipeline;
+        p.set_name("Forward pipeline");
+        p.add_dynamic_state(VK_DYNAMIC_STATE_SCISSOR)
+            .add_dynamic_state(VK_DYNAMIC_STATE_VIEWPORT)
+            .set_cull_mode(VK_CULL_MODE_BACK_BIT)
+            .set_front_face(VK_FRONT_FACE_COUNTER_CLOCKWISE)
+            .set_draw_mode(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+            .set_polygon_mode(VK_POLYGON_MODE_FILL)
+            .set_vertex_input_description(vertexInput)
+            .set_sample_count(settings.msaaSamples)
+            .set_sample_shading(settings.msaaSamples > VK_SAMPLE_COUNT_1_BIT, .2f)
+            .add_attachment_blend_state(blend0)
+            .add_attachment_blend_state(blend0)
+            .set_render_pass(pass.pass)
+            .set_depth_func(VK_COMPARE_OP_GREATER_OR_EQUAL)
+            .set_depth_mask(true)
+            .set_depth_test(true);
+
+        VK_CHECK(p.build_pipeline());
     }
-
-    VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo((uint32_t)dsls.size());
-    plci.pSetLayouts = dsls.data();
-    VK_CHECK(vkCreatePipelineLayout(d, &plci, nullptr, &pass.layout));
-    pb._pipelineLayout = pass.layout;
-
-    VkPipelineColorBlendAttachmentState blend0 = vks::initializers::pipelineColorBlendAttachmentState(
-        0x0f, VK_FALSE);
-
-    pb._colorBlendAttachments.push_back(blend0);
-    pb._colorBlendAttachments.push_back(blend0);
-
-    pass.pipeline = pb.build_pipeline(d, pass.pass);
-    assert(pass.pipeline);
-
-    device->set_object_name((uint64_t) pass.pipeline, VK_DEBUG_REPORT_OBJECT_TYPE_PIPELINE_EXT, "Forward pipeline");
 
 }
 
@@ -1456,7 +1381,7 @@ void App::prepare()
         S_Scene{fs::path("D:/DATA/models/crq376zqdkao-Castelia-City/OBJ"), "city.gltf"}
     };
 
-    const int sceneIdx = 1;
+    const int sceneIdx = 0;
     auto scenePath = scenes[sceneIdx].dir;
     jsr::gltfLoadWorld(scenePath / scenes[sceneIdx].file, *world);
 
@@ -1490,10 +1415,17 @@ void App::prepare()
         create_material_texture(fname[1]);
         create_material_texture(fname[2]);
 
-        vkutil::DescriptorBuilder::begin(&descLayoutCache, &descAllocator)
-            .bind_image(0, &imageCache.at(fname[0]).descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
-            .bind_image(1, &imageCache.at(fname[1]).descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
-            .bind_image(2, &imageCache.at(fname[2]).descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+        std::array<VkDescriptorImageInfo, 4> images{
+            imageCache.at(fname[0]).descriptor,
+            imageCache.at(fname[1]).descriptor,
+            imageCache.at(fname[2]).descriptor,
+            imageCache.at(fname[0]).descriptor
+        };
+
+        descMgr.builder()
+            .bind_images(0, static_cast<uint32_t>(images.size()), images.data(), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+//            .bind_image(1, &imageCache.at(fname[1]).descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+//            .bind_image(2, &imageCache.at(fname[2]).descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .build(materials[i++].resources);
     }
 
