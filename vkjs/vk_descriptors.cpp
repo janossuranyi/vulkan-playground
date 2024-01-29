@@ -145,13 +145,6 @@ namespace vkutil {
 		DescriptorLayoutInfo layoutinfo;
 		layoutinfo.bindings.reserve(info->bindingCount);
 
-		if (info->flags & VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT && info->pNext) {
-			if (*((VkStructureType*)info->pNext) == VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO) {
-				const VkDescriptorSetLayoutBindingFlagsCreateInfo* flagInfo = (VkDescriptorSetLayoutBindingFlagsCreateInfo*)info->pNext;
-
-			}
-		}
-
 		bool isSorted = true;
 		int32_t lastBinding = -1;
 		for (uint32_t i = 0; i < info->bindingCount; i++) {
