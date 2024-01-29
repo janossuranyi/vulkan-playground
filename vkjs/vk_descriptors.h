@@ -56,19 +56,16 @@ namespace vkutil {
 		void cleanup();
 		~DescriptorLayoutCache();
 
-		VkDescriptorSetLayout create_descriptor_layout(const VkDescriptorSetLayoutCreateInfo* info, uint32_t id = ~0);
+		VkDescriptorSetLayout create_descriptor_layout(const VkDescriptorSetLayoutCreateInfo* info);
 
 		struct DescriptorLayoutInfo {
 			//good idea to turn this into a inlined array
 			std::vector<VkDescriptorSetLayoutBinding> bindings;
-
+			bool dynamic = false;
 			bool operator==(const DescriptorLayoutInfo& other) const;
 
 			size_t hash() const;
-		};
-
-		
-
+		};		
 	private:
 
 		struct DescriptorLayoutHash

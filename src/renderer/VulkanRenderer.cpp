@@ -329,8 +329,10 @@ namespace jsr {
 		textureArrayBinding[0].stageFlags = VK_SHADER_STAGE_ALL;
 		textureArrayBinding[0].pImmutableSamplers = nullptr;
 
-		VkDescriptorBindingFlags binding_bits[1] = { 
-			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT
+		const VkDescriptorBindingFlags binding_bits[1] = { 
+			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | 
+			VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | 
+			VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT
 		};
 
 		VkDescriptorSetLayoutBindingFlagsCreateInfo flagInfo{};

@@ -140,10 +140,18 @@ namespace vkutil {
 		device = newDevice;
 	}
 
-	VkDescriptorSetLayout DescriptorLayoutCache::create_descriptor_layout(const VkDescriptorSetLayoutCreateInfo* info, uint32_t id)
+	VkDescriptorSetLayout DescriptorLayoutCache::create_descriptor_layout(const VkDescriptorSetLayoutCreateInfo* info)
 	{
 		DescriptorLayoutInfo layoutinfo;
 		layoutinfo.bindings.reserve(info->bindingCount);
+
+		if (info->flags & VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT && info->pNext) {
+			if (*((VkStructureType*)info->pNext) == VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO) {
+				const VkDescriptorSetLayoutBindingFlagsCreateInfo* flagInfo = (VkDescriptorSetLayoutBindingFlagsCreateInfo*)info->pNext;
+
+			}
+		}
+
 		bool isSorted = true;
 		int32_t lastBinding = -1;
 		for (uint32_t i = 0; i < info->bindingCount; i++) {
@@ -160,9 +168,11 @@ namespace vkutil {
 		}
 		if (!isSorted)
 		{
-			std::sort(layoutinfo.bindings.begin(), layoutinfo.bindings.end(), [](VkDescriptorSetLayoutBinding& a, VkDescriptorSetLayoutBinding& b ) {
-				return a.binding < b.binding;
-			});
+			std::sort(layoutinfo.bindings.begin(), layoutinfo.bindings.end(), 
+				[](const VkDescriptorSetLayoutBinding& a, const VkDescriptorSetLayoutBinding& b )
+				{
+					return a.binding < b.binding;
+				});
 		}
 
 		auto it = layoutCache.find(layoutinfo);
@@ -339,6 +349,10 @@ namespace vkutil {
 	bool DescriptorLayoutCache::DescriptorLayoutInfo::operator==(const DescriptorLayoutInfo& other) const
 	{
 		if (other.bindings.size() != bindings.size())
+		{
+			return false;
+		}
+		if (other.dynamic != dynamic)
 		{
 			return false;
 		}
