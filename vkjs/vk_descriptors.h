@@ -61,7 +61,6 @@ namespace vkutil {
 		struct DescriptorLayoutInfo {
 			//good idea to turn this into a inlined array
 			std::vector<VkDescriptorSetLayoutBinding> bindings;
-			bool dynamic = false;
 			bool operator==(const DescriptorLayoutInfo& other) const;
 
 			size_t hash() const;
@@ -120,7 +119,7 @@ namespace vkutil {
 	private:
 		vkjs::Device* _device;
 		std::unique_ptr<DescriptorLayoutCache> _pLayoutCache;
-		std::unordered_map<size_t, std::unique_ptr<DescriptorAllocator>> _pAllocators;
+		std::unordered_map<uint64_t, std::unique_ptr<DescriptorAllocator>> _pAllocators;
 	};
 }
 

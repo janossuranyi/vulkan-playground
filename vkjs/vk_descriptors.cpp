@@ -345,10 +345,6 @@ namespace vkutil {
 		{
 			return false;
 		}
-		if (other.dynamic != dynamic)
-		{
-			return false;
-		}
 		else {
 			//compare each of the bindings is the same. Bindings are sorted so they will match
 			for (int i = 0; i < bindings.size(); i++) {
