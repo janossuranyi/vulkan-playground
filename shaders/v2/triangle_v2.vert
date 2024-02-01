@@ -10,7 +10,7 @@ layout(location = 4) in vec4 inColor;
 
 #include "passData.glsl"
 
-layout(set = 0, binding = 0) uniform stc_PassDataUBO {
+layout(set = 0, binding = 0) uniform stc_ubo_PassData {
     S_PASS passdata;
 };
 
@@ -20,7 +20,7 @@ struct S_DRAW_DATA {
     vec4 color;
 };
 
-layout(set = 0, binding = 1) uniform dyn_DrawDataUBO {
+layout(set = 0, binding = 1) uniform dyn_ubo_DrawData {
     S_DRAW_DATA drawdata;
 };
 
@@ -47,13 +47,13 @@ void main() {
     gl_Position = passdata.mtxProjection * posVS;
     gl_Position.y = -gl_Position.y;
 
-	mat3 mNormal = mat3( passdata.mtxView * drawdata.mtxNormal );
+	mat3 mtxNormal = mat3( passdata.mtxView * drawdata.mtxNormal );
 	
 	vec4 localTangent = inTangent * 2.0 - 1.0;
 	vec3 localNormal = inNormal * 2.0 - 1.0;
 
-	vec3 T = normalize( mNormal * localTangent.xyz );
-	vec3 N = normalize( mNormal * localNormal );
+	vec3 T = normalize( mtxNormal * localTangent.xyz );
+	vec3 N = normalize( mtxNormal * localNormal );
 	T = normalize(T - dot( T, N ) * N);
 	vec3 B = normalize( cross( N, T ) * localTangent.w );
 

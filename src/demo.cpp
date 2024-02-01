@@ -64,7 +64,7 @@ struct UniformBufferPool {
     }
 
     template<class T>
-    VkDescriptorBufferInfo Allocate(uint32_t count, const T* data)
+    VkDescriptorBufferInfo Allocate(uint32_t count, const T *data)
     {   
         const uint32_t alignedSize = static_cast<uint32_t>( align_size(sizeof(T), offsetAligment) );
         const uint32_t size = count * alignedSize;
@@ -1381,7 +1381,7 @@ void App::prepare()
         S_Scene{fs::path("D:/DATA/models/crq376zqdkao-Castelia-City/OBJ"), "city.gltf"}
     };
 
-    const int sceneIdx = 0;
+    const int sceneIdx = 1;
     auto scenePath = scenes[sceneIdx].dir;
     jsr::gltfLoadWorld(scenePath / scenes[sceneIdx].file, *world);
 
@@ -1395,12 +1395,12 @@ void App::prepare()
 
     int i = 0;
     jsrlib::Info("Loading images...");
-    for (auto& it : world->materials)
+    for (auto it = world->materials.begin(); it != world->materials.end(); it++)
     {
         std::string fname[3];
-        fname[0] = (scenePath / it.texturePaths.albedoTexturePath).u8string();
-        fname[1] = (scenePath / it.texturePaths.normalTexturePath).u8string();
-        fname[2] = (scenePath / it.texturePaths.specularTexturePath).u8string();
+        fname[0] = (scenePath / it->texturePaths.albedoTexturePath).u8string();
+        fname[1] = (scenePath / it->texturePaths.normalTexturePath).u8string();
+        fname[2] = (scenePath / it->texturePaths.specularTexturePath).u8string();
 
         for (int i = 0; i < 3; ++i) {
             while (true) {
