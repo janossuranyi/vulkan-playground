@@ -101,6 +101,21 @@ vec4 specBRDF(vec3 F0, vec3 L, vec3 V, vec3 N, float roughness)
 	return color;
 }
 
+vec4 specBRDF_DOOM( vec3 f0,vec3 L, vec3 V, vec3 N, float r ) {
+	const vec3 H = normalize( V + L );
+	float m = 0.2 + r * 0.8;
+    m *= m;
+    m *= m;
+    float m2 = m * m;
+	float NdotH = clamp( dot( N, H ), 0.0, 1.0 );
+	float spec = (NdotH * NdotH) * (m2 - 1) + 1;
+	spec = m2 / ( spec * spec + 1e-8 );
+	float Gv = clamp( dot( N, V ), 0.0, 1.0 ) * (1.0 - m) + m;
+	float Gl = clamp( dot( N, L ), 0.0, 1.0 ) * (1.0 - m) + m;
+	spec /= ( 4.0 * Gv * Gl + 1e-8 );
+	return vec4(F_Schlick( f0, clamp(dot( L, H ), 0.0, 1.0) ), spec);
+}
+
 void main() {
 
 /*
@@ -122,7 +137,8 @@ void main() {
     // b = 0.5 * sqrt(1 - ( 2 * r - 1)^2 - (2 * g - 1)^2) + 0.5
     //vec3 normalTS = vec3(normalSamp.xy, sqrt(1.0 - normalSamp.x * normalSamp.x - normalSamp.y * normalSamp.y));
 
-    const float r = 0.2 + pbrSample.g * 0.8;
+//  const float r = 0.2 + pbrSample.g * 0.8;
+    const float r = pbrSample.g;
     const float metalness = pbrSample.b;
     const float microAO = pbrSample.r;
 
@@ -161,7 +177,7 @@ void main() {
     
     specColor = GGXSingleScattering(r, F0, NoH, NoV, VoH, NoL);
 */
-    vec4 spec = specBRDF(F0, L,V,N, r);
+    vec4 spec = specBRDF_DOOM(F0, L,V,N, r);
     specColor = spec.rgb * spec.a;
 
     diffuseColor = (1.0 - metalness) * albedoColor.rgb * (1.0 - spec.rgb);

@@ -1381,7 +1381,7 @@ void App::prepare()
         S_Scene{fs::path("D:/DATA/models/crq376zqdkao-Castelia-City/OBJ"), "city.gltf"}
     };
 
-    const int sceneIdx = 1;
+    const int sceneIdx = 0;
     auto scenePath = scenes[sceneIdx].dir;
     jsr::gltfLoadWorld(scenePath / scenes[sceneIdx].file, *world);
 
