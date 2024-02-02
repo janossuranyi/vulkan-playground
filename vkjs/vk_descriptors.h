@@ -108,6 +108,9 @@ namespace vkutil {
 
 	class DescriptorManager {
 	public:
+		using DescriptorSetList = std::vector<VkDescriptorSet>;
+		using DescriptorSetIt = DescriptorSetList::iterator;
+
 		DescriptorManager() = default;
 		~DescriptorManager() {};
 
@@ -116,10 +119,14 @@ namespace vkutil {
 		void reset_pool(VkDescriptorSetLayout layout);
 		DescriptorAllocator* get_allocator(VkDescriptorSetLayout layout);
 		DescriptorBuilder builder();
+		const DescriptorSetList* get_descriptors(VkDescriptorSetLayout layout);
 	private:
+		
+
 		vkjs::Device* _device;
 		std::unique_ptr<DescriptorLayoutCache> _pLayoutCache;
 		std::unordered_map<uint64_t, std::unique_ptr<DescriptorAllocator>> _pAllocators;
+		std::unordered_map<uint64_t, std::unique_ptr<DescriptorSetList>> _descriptorMap;
 	};
 }
 

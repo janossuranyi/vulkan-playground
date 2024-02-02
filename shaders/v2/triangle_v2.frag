@@ -105,7 +105,7 @@ vec4 specBRDF_DOOM( vec3 f0,vec3 L, vec3 V, vec3 N, float r ) {
 	const vec3 H = normalize( V + L );
 	float m = 0.2 + r * 0.8;
     m *= m;
-    m *= m;
+    /*m *= m;*/
     float m2 = m * m;
 	float NdotH = clamp( dot( N, H ), 0.0, 1.0 );
 	float spec = (NdotH * NdotH) * (m2 - 1) + 1;

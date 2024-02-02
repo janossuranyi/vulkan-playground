@@ -402,10 +402,10 @@ namespace vkutil {
 
 		if (res != VK_NULL_HANDLE && _pAllocators.find((size_t)res) == _pAllocators.end())
 		{
-			
+
 			DescriptorAllocator::PoolSizes ps;
 			ps.sizes.clear();
-			
+
 			std::unordered_map<VkDescriptorType, uint32_t> typeCounter;
 			for (uint32_t i = 0; i < info->bindingCount; ++i)
 			{
@@ -421,7 +421,8 @@ namespace vkutil {
 			DescriptorAllocator* p = new DescriptorAllocator();
 			p->init(*_device);
 			p->set_pool_sizes(ps);
-			_pAllocators.emplace((size_t) res, p);
+			_pAllocators.emplace((uint64_t)res, p);
+			_descriptorMap.emplace((uint64_t)res, new DescriptorSetList());
 		}
 		return res;
 	}
@@ -449,6 +450,18 @@ namespace vkutil {
 	DescriptorBuilder DescriptorManager::builder()
 	{
 		return DescriptorBuilder::begin(this);
+	}
+
+	const DescriptorManager::DescriptorSetList* DescriptorManager::get_descriptors(VkDescriptorSetLayout layout)
+	{
+		DescriptorManager::DescriptorSetList* res = nullptr;
+		auto it = _descriptorMap.find((uint64_t)layout);
+		if (it != _descriptorMap.end())
+		{
+			res = it->second.get();
+		}
+
+		return res;
 	}
 
 }
