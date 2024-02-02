@@ -1,5 +1,4 @@
 #include "image.h"
-#include "gli_utils.h"
 #include "VulkanInitializers.hpp"
 #include "vkcheck.h"
 

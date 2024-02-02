@@ -47,4 +47,5 @@ target_link_libraries(vkjs
     #    Vulkan::Vulkan
     volk
     spirv-reflect
+    ktx2
 )

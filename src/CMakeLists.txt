@@ -124,6 +124,7 @@ target_link_libraries(demo
     tiny_gltf
     spirv-reflect
     imgui
+    ktx2
 #    Vulkan::Vulkan
     volk
 )

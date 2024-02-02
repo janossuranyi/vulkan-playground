@@ -134,8 +134,7 @@ void main() {
     vec3 normalTS = texture(samp_material[SAMP_NORMAL], In.UV).xyz * 2.0 - 1.0;
     vec4 pbrSample = texture(samp_material[SAMP_PBR], In.UV);
     
-    // b = 0.5 * sqrt(1 - ( 2 * r - 1)^2 - (2 * g - 1)^2) + 0.5
-    //vec3 normalTS = vec3(normalSamp.xy, sqrt(1.0 - normalSamp.x * normalSamp.x - normalSamp.y * normalSamp.y));
+    //normalTS.z = sqrt(1.0 - dot(normalTS.xy, normalTS.xy));
 
 //  const float r = 0.2 + pbrSample.g * 0.8;
     const float r = pbrSample.g;

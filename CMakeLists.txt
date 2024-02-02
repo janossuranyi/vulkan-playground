@@ -14,6 +14,8 @@ add_compile_definitions(
 add_library(sdl2 INTERFACE)
 set(sdl2_DIR "SDL_PATH" CACHE PATH "Path to SDL2")
 
+set(RESOURCE_DIR "Resources" CACHE PATH "Path to resources")
+
 if (WIN32)
 target_include_directories(sdl2 INTERFACE ${sdl2_DIR}/include ${sdl2_image_DIR}/include)
 target_link_directories(sdl2 INTERFACE ${sdl2_DIR}/lib/x64 ${sdl2_image_DIR}/lib/x64)
@@ -23,6 +25,18 @@ target_link_directories(sdl2 INTERFACE ${sdl2_DIR}/lib ${sdl2_image_DIR}/lib)
 endif()
 
 target_link_libraries(sdl2 INTERFACE SDL2 SDL2main)
+
+add_library(ktx2 INTERFACE)
+set(ktx2_DIR "KTX_PATH" CACHE PATH "Path to KTX2")
+if (WIN32)
+target_include_directories(ktx2 INTERFACE ${ktx2_DIR}/include)
+target_link_directories(ktx2 INTERFACE ${ktx2_DIR}/lib)
+elseif (UNIX)
+target_include_directories(ktx2 INTERFACE ${ktx2_DIR}/include)
+target_link_directories(ktx2 INTERFACE ${ktx2_DIR}/lib)
+endif()
+
+target_link_libraries(ktx2 INTERFACE ktx)
 
 include_directories(
     include
@@ -60,7 +74,7 @@ file(GLOB_RECURSE GLSL_INCLUDE_FILES
 foreach(GLSL ${GLSL_SOURCE_FILES})
   message(STATUS "BUILDING SHADER")
   get_filename_component(FILE_NAME ${GLSL} NAME)
-  set(SPIRV "${PROJECT_SOURCE_DIR}/shaders/${FILE_NAME}.spv")
+  set(SPIRV "${PROJECT_SOURCE_DIR}/shaders/bin/${FILE_NAME}.spv")
   message(STATUS ${GLSL})
   ##execute glslang command to compile that specific shader
   add_custom_command(
@@ -75,3 +89,23 @@ add_custom_target(
     DEPENDS ${SPIRV_BINARY_FILES}
     )
 
+file(GLOB SPONZA_IMAGES
+  "${RESOURCE_DIR}/models/sponza/*.jpg"
+  "${RESOURCE_DIR}/models/sponza/*.png"
+)
+foreach(IMG ${SPONZA_IMAGES})
+  message(STATUS "Convert to KTX2")
+  get_filename_component(FILE_NAME ${IMG} NAME_WE)
+  set(KTX "${RESOURCE_DIR}/models/sponza/ktx/${FILE_NAME}.ktx2")
+  add_custom_command(
+    OUTPUT ${KTX}
+    COMMAND ${ktx2_DIR}/bin/toktx --clevel 3 --genmipmap --assign_oetf linear --encode etc1s ${KTX} ${IMG}
+    DEPENDS ${IMG}
+  )
+  list(APPEND SPONZA_KTX_FILES ${KTX})
+endforeach(IMG)
+
+add_custom_target(
+    Sponza_IMAGES 
+    DEPENDS ${SPONZA_KTX_FILES}
+    )

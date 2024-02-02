@@ -33,6 +33,8 @@
 #include "vkjs/spirv_utils.h"
 #include <gli/generate_mipmaps.hpp>
 #include "renderer/gli_utils.h"
+#include "ktx.h"
+#include "ktxvulkan.h"
 
 namespace fs = std::filesystem;
 using namespace glm;
@@ -686,7 +688,7 @@ void App::build_command_buffers()
     passes.tonemap.pPipeline->bind_descriptor_sets(cmd, 1, &HDRDescriptor[currentFrame]);
     //vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, passes.tonemap.layout, 0, 1, &HDRDescriptor[currentFrame], 0, nullptr);
     vkCmdDraw(cmd, 3, 1, 0, 0);
-#if 1
+#if 0
     if (visibleObjectCount > 0)
     {
         vkCmdBindVertexBuffers(cmd, 0, 1, &transientVtxBuf[currentFrame].buffer, &offset);
@@ -790,8 +792,8 @@ void App::setup_debug_pipeline(RenderPass& pass)
 
     vkjs::ShaderModule vert_module(*device);
     vkjs::ShaderModule frag_module(*device);
-    const fs::path vert_spirv_filename = basePath / "shaders/debug.vert.spv";
-    const fs::path frag_spirv_filename = basePath / "shaders/debug.frag.spv";
+    const fs::path vert_spirv_filename = basePath / "shaders/bin/debug.vert.spv";
+    const fs::path frag_spirv_filename = basePath / "shaders/bin/debug.frag.spv";
     VK_CHECK(vert_module.create(vert_spirv_filename));
     VK_CHECK(frag_module.create(frag_spirv_filename));
 
@@ -835,8 +837,8 @@ void App::setup_tonemap_pipeline(RenderPass& pass)
 
     vkjs::ShaderModule vert_module(*device);
     vkjs::ShaderModule frag_module(*device);
-    const fs::path vert_spirv_filename = basePath / "shaders/triquad.vert.spv";
-    const fs::path frag_spirv_filename = basePath / "shaders/post.frag.spv";
+    const fs::path vert_spirv_filename = basePath / "shaders/bin/triquad.vert.spv";
+    const fs::path frag_spirv_filename = basePath / "shaders/bin/post.frag.spv";
     VK_CHECK(vert_module.create(vert_spirv_filename));
     VK_CHECK(frag_module.create(frag_spirv_filename));
     vkjs::GraphicsShaderInfo shaders{};
@@ -879,8 +881,8 @@ void App::setup_triangle_pipeline(RenderPass& pass)
 
     vkjs::ShaderModule vert_module(*device);
     vkjs::ShaderModule frag_module(*device);
-    VK_CHECK(vert_module.create(basePath / "shaders/triangle_v2.vert.spv"));
-    VK_CHECK(frag_module.create(basePath / "shaders/triangle_v2.frag.spv"));
+    VK_CHECK(vert_module.create(basePath / "shaders/bin/triangle_v2.vert.spv"));
+    VK_CHECK(frag_module.create(basePath / "shaders/bin/triangle_v2.frag.spv"));
 
     vkjs::GraphicsShaderInfo shaders = {};
     shaders.vert = &vert_module;
@@ -1568,11 +1570,14 @@ void App::create_material_texture(const std::string& filename)
         vkjs::Image newImage;
         fs::path base = fs::path(fn).parent_path();
         fs::path name = fs::path(fn).filename();
-        name.replace_extension("dds");
+        name.replace_extension("ktx2");
         auto dds = base / "dds" / name;
+        auto ktx = base / "ktx" / name;
 
         bool bOk = false;
+#if 0
         gli::texture tex = gli::load(dds.u8string());
+        
         if (!tex.empty())
         {
             device->create_texture2d_with_mips(gliutils::convert_format(tex.format()), gliutils::convert_extent(tex.extent()), &newImage);
@@ -1587,6 +1592,88 @@ void App::create_material_texture(const std::string& filename)
             newImage.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
             device->destroy_buffer(&stagebuf);
             jsrlib::Info("%s Loaded", dds.u8string().c_str());
+        }
+#endif
+
+        ktxTexture* kTexture;
+        KTX_error_code result;
+
+        result = ktxTexture_CreateFromNamedFile(ktx.u8string().c_str(),
+            KTX_TEXTURE_CREATE_NO_FLAGS,
+            &kTexture);
+        
+        if (result == KTX_SUCCESS)
+        {
+            if (ktxTexture2_NeedsTranscoding((ktxTexture2*)kTexture)) {
+                ktx_texture_transcode_fmt_e tf;
+
+                // Using VkGetPhysicalDeviceFeatures or GL_COMPRESSED_TEXTURE_FORMATS or
+                // extension queries, determine what compressed texture formats are
+                // supported and pick a format. For example
+                VkPhysicalDeviceFeatures deviceFeatures = device->vkbPhysicalDevice.features;
+                khr_df_model_e colorModel = ktxTexture2_GetColorModel_e((ktxTexture2*)kTexture);
+                if (colorModel == KHR_DF_MODEL_UASTC
+                    && deviceFeatures.textureCompressionASTC_LDR) {
+                    tf = KTX_TTF_ASTC_4x4_RGBA;
+                }
+                else if (colorModel == KHR_DF_MODEL_ETC1S
+                    && deviceFeatures.textureCompressionETC2) {
+                    tf = KTX_TTF_ETC;
+                }
+                else if (deviceFeatures.textureCompressionASTC_LDR) {
+                    tf = KTX_TTF_ASTC_4x4_RGBA;
+                }
+                else if (deviceFeatures.textureCompressionETC2)
+                    tf = KTX_TTF_ETC2_RGBA;
+                else if (deviceFeatures.textureCompressionBC)
+                    tf = KTX_TTF_BC7_RGBA;
+                else {
+                    std::string message = "Vulkan implementation does not support any available transcode target.";
+                    throw std::runtime_error(message.c_str());
+                }
+
+                result = ktxTexture2_TranscodeBasis((ktxTexture2*)kTexture, tf, 0);
+
+                // Then use VkUpload or GLUpload to create a texture object on the GPU.
+            }
+
+            // Retrieve information about the texture from fields in the ktxTexture
+            // such as:
+            ktx_uint32_t numLevels = kTexture->numLevels;
+            ktx_uint32_t baseWidth = kTexture->baseWidth;
+            ktx_uint32_t baseHeight = kTexture->baseHeight;
+            ktx_bool_t isArray = kTexture->isArray;
+
+            device->create_texture2d_with_mips(ktxTexture2_GetVkFormat((ktxTexture2*)kTexture), { kTexture->baseWidth,kTexture->baseHeight,kTexture->baseDepth }, &newImage);
+
+            vkjs::Buffer stagebuf;
+            device->create_staging_buffer(kTexture->dataSize, &stagebuf);
+            stagebuf.copyTo(0, ktxTexture_GetDataSize(kTexture), ktxTexture_GetData(kTexture));
+
+            device->execute_commands([&](VkCommandBuffer cmd)
+                {
+                    // Retrieve a pointer to the image for a specific mip level, array layer
+                    // & face or depth slice.
+                    newImage.record_upload(cmd, [kTexture,baseWidth,baseHeight](uint32_t layer, uint32_t face, uint32_t level, vkjs::Image::UploadInfo* inf)
+                        {
+                            size_t offset{};
+                            uint32_t w = baseWidth >> level;
+                            uint32_t h = baseHeight >> level;
+                            w = std::max(w, 1u);
+                            h = std::max(h, 1u);
+                            ktxResult res = ktxTexture_GetImageOffset(ktxTexture(kTexture), level, layer, face, &offset);
+                            if (res != KTX_SUCCESS) {
+                                throw "KTX Error";
+                            }
+                            inf->extent = { w,h,1 };
+                            inf->offset = offset;
+
+                        }, &stagebuf);
+                });
+
+            newImage.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+            ktxTexture_Destroy(kTexture);
+            device->destroy_buffer(&stagebuf);
         }
         else if (!load_texture2d(fn, &newImage, true, w, h, nc))
         {
