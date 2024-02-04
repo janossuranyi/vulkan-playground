@@ -99,7 +99,7 @@ foreach(IMG ${SPONZA_IMAGES})
   set(KTX "${RESOURCE_DIR}/models/sponza/ktx/${FILE_NAME}.ktx2")
   add_custom_command(
     OUTPUT ${KTX}
-    COMMAND ${ktx2_DIR}/bin/toktx --clevel 3 --genmipmap --assign_oetf linear --encode etc1s ${KTX} ${IMG}
+    COMMAND ${ktx2_DIR}/bin/toktx --uastc_quality 2 --genmipmap --assign_oetf linear --encode uastc ${KTX} ${IMG}
     DEPENDS ${IMG}
   )
   list(APPEND SPONZA_KTX_FILES ${KTX})

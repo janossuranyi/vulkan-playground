@@ -1647,13 +1647,11 @@ void App::create_material_texture(const std::string& filename)
             device->create_texture2d_with_mips(ktxTexture2_GetVkFormat((ktxTexture2*)kTexture), { kTexture->baseWidth,kTexture->baseHeight,kTexture->baseDepth }, &newImage);
 
             vkjs::Buffer stagebuf;
-            device->create_staging_buffer(kTexture->dataSize, &stagebuf);
+            device->create_staging_buffer(ktxTexture_GetDataSize( kTexture ), &stagebuf);
             stagebuf.copyTo(0, ktxTexture_GetDataSize(kTexture), ktxTexture_GetData(kTexture));
 
             device->execute_commands([&](VkCommandBuffer cmd)
                 {
-                    // Retrieve a pointer to the image for a specific mip level, array layer
-                    // & face or depth slice.
                     newImage.record_upload(cmd, [kTexture,baseWidth,baseHeight](uint32_t layer, uint32_t face, uint32_t level, vkjs::Image::UploadInfo* inf)
                         {
                             size_t offset{};
@@ -1661,10 +1659,12 @@ void App::create_material_texture(const std::string& filename)
                             uint32_t h = baseHeight >> level;
                             w = std::max(w, 1u);
                             h = std::max(h, 1u);
-                            ktxResult res = ktxTexture_GetImageOffset(ktxTexture(kTexture), level, layer, face, &offset);
-                            if (res != KTX_SUCCESS) {
-                                throw "KTX Error";
-                            }
+
+                            // Retrieve a pointer to the image for a specific mip level, array layer
+                            // & face or depth slice.
+                            ktxResult res = ktxTexture_GetImageOffset(kTexture, level, layer, face, &offset);
+                            assert(res == KTX_SUCCESS);
+
                             inf->extent = { w,h,1 };
                             inf->offset = offset;
 
