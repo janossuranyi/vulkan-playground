@@ -89,17 +89,19 @@ add_custom_target(
     DEPENDS ${SPIRV_BINARY_FILES}
     )
 
+# Convert sponza jpg/png to KTX2
 file(GLOB SPONZA_IMAGES
   "${RESOURCE_DIR}/models/sponza/*.jpg"
   "${RESOURCE_DIR}/models/sponza/*.png"
 )
 foreach(IMG ${SPONZA_IMAGES})
-  message(STATUS "Convert to KTX2")
   get_filename_component(FILE_NAME ${IMG} NAME_WE)
+  message(STATUS "Convert ${FILE_NAME} to KTX2")
   set(KTX "${RESOURCE_DIR}/models/sponza/ktx/${FILE_NAME}.ktx2")
   add_custom_command(
     OUTPUT ${KTX}
-    COMMAND ${ktx2_DIR}/bin/toktx --uastc_quality 2 --genmipmap --assign_oetf linear --encode uastc ${KTX} ${IMG}
+    COMMAND ${ktx2_DIR}/bin/toktx --genmipmap --assign_oetf linear --encode uastc --uastc_quality 3 --zcmp 8 --verbose ${KTX} ${IMG}
+#    COMMAND ${ktx2_DIR}/bin/toktx --genmipmap --assign_oetf linear --encode etc1s --clevel 4 --qlevel 192 --verbose ${KTX} ${IMG}
     DEPENDS ${IMG}
   )
   list(APPEND SPONZA_KTX_FILES ${KTX})
@@ -109,3 +111,4 @@ add_custom_target(
     Sponza_IMAGES 
     DEPENDS ${SPONZA_KTX_FILES}
     )
+# END Convert sponza jpg/png to KTX2

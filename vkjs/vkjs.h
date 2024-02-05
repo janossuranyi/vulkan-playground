@@ -9,6 +9,9 @@
 //#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 //#define GLM_FORCE_SIMD_SSE2
 
+#define asfloat(x) static_cast<float>(x)
+#define asuint(x) static_cast<uint32_t>(x)
+
 #include <iostream>
 #include <fstream>
 #include <cinttypes>

@@ -40,9 +40,6 @@ namespace fs = std::filesystem;
 using namespace glm;
 using namespace jsr;
 
-#define asfloat(x) static_cast<float>(x)
-#define asuint(x) static_cast<uint32_t>(x)
-
 inline static size_t align_size(size_t size, size_t alignment) {
     return (size + alignment - 1) & ~(alignment - 1);
 }
@@ -1628,7 +1625,7 @@ void App::create_material_texture(const std::string& filename)
                 else if (deviceFeatures.textureCompressionBC)
                     tf = KTX_TTF_BC7_RGBA;
                 else {
-                    std::string message = "Vulkan implementation does not support any available transcode target.";
+                    const std::string message = "Vulkan implementation does not support any available transcode target.";
                     throw std::runtime_error(message.c_str());
                 }
 
@@ -1669,9 +1666,11 @@ void App::create_material_texture(const std::string& filename)
                             inf->offset = offset;
 
                         }, &stagebuf);
+                    newImage.record_change_layout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                    newImage.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
                 });
 
-            newImage.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+            //newImage.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
             ktxTexture_Destroy(kTexture);
             device->destroy_buffer(&stagebuf);
         }
