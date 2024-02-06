@@ -1396,10 +1396,11 @@ void App::prepare()
     jsrlib::Info("Loading images...");
     for (auto it = world->materials.begin(); it != world->materials.end(); it++)
     {
-        std::string fname[3];
+        std::string fname[4];
         fname[0] = (scenePath / it->texturePaths.albedoTexturePath).u8string();
         fname[1] = (scenePath / it->texturePaths.normalTexturePath).u8string();
         fname[2] = (scenePath / it->texturePaths.specularTexturePath).u8string();
+        fname[3] = (scenePath / it->texturePaths.emissiveTexturePath).u8string();
 
         for (int i = 0; i < 3; ++i) {
             while (true) {
@@ -1413,12 +1414,13 @@ void App::prepare()
         create_material_texture(fname[0]);
         create_material_texture(fname[1]);
         create_material_texture(fname[2]);
+        create_material_texture(fname[3]);
 
         std::array<VkDescriptorImageInfo, 4> images{
             imageCache.at(fname[0]).descriptor,
             imageCache.at(fname[1]).descriptor,
             imageCache.at(fname[2]).descriptor,
-            imageCache.at(fname[0]).descriptor
+            imageCache.at(fname[3]).descriptor
         };
 
         descMgr.builder()

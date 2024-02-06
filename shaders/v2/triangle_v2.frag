@@ -133,7 +133,17 @@ void main() {
     vec4 albedoColor = texture(samp_material[SAMP_ALBEDO], In.UV);
     vec3 normalTS = texture(samp_material[SAMP_NORMAL], In.UV).xyz * 2.0 - 1.0;
     vec4 pbrSample = texture(samp_material[SAMP_PBR], In.UV);
-    
+    vec3 emissiveColor = texture(samp_material[SAMP_EMISSIVE], In.UV).rgb;
+
+    const bool hasEmissive = any(greaterThan(emissiveColor, vec3(0)));
+
+    if (albedoColor.a < .5) discard;
+
+    if (hasEmissive) {
+        out_Color0 = vec4(emissiveColor,albedoColor.a);
+        return;
+    }
+
     //normalTS.z = sqrt(1.0 - dot(normalTS.xy, normalTS.xy));
 
 //  const float r = 0.2 + pbrSample.g * 0.8;
@@ -161,7 +171,7 @@ void main() {
     light.type = LightType_Point;
     vec3 Attn = getLightIntensity( light, In.LightVS - In.FragCoordVS  );
 
-    if(albedoColor.a < 0.5) discard;
+
     albedoColor.rgb = sRGBToLinear(albedoColor.rgb /* In.Color.rgb*/);
 
     float NoL = saturate(dot(N,L));
