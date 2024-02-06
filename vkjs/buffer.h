@@ -16,15 +16,12 @@ namespace vkjs {
 		Device*					device_{};
 		uint8_t*				mapped{};
 		bool					alias = false;
-
 		Buffer() = default;
 		explicit Buffer(Device* device);
-
 		bool map();
 		void unmap();
 		
 		/* Do not call directly, use Device::destroy_buffer instead */
-		void destroy();
 		void copyTo(VkDeviceSize offset, VkDeviceSize size, const void* data);
 		void fill(VkDeviceSize offset, VkDeviceSize size, uint32_t data);
 		void setup_descriptor();

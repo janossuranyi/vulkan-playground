@@ -60,6 +60,8 @@ namespace vkjs {
 		void begin_debug_marker_region(VkCommandBuffer cmd, const glm::vec4& color, const std::string& name);
 		void end_debug_marker_region(VkCommandBuffer cmd);
 
+		VkResult map_buffer(Buffer* buffer);
+		VkResult unmap_buffer(Buffer* buffer);
 		VkResult create_command_pool(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags flags, VkCommandPool* result);
 		VkResult create_command_buffer(VkCommandPool pool, VkCommandBufferUsageFlags usage, bool secondary, VkCommandBuffer* out, bool begin);
 		VkResult create_fence(VkFenceCreateFlags flags, VkFence* out);

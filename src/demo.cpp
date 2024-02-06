@@ -1290,10 +1290,10 @@ void App::setup_images()
             device->create_staging_buffer(16 * 4, &tmpbuf);
             tmpbuf.copyTo(0, 16 * 4, &ssaoNoise[0]);
             this->ssaoNoise.upload(VkExtent3D{ 4,4,1 }, 0, 0, 0, 0, &tmpbuf);
-            device->destroy_buffer(&tmpbuf);
             this->ssaoNoise.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
             this->ssaoNoise.setup_descriptor();
             this->ssaoNoise.descriptor.sampler = sampNearestClampBorder;
+            device->destroy_buffer(&tmpbuf);
         }
         //HDRImage[i].change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
@@ -1380,7 +1380,7 @@ void App::prepare()
         S_Scene{fs::path("D:/DATA/models/crq376zqdkao-Castelia-City/OBJ"), "city.gltf"}
     };
 
-    const int sceneIdx = 0;
+    const int sceneIdx = 1;
     auto scenePath = scenes[sceneIdx].dir;
     jsr::gltfLoadWorld(scenePath / scenes[sceneIdx].file, *world);
 
@@ -1461,14 +1461,9 @@ void App::prepare()
 
     vkjs::Buffer stagingBuffer;
 
-    device->create_staging_buffer(vertexBytes, &stagingBuffer);
+    device->create_staging_buffer(std::max(vertexBytes,indexBytes), &stagingBuffer);
     stagingBuffer.copyTo(0, vertexBytes, vertices.data());
     device->buffer_copy(&stagingBuffer, &vtxbuf, 0, 0, vertexBytes);
-    if (indexBytes > vertexBytes)
-    {
-        device->destroy_buffer(&stagingBuffer);
-        device->create_staging_buffer(indexBytes, &stagingBuffer);
-    }
     stagingBuffer.copyTo(0, indexBytes, indices.data());
     device->buffer_copy(&stagingBuffer, &idxbuf, 0, 0, indexBytes);
     device->destroy_buffer(&stagingBuffer);
@@ -1485,7 +1480,6 @@ void App::prepare()
     {
         device->buffer_copy(&stage, &uboDrawData, 0, i * drawDataBufferSize, drawData.size());
     }
-    device->destroy_buffer(&stage);
     setup_descriptor_sets();
 
     const int kernelSize = sizeof(passData.avSSAOkernel) / sizeof(passData.avSSAOkernel[0]);
@@ -1686,7 +1680,7 @@ void App::create_material_texture(const std::string& filename)
         }
         newImage.setup_descriptor();
         newImage.descriptor.sampler = sampLinearRepeat;
-        imageCache.insert({ fn,newImage });        
+        imageCache.insert({ fn,newImage });
     }
 }
 
@@ -1721,8 +1715,6 @@ bool App::load_texture2d(std::string filename, vkjs::Image* dest, bool autoMipma
     else {
         dest->change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
-
-    device->destroy_buffer(&stage);
 
     return true;
 }

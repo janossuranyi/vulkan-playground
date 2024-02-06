@@ -7,6 +7,9 @@ namespace vkjs {
 	Image::Image(Device* device) : device_(device)
 	{
 	}
+	Image::~Image() noexcept
+	{
+	}
 	void Image::upload(const VkExtent3D& extent, uint32_t layer, uint32_t face, uint32_t level, VkDeviceSize offset, Buffer* buffer)
 	{
 		assert(image);
@@ -237,13 +240,4 @@ namespace vkjs {
 		vkCmdPipelineBarrier(cmd, srcStageMask, dstStageMask, 0, 0, nullptr, 0, nullptr, 1, &ibar);
 	}
 
-	void Image::destroy()
-	{
-		if (image && !alias) {
-			vkDestroyImageView(*device_, view, nullptr);
-			vmaDestroyImage(device_->allocator, image, mem);
-			image = VK_NULL_HANDLE;
-			mem = {};
-		}
-	}
 }

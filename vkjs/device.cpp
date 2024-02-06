@@ -237,6 +237,33 @@ namespace vkjs {
 		}
 	}
 
+	VkResult Device::map_buffer(Buffer* buffer)
+	{
+		assert(buffer->mem_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+		if (buffer->mapped) return VK_SUCCESS;
+
+		void* ptr;
+		VkResult err = vmaMapMemory(allocator, buffer->mem, &ptr);
+
+		if (err != VK_SUCCESS) {
+			return err;
+		}
+
+		buffer->mapped = (uint8_t*)ptr;
+
+		return err;
+	}
+
+	VkResult Device::unmap_buffer(Buffer* buffer)
+	{
+		if (buffer->mapped) {
+			vmaUnmapMemory(allocator, buffer->mem);
+			buffer->mapped = nullptr;
+		}
+		return VK_SUCCESS;
+	}
+
 	VkResult Device::create_command_pool(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags flags, VkCommandPool* result)
 	{
 		*result = VK_NULL_HANDLE;
@@ -604,26 +631,43 @@ namespace vkjs {
 
 	void Device::destroy_buffer(Buffer* b)
 	{
+		if (!b || !b->buffer || b->device_ != this)
+		{
+			return;
+		}
+
 		for (auto it = buffers.begin(); it != buffers.end(); it++) {
 			if (it->buffer == b->buffer) {
-				b->alias = false;
-				b->destroy();
+				
 				buffers.erase(it);
 				break;
 			}
 		}
+
+		if (b->mapped) { b->unmap(); }
+
+		vmaDestroyBuffer(allocator, b->buffer, b->mem);
+		*b = {};
 	}
 
 	void Device::destroy_image(Image* i)
 	{
+		if (!i || !i->image || i->device_ != this || i->alias)
+		{
+			return;
+		}
+
 		for (auto it = images.begin(); it != images.end(); it++) {
 			if (it->image == i->image) {
 				i->alias = false;
-				i->destroy();
 				images.erase(it);
 				break;
 			}
 		}
+
+		vkDestroyImageView(logicalDevice, i->view, nullptr);
+		vmaDestroyImage(allocator, i->image, i->mem);
+		*i = {};
 	}
 
 	void Device::buffer_copy(const Buffer* src, const Buffer* dst, VkDeviceSize srcOffset, VkDeviceSize dstOffset, VkDeviceSize size)

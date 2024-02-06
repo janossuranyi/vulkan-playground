@@ -100,7 +100,7 @@ foreach(IMG ${SPONZA_IMAGES})
   set(KTX "${RESOURCE_DIR}/models/sponza/ktx/${FILE_NAME}.ktx2")
   add_custom_command(
     OUTPUT ${KTX}
-    COMMAND ${ktx2_DIR}/bin/toktx --genmipmap --assign_oetf linear --encode uastc --uastc_quality 3 --zcmp 8 --verbose ${KTX} ${IMG}
+    COMMAND ${ktx2_DIR}/bin/toktx --genmipmap --assign_oetf linear --encode uastc --uastc_quality 3 --uastc_rdo_l --zcmp 8 --verbose ${KTX} ${IMG}
 #    COMMAND ${ktx2_DIR}/bin/toktx --genmipmap --assign_oetf linear --encode etc1s --clevel 4 --qlevel 192 --verbose ${KTX} ${IMG}
     DEPENDS ${IMG}
   )
@@ -112,3 +112,27 @@ add_custom_target(
     DEPENDS ${SPONZA_KTX_FILES}
     )
 # END Convert sponza jpg/png to KTX2
+
+
+# Convert sw_venator jpg/png to KTX2
+file(GLOB VENATOR_IMAGES
+  "${RESOURCE_DIR}/models/sw_venator/textures/*.png"
+)
+foreach(IMG ${VENATOR_IMAGES})
+  get_filename_component(FILE_NAME ${IMG} NAME_WE)
+  message(STATUS "Convert ${FILE_NAME} to KTX2")
+  set(KTX "${RESOURCE_DIR}/models/sw_venator/textures/ktx/${FILE_NAME}.ktx2")
+  add_custom_command(
+    OUTPUT ${KTX}
+    COMMAND ${ktx2_DIR}/bin/toktx --genmipmap --assign_oetf linear --encode uastc --uastc_quality 3 --uastc_rdo_l --zcmp 8 --verbose ${KTX} ${IMG}
+#    COMMAND ${ktx2_DIR}/bin/toktx --genmipmap --assign_oetf linear --encode etc1s --clevel 4 --qlevel 192 --verbose ${KTX} ${IMG}
+    DEPENDS ${IMG}
+  )
+  list(APPEND VENATOR_KTX_FILES ${KTX})
+endforeach(IMG)
+
+add_custom_target(
+    Venator_IMAGES 
+    DEPENDS ${VENATOR_KTX_FILES}
+    )
+# END Convert sw_venator jpg/png to KTX2

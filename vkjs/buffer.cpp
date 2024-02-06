@@ -9,41 +9,15 @@ namespace vkjs {
 	bool Buffer::map()
 	{
 		assert(device_);
-		assert(mem_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-
-		if (mapped) return true;
-
-		void* ptr;
-		VkResult err = vmaMapMemory(device_->allocator, mem, &ptr);
 		
-		if (err) {
-			return false;
-		}
+		VkResult r = device_->map_buffer(this);
 
-		mapped = (uint8_t*)ptr;
-		
-		return true;
+		return r == VK_SUCCESS;
 	}
 
 	void Buffer::unmap()
 	{
-		assert(device_);
-		if (mapped) {
-			vmaUnmapMemory(device_->allocator, mem);
-			mapped = nullptr;
-		}
-	}
-
-	void Buffer::destroy()
-	{
-		assert(device_);
-		if (buffer) {
-			if (mapped) { unmap(); }
-			vmaDestroyBuffer(device_->allocator, buffer, mem);
-			buffer = VK_NULL_HANDLE;
-			size = 0ull;
-			mem = {};
-		}
+		device_->unmap_buffer(this);
 	}
 
 	void Buffer::copyTo(VkDeviceSize offset, VkDeviceSize size, const void* data)

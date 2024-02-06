@@ -41,6 +41,7 @@ namespace vkjs {
 
 		explicit Image(Device* device);
 		Image() = default;
+		~Image() noexcept;
 
 		void upload(const VkExtent3D& extent, uint32_t layer, uint32_t face, uint32_t level, VkDeviceSize offset, Buffer* buffer);
 		void upload(UploadCallbackFn&& callback, Buffer* buffer);
@@ -58,8 +59,6 @@ namespace vkjs {
 		void generate_mipmaps(VkFilter filter = VK_FILTER_LINEAR);
 
 		void setup_descriptor();
-
-		void destroy();
 	};
 }
 #endif // !VKJS_IMAGE_H
