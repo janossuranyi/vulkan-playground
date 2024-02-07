@@ -1,6 +1,5 @@
 #pragma once
 
-#include "renderer/ResourceDescriptions.h"
 #include "world.h"
 
 namespace jsr {

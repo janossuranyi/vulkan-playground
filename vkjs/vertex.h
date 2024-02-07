@@ -14,7 +14,7 @@ namespace vkjs {
 	};
 
 	struct Vertex {
-		glm::vec3				xyz;
+		float				xyz[3];
 		glm::vec2				uv;
 		glm::vec<4, uint8_t>	normal;
 		glm::vec<4, uint8_t>	tangent;

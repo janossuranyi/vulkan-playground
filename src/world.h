@@ -2,12 +2,15 @@
 
 #include "pch.h"
 #include "mesh_data.h"
-#include "renderer/Light.h"
-#include "renderer/ResourceDescriptions.h"
-#include "renderer/Frustum.h"
+#include "material.h"
+#include "light.h"
+#include "bounds.h"
+
 namespace jsr {
 
 	enum EntityType { EntityType_Mesh, EntityType_Light, EntityType_Camera, EntityType_Empty };
+
+	class Frustum;
 
 	class Node3d {
 	public:

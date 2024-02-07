@@ -1,7 +1,6 @@
 #ifndef VK_RENDER_GLIUTILS_H
 #define VK_RENDER_GLIUTILS_H
 
-#include <gli/gli.hpp>
 #include <glm/glm.hpp>
 #include "renderer/Vulkan.h"
 

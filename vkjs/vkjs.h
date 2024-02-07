@@ -16,6 +16,7 @@
 #include <fstream>
 #include <cinttypes>
 #include <limits>
+#include <array>
 #include <vector>
 #include <filesystem>
 #include <optional>
@@ -28,7 +29,6 @@
 #include <utility>
 #include <chrono>
 #include <glm/glm.hpp>
-#include <gli/gli.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/packing.hpp>
 #include <glm/gtx/quaternion.hpp>

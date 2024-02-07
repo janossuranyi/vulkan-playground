@@ -13,6 +13,7 @@
 #include <cinttypes>
 #include <limits>
 #include <vector>
+#include <array>
 #include <filesystem>
 #include <optional>
 #include <functional>
@@ -24,7 +25,6 @@
 #include <utility>
 #include <chrono>
 #include <glm/glm.hpp>
-#include <gli/gli.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/packing.hpp>
 #include <glm/gtx/quaternion.hpp>

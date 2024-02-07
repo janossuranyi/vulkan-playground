@@ -9,6 +9,8 @@ set(CMAKE_CXX_STANDARD 17)
 add_compile_definitions(
   DDS_USE_STD_FILESYSTEM
   GLM_FORCE_DEPTH_ZERO_TO_ONE
+  GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+  GLM_FORCE_SIMD_SSE2
 )
 
 add_library(sdl2 INTERFACE)
@@ -42,7 +44,6 @@ include_directories(
     include
     src 
     third_party/glm
-    third_party/gli
     third_party/vma
     third_party/vkbootstrap
     third_party/nv_dds

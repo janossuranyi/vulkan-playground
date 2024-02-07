@@ -15,13 +15,14 @@
 #include "jsrlib/jsr_semaphore.h"
 #include "jsrlib/jsr_resources.h"
 #include "jsrlib/jsr_math.h"
-#include "jsrlib/jsr_frustum.h"
 
 //#include "jsrlib/jsr_jobsystem2.h"
 #include "jobsys.h"
 #include "world.h"
 #include "gltf_loader.h"
 #include "stb_image.h"
+#include "bounds.h"
+#include "frustum.h"
 #include "vkjs/vkjs.h"
 #include "vkjs/appbase.h"
 #include "vkjs/VulkanInitializers.hpp"
@@ -31,8 +32,6 @@
 #include "vkjs/vk_descriptors.h"
 #include "vkjs/shader_module.h"
 #include "vkjs/spirv_utils.h"
-#include <gli/generate_mipmaps.hpp>
-#include "renderer/gli_utils.h"
 #include "ktx.h"
 #include "ktxvulkan.h"
 
@@ -250,7 +249,7 @@ public:
         ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.01f, 1.0f, 50.0f);
         ImGui::Checkbox("Fog On/Off", &fogEnabled);
         ImGui::DragFloat("Fog density", &postProcessData.vFogParams.x, 0.001f, 0.0f, 10.0f, "%.4f");
-        ImGui::DragFloat("Fog scale", &postProcessData.vFogParams.y, 0.001, 0.001f, 1.0f, "%.4f");
+        ImGui::DragFloat("Fog scale", &postProcessData.vFogParams.y, 0.001f, 0.001f, 1.0f, "%.4f");
         ImGui::DragFloat3("Sun dir", &postProcessData.vSunPos[0], 1.0f);
         if (ImGui::BeginCombo("MSAA", current_msaa_item, ImGuiComboFlags_HeightRegular))
         {
@@ -1437,9 +1436,11 @@ void App::prepare()
         {
             vertices.emplace_back();
             auto& v = vertices.back();
-            v.xyz = mesh.positions[i];
+            v.xyz[0] = mesh.positions[i].v[0];
+            v.xyz[1] = mesh.positions[i].v[1];
+            v.xyz[2] = mesh.positions[i].v[2];
             v.uv = mesh.uvs[i];
-            v.pack_normal(mesh.normals[i]);
+            v.pack_normal(glm::vec3(mesh.normals[i].v[0], mesh.normals[i].v[1], mesh.normals[i].v[2]));
             v.pack_tangent(mesh.tangents[i]);
             v.pack_color(vec4(1.0f));
         }
@@ -1662,7 +1663,12 @@ void App::create_material_texture(const std::string& filename)
                             inf->offset = offset;
 
                         }, &stagebuf);
-                    newImage.record_change_layout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+                    newImage.record_change_layout(cmd,
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        VK_PIPELINE_STAGE_TRANSFER_BIT,
+                        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
                     newImage.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
                 });
 

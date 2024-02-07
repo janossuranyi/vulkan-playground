@@ -43,7 +43,6 @@ namespace jsr {
 		handle::StorageBuffer createStorageBuffer(const StorageBufferDescription& desc);
 		void freeStorageBuffer(handle::StorageBuffer handle);
 		handle::Image createImage(const ImageDescription& desc);
-		handle::Image createImage(const gli::texture& texture, const std::string name);
 		handle::Image createImage(const std::filesystem::path& filename, const std::string& name);
 		handle::Image getSwapchainImage() const;
 		handle::Sampler createSampler(const VkSamplerCreateInfo& samplerInfo);
@@ -121,7 +120,6 @@ namespace jsr {
 		handle::UniformBuffer createUniformBufferInternal(const UniformBufferDescription& desc);
 		handle::StorageBuffer createStorageBufferInternal(const StorageBufferDescription& desc);
 		handle::Image createImageInternal(const ImageDescription& desc);
-		handle::Image createImageInternal(const gli::texture& texture, const std::string name);
 		handle::Image createImageInternal(const std::filesystem::path& filename, const std::string& name);
 		handle::Image allocateImage(std::unique_ptr<VulkanImage>& param);
 		void updateGlobalTextureArray(uint32_t arrayIndex, handle::Image imageHandle);

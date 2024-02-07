@@ -53,7 +53,8 @@ namespace vkjs {
 			VkPipelineStageFlags srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
 			VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
 			VkAccessFlags srcAccess = 0,
-			VkAccessFlags dstAccess = 0);
+			VkAccessFlags dstAccess = 0,
+			bool updateLayout = false);
 		void record_upload(VkCommandBuffer cmd, UploadCallbackFn callback, Buffer* buffer);
 		VkImageMemoryBarrier get_layout_transition_barrier(VkImageLayout newLayout, VkAccessFlags srcAccess = 0, VkAccessFlags dstAccess = 0);
 		void generate_mipmaps(VkFilter filter = VK_FILTER_LINEAR);

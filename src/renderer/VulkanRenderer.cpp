@@ -381,34 +381,7 @@ namespace jsr {
 
 	void VulkanRenderer::init_default_images()
 	{
-		{
-			gli::extent2d extent{ 1, 1 };
-			gli::texture2d white_texture(gli::texture::format_type::FORMAT_RGBA8_UNORM_PACK8, extent, 1);
-			const uint32_t color = 0xFFFFFFFF;
-			white_texture.clear(color);
-
-			m_whiteImage = createImage(white_texture, "default_white");
-			gpass_data.uWhiteImageIndex = getImageGlobalIndex(m_whiteImage);
-		}
-		{
-			gli::extent2d extent{ 1, 1 };
-			gli::texture2d black_texture(gli::texture::format_type::FORMAT_RGBA8_UNORM_PACK8, extent, 1);
-			const uint32_t color = 0UL;
-			black_texture.clear(color);
-
-			m_blackImage = createImage(black_texture, "default_black");
-			gpass_data.uBlackImageIndex = getImageGlobalIndex(m_blackImage);
-		}
-		{
-			gli::extent2d extent{ 1, 1 };
-			gli::texture2d flat_norm(gli::texture::format_type::FORMAT_RGBA8_UNORM_PACK8, extent, 1);
-			const uint32_t color = 0xFFFF7F7F;
-			flat_norm.clear(color);
-
-			m_flatDepthImage = createImage(flat_norm, "default_normal");
-			gpass_data.uFlatNormalIndex = getImageGlobalIndex(m_flatDepthImage);
-		}
-
+		gpass_data.uFlatNormalIndex = getImageGlobalIndex(m_flatDepthImage);
 	}
 
 	void VulkanRenderer::init_descriptor_pool()
@@ -1145,14 +1118,6 @@ namespace jsr {
 		return allocateImage(std::make_unique<VulkanImage>(m_device, desc));
 	}
 
-	handle::Image VulkanRenderer::createImageInternal(const gli::texture& texture, const std::string name)
-	{
-		auto handle = allocateImage(std::make_unique<VulkanImage>(m_device, texture));
-		getImageRef(handle)->name = name;
-
-		return handle;
-	}
-
 	handle::Image VulkanRenderer::createImageInternal(const std::filesystem::path& filename, const std::string& name)
 	{
 		auto handle = allocateImage(std::make_unique<VulkanImage>(m_device, filename));
@@ -1419,11 +1384,6 @@ namespace jsr {
 	handle::Image VulkanRenderer::createImage(const ImageDescription& desc)
 	{
 		return createImageInternal(desc);
-	}
-
-	handle::Image VulkanRenderer::createImage(const gli::texture& texture, const std::string name)
-	{
-		return createImageInternal(texture, name);
 	}
 
 	handle::Image VulkanRenderer::createImage(const std::filesystem::path& filename, const std::string& name)

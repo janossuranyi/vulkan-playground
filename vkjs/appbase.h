@@ -4,6 +4,7 @@
 #include <SDL.h>
 #include <SDL_vulkan.h>
 #include "vkjs.h"
+
 #include "jsrlib/jsr_camera.h"
 
 // We want to keep GPU and CPU busy. To do that we may start building a new command buffer while the previous one is still being executed

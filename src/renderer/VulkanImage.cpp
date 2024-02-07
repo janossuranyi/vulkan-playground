@@ -3,9 +3,7 @@
 #include "renderer/VulkanCheck.h"
 #include "renderer/VulkanBuffer.h"
 #include "renderer/VulkanBarrier.h"
-#include "renderer/gli_utils.h"
 #include <stb_image.h>
-#include <gli/generate_mipmaps.hpp>
 
 namespace jsr {
 	
@@ -25,22 +23,6 @@ namespace jsr {
 	VulkanImage::VulkanImage(VulkanDevice* device, const std::filesystem::path filename) : device(device)
 	{
 		this->name = filename.u8string();
-		gli::texture texture = loadImageHelper(filename, autoMipmap);
-		if (!texture.empty()) {
-			create_image(texture);
-			return;
-		}
-
-		gli::extent2d extent{ 16, 16 };
-		gli::texture2d white_texture(gli::texture::format_type::FORMAT_RGBA8_UNORM_PACK8, extent, 1);
-		const uint32_t color = 0xFFFFFFFF;
-		white_texture.clear(color);
-		create_image(white_texture);
-	}
-
-	VulkanImage::VulkanImage(VulkanDevice* device, const gli::texture& texture) : device(device), isCubemap(), currentlyWriting(), sampler()
-	{
-		create_image(texture);
 	}
 	
 	VulkanImage::VulkanImage(VulkanDevice* device, const VulkanSwapchain* swapchain, int index) : device(device),swapchainImage(true)

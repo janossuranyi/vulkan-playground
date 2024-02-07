@@ -232,12 +232,15 @@ namespace vkjs {
 		layout = newLayout;
 	}
 
-	void Image::record_change_layout(VkCommandBuffer cmd, VkImageLayout newLayout, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkAccessFlags srcAccess, VkAccessFlags dstAccess)
+	void Image::record_change_layout(VkCommandBuffer cmd, VkImageLayout newLayout, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkAccessFlags srcAccess, VkAccessFlags dstAccess, bool update)
 	{
 		assert(image);
 		
 		const VkImageMemoryBarrier ibar = get_layout_transition_barrier(newLayout,srcAccess,dstAccess);
 		vkCmdPipelineBarrier(cmd, srcStageMask, dstStageMask, 0, 0, nullptr, 0, nullptr, 1, &ibar);
+		if (update) {
+			layout = newLayout;
+		}
 	}
 
 }

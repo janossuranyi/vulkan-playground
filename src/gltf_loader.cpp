@@ -116,6 +116,7 @@ namespace jsr {
 	{
 		size_t mesh_count(0);
 		std::vector<uint8_t> attribVec;
+		using Vec3 = float[3];
 
 		for (size_t i = 0; i < model.meshes.size(); ++i)
 		{
@@ -142,15 +143,15 @@ namespace jsr {
 				data.aabb.Extend(glm::vec3(glm::make_vec3(model.accessors[pos_index].maxValues.data())));
 
 				{
-					const std::vector<uint8_t> positionBytes = getGltfAttribute(model, pos_index, sizeof(glm::vec3), TINYGLTF_TYPE_VEC3, TINYGLTF_COMPONENT_TYPE_FLOAT);
-					const std::vector<uint8_t> normalBytes = getGltfAttribute(model, normal_index, sizeof(glm::vec3), TINYGLTF_TYPE_VEC3, TINYGLTF_COMPONENT_TYPE_FLOAT);
+					const std::vector<uint8_t> positionBytes = getGltfAttribute(model, pos_index, sizeof(Vec3), TINYGLTF_TYPE_VEC3, TINYGLTF_COMPONENT_TYPE_FLOAT);
+					const std::vector<uint8_t> normalBytes = getGltfAttribute(model, normal_index, sizeof(Vec3), TINYGLTF_TYPE_VEC3, TINYGLTF_COMPONENT_TYPE_FLOAT);
 					const std::vector<uint8_t> tangentBytes = getGltfAttribute(model, tangent_index, sizeof(glm::vec4), TINYGLTF_TYPE_VEC4, TINYGLTF_COMPONENT_TYPE_FLOAT);
 					const std::vector<uint8_t> uvBytes = getGltfAttribute(model, uv_index, sizeof(glm::vec2), TINYGLTF_TYPE_VEC2, TINYGLTF_COMPONENT_TYPE_FLOAT);
 
-					data.positions.resize(positionBytes.size() / sizeof(glm::vec3));
+					data.positions.resize(positionBytes.size() / sizeof(Vec3));
 					memcpy(data.positions.data(), positionBytes.data(), positionBytes.size());
 
-					data.normals.resize(normalBytes.size() / sizeof(glm::vec3));
+					data.normals.resize(normalBytes.size() / sizeof(Vec3));
 					memcpy(data.normals.data(), normalBytes.data(), normalBytes.size());
 
 					data.tangents.resize(tangentBytes.size() / sizeof(glm::vec4));

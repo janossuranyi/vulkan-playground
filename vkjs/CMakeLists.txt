@@ -29,8 +29,6 @@ target_sources(vkjs PRIVATE
     swapchain.cpp
     appbase.cpp
     pipeline.cpp
-    gli_utils.h
-    gli_utils.cpp
     VulkanInitializers.hpp
     vk_descriptors.cpp
     shader_module.cpp
@@ -47,5 +45,4 @@ target_link_libraries(vkjs
     #    Vulkan::Vulkan
     volk
     spirv-reflect
-    ktx2
 )

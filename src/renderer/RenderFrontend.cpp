@@ -162,18 +162,6 @@ namespace jsr {
             jobsys.submitJob([this, i, filename, &model, &sync](int id)
                 {
                     fs::path dds = filename.parent_path() / "dds" / (fs::path(model.images[i].uri).stem().string() + ".dds");
-                    gli::texture loaded;
-                    if (fs::exists(dds)) {
-                        loaded = jsr::VulkanImage::loadImageHelper(dds, false);
-                        jsrlib::Info("(%d / %d) %s loaded (threadID: %d)", model.images.size(), i, dds.filename().string().c_str(), id);
-                    }
-                    else {
-                        loaded = jsr::VulkanImage::loadImageHelper(filename.parent_path() / model.images[i].uri,false);
-                        jsrlib::Info("(%d / %d) %s loaded (threadID: %d)", model.images.size(), i, model.images[i].uri.c_str(), id);
-                    }
-
-                    std::unique_lock<std::mutex> lock(sync);
-                    m_images[i] = m_backend->createImage(loaded, model.images[i].uri);
 
                 }, &imgCounter);
         }

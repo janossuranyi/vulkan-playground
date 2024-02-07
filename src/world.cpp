@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "world.h"
+#include "frustum.h"
 #include <jsrlib/jsr_logger.h>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtc/type_ptr.hpp>

@@ -1,9 +1,8 @@
+#include "appbase.h"
 #include <imgui.h>
 #include <imgui_impl_sdl2.h>
 #include <imgui_impl_vulkan.h>
-#include <SDL_vulkan.h>
 
-#include "appbase.h"
 #include "vkcheck.h"
 
 #include "VulkanInitializers.hpp"
@@ -477,7 +476,7 @@ namespace vkjs
 			// create wait/signal semphores
 			vkDestroySemaphore(*device, semaphores[i].present_complete, 0);
 			vkDestroySemaphore(*device, semaphores[i].render_complete, 0);
-			vkDestroyFence(*device, wait_fences[i], 0);
+			vkDestroyFence(*device, wait_fences[i], nullptr);
 			vkDestroyFramebuffer(*device, imguiFranebuffer[i], nullptr);
 		}
 

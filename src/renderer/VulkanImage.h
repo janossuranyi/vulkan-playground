@@ -31,14 +31,12 @@ namespace jsr {
 		ImageUsageFlags usageFlags;
 		VulkanImage(VulkanDevice* device, const ImageDescription& desc);
 		VulkanImage(VulkanDevice* device, const std::filesystem::path filename);
-		VulkanImage(VulkanDevice* device, const gli::texture& texture);
 		VulkanImage(VulkanDevice* device, const VulkanSwapchain* swapchain, int index = 0);
 		VulkanImage(const VulkanImage&) = delete;
 		VulkanImage& operator=(const VulkanImage&) = delete;
 		VulkanImage(VulkanImage&&) = delete;
 		VulkanImage& operator=(VulkanImage&&) = delete;
 		~VulkanImage();
-		static gli::texture loadImageHelper(const std::filesystem::path filename, bool autoMipmap = false);
 
 		static inline bool isDepthFormat(VkFormat x)
 		{
@@ -60,7 +58,6 @@ namespace jsr {
 
 	private:
 		void create_image(const ImageDescription& desc);
-		void create_image(const gli::texture& texture);
 
 		void destroy();
 	};
