@@ -1,6 +1,7 @@
 #pragma once
 
 #include "pch.h"
+#include "vkjs/vkjs.h"
 
 namespace jsr {
 
@@ -12,13 +13,13 @@ namespace jsr {
 
 	struct Light
 	{
-		glm::vec3 direction;
+		vkjs::vec3 direction;
 		float range;
 
-		glm::vec3 color;
+		vkjs::vec3 color;
 		float intensity;
 
-		glm::vec3 position;
+		vkjs::vec3 position;
 		float innerConeCos;
 
 		float outerConeCos;

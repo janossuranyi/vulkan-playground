@@ -1,17 +1,17 @@
 #pragma once
 #include "pch.h"
 #include "bounds.h"
+#include "vkjs/vkjs.h"
+
 namespace jsr {
     
     struct MeshData {
-        struct PosType { float v[3]; };
-
         std::vector<uint32_t>  indices;
 
-        std::vector<PosType> positions;
-        std::vector<PosType> normals;
-        std::vector<glm::vec4> tangents;
-        std::vector<glm::vec2> uvs;
+        std::vector<vkjs::vec3> positions;
+        std::vector<vkjs::vec3> normals;
+        std::vector<vkjs::vec4> tangents;
+        std::vector<vkjs::vec2> uvs;
 
         Bounds aabb;
         int material;

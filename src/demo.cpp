@@ -1436,11 +1436,9 @@ void App::prepare()
         {
             vertices.emplace_back();
             auto& v = vertices.back();
-            v.xyz[0] = mesh.positions[i].v[0];
-            v.xyz[1] = mesh.positions[i].v[1];
-            v.xyz[2] = mesh.positions[i].v[2];
+            v.xyz = mesh.positions[i];
             v.uv = mesh.uvs[i];
-            v.pack_normal(glm::vec3(mesh.normals[i].v[0], mesh.normals[i].v[1], mesh.normals[i].v[2]));
+            v.pack_normal(mesh.normals[i]);
             v.pack_tangent(mesh.tangents[i]);
             v.pack_color(vec4(1.0f));
         }

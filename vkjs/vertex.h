@@ -14,11 +14,11 @@ namespace vkjs {
 	};
 
 	struct Vertex {
-		float				xyz[3];
-		glm::vec2				uv;
-		glm::vec<4, uint8_t>	normal;
-		glm::vec<4, uint8_t>	tangent;
-		glm::vec<4, uint8_t>	color;
+		vec3				xyz;
+		vec2				uv;
+		uint8_t				normal[4];
+		uint8_t				tangent[4];
+		uint8_t				color[4];
 
 		static inline VertexInputDescription vertex_input_description() {
 
@@ -100,20 +100,32 @@ namespace vkjs {
 		}
 
 		inline void pack_tangent(const glm::vec4& v) {
-			tangent = round((0.5f + 0.5f * glm::clamp(v, -1.0f, 1.0f)) * 255.0f);
+			auto res = round((0.5f + 0.5f * glm::clamp(v, -1.0f, 1.0f)) * 255.0f);
+			tangent[0] = static_cast<uint8_t>(res[0]);
+			tangent[1] = static_cast<uint8_t>(res[1]);
+			tangent[2] = static_cast<uint8_t>(res[2]);
+			tangent[3] = static_cast<uint8_t>(res[3]);
 		}
 
 		inline void pack_normal(const glm::vec3& v)
 		{
 			const glm::vec3 tmp(round((0.5f + 0.5f * glm::clamp(v, -1.0f, 1.0f)) * 255.0f));
-			normal = glm::vec4(tmp, 0.0f);
+			normal[0] = static_cast<uint8_t>(tmp[0]);
+			normal[1] = static_cast<uint8_t>(tmp[1]);
+			normal[2] = static_cast<uint8_t>(tmp[2]);
+			normal[3] = static_cast<uint8_t>(0);
 		}
 
 		inline void pack_color(const glm::vec4& v)
 		{
-			color = round(glm::clamp(v, 0.0f, 1.0f) * 255.0f);
+			auto c = round(glm::clamp(v, 0.0f, 1.0f) * 255.0f);
+			color[0] = static_cast<uint8_t>(c[0]);
+			color[1] = static_cast<uint8_t>(c[1]);
+			color[2] = static_cast<uint8_t>(c[2]);
+			color[3] = static_cast<uint8_t>(c[3]);
 		}
 
 	};
+	static_assert(sizeof(Vertex) == 32);
 }
 #endif
