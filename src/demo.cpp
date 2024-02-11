@@ -340,8 +340,11 @@ void demo()
 
 int main(int argc, char* argv[])
 {
+    vec4 v1{2.0f};
 
-    demo();
+    std::cout << v1.w << "\n";
+
+//    demo();
 
     return 0;
 }

@@ -6,9 +6,6 @@
 // Default fence timeout in nanoseconds
 #define DEFAULT_FENCE_TIMEOUT 100000000000
 
-//#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-//#define GLM_FORCE_SIMD_SSE2
-
 #define asfloat(x) static_cast<float>(x)
 #define asuint(x) static_cast<uint32_t>(x)
 
@@ -28,11 +25,6 @@
 #include <unordered_set>
 #include <utility>
 #include <chrono>
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/packing.hpp>
-#include <glm/gtx/quaternion.hpp>
-#include <glm/gtx/matrix_decompose.hpp>
 
 #ifdef VKJS_USE_VOLK
 #include <volk.h>
