@@ -9,7 +9,6 @@ target_sources(vkjs PRIVATE
     span.h
     types.h
     vkcheck.h 
-    vertex.h
     device.h
     buffer.h
     image.h

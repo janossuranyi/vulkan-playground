@@ -56,8 +56,8 @@ namespace vkjs {
 		void set_image_name(const Image* image, const std::string& name);
 		void set_buffer_name(const Buffer* buffer, const std::string& name);
 		void set_descriptor_set_name(VkDescriptorSet ds, const std::string& name);
-		void set_debug_marker(VkCommandBuffer cmd, const glm::vec4& color, const std::string& name);
-		void begin_debug_marker_region(VkCommandBuffer cmd, const glm::vec4& color, const std::string& name);
+		void set_debug_marker(VkCommandBuffer cmd, const float color[4], const std::string& name);
+		void begin_debug_marker_region(VkCommandBuffer cmd, const float color[4], const std::string& name);
 		void end_debug_marker_region(VkCommandBuffer cmd);
 
 		VkResult map_buffer(Buffer* buffer);

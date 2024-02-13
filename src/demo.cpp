@@ -28,12 +28,12 @@
 #include "vkjs/VulkanInitializers.hpp"
 #include "vkjs/pipeline.h"
 #include "vkjs/vkcheck.h"
-#include "vkjs/vertex.h"
 #include "vkjs/vk_descriptors.h"
 #include "vkjs/shader_module.h"
 #include "vkjs/spirv_utils.h"
 #include "ktx.h"
 #include "ktxvulkan.h"
+#include "vertex.h"
 
 namespace fs = std::filesystem;
 using namespace glm;
@@ -340,11 +340,7 @@ void demo()
 
 int main(int argc, char* argv[])
 {
-    vec4 v1{2.0f};
-
-    std::cout << v1.w << "\n";
-
-//    demo();
+    demo();
 
     return 0;
 }
@@ -542,7 +538,8 @@ void App::build_command_buffers()
 
     drawPool[currentFrame]->reset();
 
-    device->begin_debug_marker_region(cmd, vec4(1.f, .5f, 0.f, 1.f), "Forward Pass");
+    auto const col1 = vec4(1.f, .5f, 0.f, 1.f);
+    device->begin_debug_marker_region(cmd, &col1.r, "Forward Pass");
     VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
     VkClearValue clearVal[3];
     glm::vec4 sky = glm::vec4{ 0.5f, 0.6f, 0.7f, 1.0f };
@@ -580,7 +577,7 @@ void App::build_command_buffers()
     uint32_t dynOffset = 0;
     size_t transientVtxOffset = 0;
 
-    vkjs::Vertex v{};
+    jsr::Vertex v{};
 
     visibleObjectCount = 0;
     uint32_t objIdx = 0;
@@ -603,10 +600,10 @@ void App::build_command_buffers()
             for (uint32_t i = 0; i < 8; ++i) {
                 vec4 p = vp * corners[i];
                 p /= p.w;
-                v.xyz = p;
-                assert((transientVtxOffset + sizeof(vkjs::Vertex)) < vtxStagingBuffer.size);
-                vtxStagingBuffer.copyTo(transientVtxOffset, sizeof(vkjs::Vertex), &v);
-                transientVtxOffset += sizeof(vkjs::Vertex);
+                v.set_position(&p.x);
+                assert((transientVtxOffset + sizeof(jsr::Vertex)) < vtxStagingBuffer.size);
+                vtxStagingBuffer.copyTo(transientVtxOffset, sizeof(jsr::Vertex), &v);
+                transientVtxOffset += sizeof(jsr::Vertex);
             }
 
             auto bufferDescr = drawPool[currentFrame]->Allocate<DrawData>(1, &drawDataStruct[objIdx]);
@@ -640,7 +637,8 @@ void App::build_command_buffers()
     HDRImage_MS[currentFrame].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     HDR_NormalImage_MS[currentFrame].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    device->begin_debug_marker_region (cmd, vec4(.5f, 1.f, .5f, 1.f), "PostProcess Pass");
+    auto const col2 = vec4(.5f, 1.f, .5f, 1.f);
+    device->begin_debug_marker_region (cmd, &col2.r, "PostProcess Pass");
 
     clearVal[0].color = { 0.f,0.f,0.f,1.f };
     beginPass.clearValueCount = 1;
@@ -772,7 +770,7 @@ void App::render()
 
 void App::setup_debug_pipeline(RenderPass& pass)
 {
-    auto vertexInput = vkjs::Vertex::vertex_input_description_position_only();
+    auto vertexInput = jsr::Vertex::vertex_input_description_position_only();
 
     const std::vector<VkDynamicState> dynStates = { VK_DYNAMIC_STATE_SCISSOR,VK_DYNAMIC_STATE_VIEWPORT };
     vkjs::PipelineBuilder pb = {};
@@ -876,7 +874,7 @@ void App::setup_triangle_pipeline(RenderPass& pass)
 
     if (pass.pPipeline) delete pass.pPipeline;
 
-    auto vertexInput = vkjs::Vertex::vertex_input_description();
+    auto vertexInput = jsr::Vertex::vertex_input_description();
 
     vkjs::ShaderModule vert_module(*device);
     vkjs::ShaderModule frag_module(*device);
@@ -1382,11 +1380,11 @@ void App::prepare()
         S_Scene{fs::path("D:/DATA/models/crq376zqdkao-Castelia-City/OBJ"), "city.gltf"}
     };
 
-    const int sceneIdx = 1;
+    const int sceneIdx = 0;
     auto scenePath = scenes[sceneIdx].dir;
     jsr::gltfLoadWorld(scenePath / scenes[sceneIdx].file, *world);
 
-    std::vector<vkjs::Vertex> vertices;
+    std::vector<jsr::Vertex> vertices;
     std::vector<uint16_t> indices;
 
     uint32_t firstIndex(0);
@@ -1432,23 +1430,25 @@ void App::prepare()
             .build(materials[i++].resources);
     }
 
+    const vec4 v4_one = vec4(1.0f);
     for (size_t i(0); i < world->meshes.size(); ++i)
     {
         auto& mesh = world->meshes[i];
-        for (size_t i(0); i < mesh.positions.size(); ++i)
+        const size_t numVerts = mesh.positions.size() / (3 * sizeof(float));
+        for (size_t i(0); i < numVerts; ++i)
         {
             vertices.emplace_back();
             auto& v = vertices.back();
-            v.xyz = mesh.positions[i];
-            v.uv = mesh.uvs[i];
-            v.pack_normal(mesh.normals[i]);
-            v.pack_tangent(mesh.tangents[i]);
-            v.pack_color(vec4(1.0f));
+            v.set_position((float*)&mesh.positions[i * 3 * sizeof(float)]);
+            v.set_uv((float*)&mesh.uvs[i * 2 * sizeof(float)]);
+            v.pack_normal((float*)&mesh.normals[i * 3 * sizeof(float)]);
+            v.pack_tangent((float*)&mesh.tangents[i * 4 * sizeof(float)]);
+            v.pack_color(&v4_one[0]);
         }
         meshes.emplace_back();
         auto& rmesh = meshes.back();
         rmesh.firstVertex = firstVertex;
-        firstVertex += mesh.positions.size();
+        firstVertex += numVerts;
 
         for (size_t i(0); i < mesh.indices.size(); ++i)
         {

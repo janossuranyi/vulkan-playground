@@ -204,25 +204,25 @@ namespace vkjs {
 		set_object_name((uint64_t)ds, VK_DEBUG_REPORT_OBJECT_TYPE_DESCRIPTOR_SET_EXT, name.c_str());
 	}
 
-	void Device::set_debug_marker(VkCommandBuffer cmd, const glm::vec4& color, const std::string& name)
+	void Device::set_debug_marker(VkCommandBuffer cmd, const float color[4], const std::string& name)
 	{
 		if (debugMarkerPresent)
 		{
 			VkDebugMarkerMarkerInfoEXT markerInfo = {};
-			memcpy(markerInfo.color, &color[0], sizeof(color));
+			memcpy(markerInfo.color, color, 4 * sizeof(color[0]));
 			markerInfo.pMarkerName = name.c_str();
 			vkCmdDebugMarkerInsertEXT(cmd, &markerInfo);
 		}
 	}
 
-	void Device::begin_debug_marker_region(VkCommandBuffer cmd, const glm::vec4& color, const std::string& name)
+	void Device::begin_debug_marker_region(VkCommandBuffer cmd, const float color[4], const std::string& name)
 	{
 		if (debugMarkerPresent)
 		{
 			VkDebugMarkerMarkerInfoEXT markerInfo = {};
 			markerInfo.sType = VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT;
 			// Color to display this region with (if supported by debugger)
-			memcpy(markerInfo.color, &color[0], sizeof(color));
+			memcpy(markerInfo.color, color, 4 * sizeof(color[0]));
 			// Name of the region displayed by the debugging application
 			markerInfo.pMarkerName = name.c_str();
 			vkCmdDebugMarkerBeginEXT(cmd, &markerInfo);

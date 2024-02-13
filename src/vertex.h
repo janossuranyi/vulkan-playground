@@ -1,21 +1,14 @@
 #ifndef VKJS_VERTEX_H_
 #define VKJS_VERTEX_H_
 
-#include "vkjs.h"
+#include "vkjs/vkjs.h"
+#include "glm/glm.hpp"
 
-namespace vkjs {
-
-	struct VertexInputDescription {
-
-		std::vector<VkVertexInputBindingDescription> bindings;
-		std::vector<VkVertexInputAttributeDescription> attributes;
-
-		VkPipelineVertexInputStateCreateFlags flags = 0;
-	};
+namespace jsr {
 
 	struct Vertex {
-		vec3				xyz;
-		vec2				uv;
+		float				xyz[3];
+		float				uv[2];
 		uint8_t				normal[4];
 		uint8_t				tangent[4];
 		uint8_t				color[4];
@@ -99,26 +92,37 @@ namespace vkjs {
 			return ret;
 		}
 
-		inline void pack_tangent(const glm::vec4& v) {
-			auto res = round((0.5f + 0.5f * glm::clamp(v, -1.0f, 1.0f)) * 255.0f);
+		inline void set_position(const float* v) {
+			for (size_t i = 0; i < 3; ++i) { xyz[i] = v[i]; }
+		}
+
+		inline void set_uv(const float* v) {
+			for (size_t i = 0; i < 2; ++i) { uv[i] = v[i]; }
+		}
+
+		inline void pack_tangent(const float* v) {
+			const glm::vec4 t{ v[0],v[1],v[2],v[3] };
+			auto res = round((0.5f + 0.5f * glm::clamp(t, -1.0f, 1.0f)) * 255.0f);
 			tangent[0] = static_cast<uint8_t>(res[0]);
 			tangent[1] = static_cast<uint8_t>(res[1]);
 			tangent[2] = static_cast<uint8_t>(res[2]);
 			tangent[3] = static_cast<uint8_t>(res[3]);
 		}
 
-		inline void pack_normal(const glm::vec3& v)
+		inline void pack_normal(const float* v)
 		{
-			const glm::vec3 tmp(round((0.5f + 0.5f * glm::clamp(v, -1.0f, 1.0f)) * 255.0f));
+			const glm::vec3 t{ v[0],v[1],v[2] };
+			const glm::vec3 tmp(round((0.5f + 0.5f * glm::clamp(t, -1.0f, 1.0f)) * 255.0f));
 			normal[0] = static_cast<uint8_t>(tmp[0]);
 			normal[1] = static_cast<uint8_t>(tmp[1]);
 			normal[2] = static_cast<uint8_t>(tmp[2]);
 			normal[3] = static_cast<uint8_t>(0);
 		}
 
-		inline void pack_color(const glm::vec4& v)
+		inline void pack_color(const float* v)
 		{
-			auto c = round(glm::clamp(v, 0.0f, 1.0f) * 255.0f);
+			const glm::vec4 t{ v[0],v[1],v[2],v[3] };
+			auto c = round(glm::clamp(t, 0.0f, 1.0f) * 255.0f);
 			color[0] = static_cast<uint8_t>(c[0]);
 			color[1] = static_cast<uint8_t>(c[1]);
 			color[2] = static_cast<uint8_t>(c[2]);

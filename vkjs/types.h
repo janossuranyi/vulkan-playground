@@ -15,4 +15,13 @@ namespace vkjs {
 	typedef int8_t		s8;
 	typedef uint32_t	uint;
 }
+
+struct VertexInputDescription {
+
+	std::vector<VkVertexInputBindingDescription> bindings;
+	std::vector<VkVertexInputAttributeDescription> attributes;
+
+	VkPipelineVertexInputStateCreateFlags flags = 0;
+};
+
 #endif // !VKJS_TYPES_H_

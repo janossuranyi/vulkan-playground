@@ -8,10 +8,10 @@ namespace jsr {
     struct MeshData {
         std::vector<uint32_t>  indices;
 
-        std::vector<vkjs::vec3> positions;
-        std::vector<vkjs::vec3> normals;
-        std::vector<vkjs::vec4> tangents;
-        std::vector<vkjs::vec2> uvs;
+        std::vector<uint8_t> positions;
+        std::vector<uint8_t> normals;
+        std::vector<uint8_t> tangents;
+        std::vector<uint8_t> uvs;
 
         Bounds aabb;
         int material;

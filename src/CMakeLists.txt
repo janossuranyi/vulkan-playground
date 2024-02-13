@@ -7,6 +7,7 @@ set(DEMO_COMMON
 add_executable(demo
     ${DEMO_COMMON}
     pch.h
+    vertex.h
     material.h
     bounds.h
     bounds.cpp

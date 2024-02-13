@@ -143,23 +143,10 @@ namespace jsr {
 				data.aabb.Extend(glm::vec3(glm::make_vec3(model.accessors[pos_index].maxValues.data())));
 
 				{
-					const std::vector<uint8_t> positionBytes = getGltfAttribute(model, pos_index, sizeof(Vec3), TINYGLTF_TYPE_VEC3, TINYGLTF_COMPONENT_TYPE_FLOAT);
-					const std::vector<uint8_t> normalBytes = getGltfAttribute(model, normal_index, sizeof(Vec3), TINYGLTF_TYPE_VEC3, TINYGLTF_COMPONENT_TYPE_FLOAT);
-					const std::vector<uint8_t> tangentBytes = getGltfAttribute(model, tangent_index, sizeof(glm::vec4), TINYGLTF_TYPE_VEC4, TINYGLTF_COMPONENT_TYPE_FLOAT);
-					const std::vector<uint8_t> uvBytes = getGltfAttribute(model, uv_index, sizeof(glm::vec2), TINYGLTF_TYPE_VEC2, TINYGLTF_COMPONENT_TYPE_FLOAT);
-
-					data.positions.resize(positionBytes.size() / sizeof(Vec3));
-					memcpy(data.positions.data(), positionBytes.data(), positionBytes.size());
-
-					data.normals.resize(normalBytes.size() / sizeof(Vec3));
-					memcpy(data.normals.data(), normalBytes.data(), normalBytes.size());
-
-					data.tangents.resize(tangentBytes.size() / sizeof(glm::vec4));
-					memcpy(data.tangents.data(), tangentBytes.data(), tangentBytes.size());
-
-					data.uvs.resize(uvBytes.size() / sizeof(glm::vec2));
-					memcpy(data.uvs.data(), uvBytes.data(), uvBytes.size());
-
+					data.positions = getGltfAttribute(model, pos_index, sizeof(Vec3), TINYGLTF_TYPE_VEC3, TINYGLTF_COMPONENT_TYPE_FLOAT);
+					data.normals = getGltfAttribute(model, normal_index, sizeof(Vec3), TINYGLTF_TYPE_VEC3, TINYGLTF_COMPONENT_TYPE_FLOAT);
+					data.tangents = getGltfAttribute(model, tangent_index, sizeof(glm::vec4), TINYGLTF_TYPE_VEC4, TINYGLTF_COMPONENT_TYPE_FLOAT);
+					data.uvs = getGltfAttribute(model, uv_index, sizeof(glm::vec2), TINYGLTF_TYPE_VEC2, TINYGLTF_COMPONENT_TYPE_FLOAT);
 				}
 
 				if (model.accessors[tris.indices].componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT)
