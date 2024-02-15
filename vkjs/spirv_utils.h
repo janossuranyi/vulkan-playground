@@ -5,7 +5,7 @@
 #include "shader_module.h"
 #include "spirv_reflect.h"
 
-namespace vkjs {
+namespace jvk {
 	struct DescriptorSetLayoutData {
 		uint32_t set_number;
 		VkDescriptorSetLayoutCreateInfo create_info;

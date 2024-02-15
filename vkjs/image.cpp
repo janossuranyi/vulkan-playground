@@ -2,7 +2,7 @@
 #include "VulkanInitializers.hpp"
 #include "vkcheck.h"
 
-namespace vkjs {
+namespace jvk {
 	
 	Image::Image(Device* device) : device_(device)
 	{

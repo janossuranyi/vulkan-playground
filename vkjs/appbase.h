@@ -11,7 +11,7 @@
 // This number defines how many frames may be worked on simultaneously at once
 #define MAX_CONCURRENT_FRAMES 2
 
-namespace vkjs {
+namespace jvk {
 
 	struct GenericFeature {
 		static const uint32_t capacity = 256;
@@ -55,7 +55,7 @@ namespace vkjs {
 
 		std::vector<GenericFeature> required_generic_features;
 
-		std::vector<vkjs::Image> swapchain_images;
+		std::vector<jvk::Image> swapchain_images;
 
 		std::string shader_path() const;
 		u32 frameCounter{ 0 };

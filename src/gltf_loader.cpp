@@ -71,7 +71,7 @@ namespace jsr {
 		std::vector<uint8_t> byteData(byteCount);
 		memcpy(byteData.data(), buffer.data.data() + view.byteOffset + accessor.byteOffset, byteCount);
 
-		return byteData;
+		return std::move(byteData);
 	}
 
 	void processGltfMaterials(const tinygltf::Model& model, World& world)
@@ -116,7 +116,6 @@ namespace jsr {
 	{
 		size_t mesh_count(0);
 		std::vector<uint8_t> attribVec;
-		using Vec3 = float[3];
 
 		for (size_t i = 0; i < model.meshes.size(); ++i)
 		{
@@ -142,11 +141,14 @@ namespace jsr {
 				data.aabb.Extend(glm::vec3(glm::make_vec3(model.accessors[pos_index].minValues.data())));
 				data.aabb.Extend(glm::vec3(glm::make_vec3(model.accessors[pos_index].maxValues.data())));
 
+				constexpr size_t vec2_size = 2 * sizeof(float);
+				constexpr size_t vec3_size = 3 * sizeof(float);
+				constexpr size_t vec4_size = 4 * sizeof(float);
 				{
-					data.positions = getGltfAttribute(model, pos_index, sizeof(Vec3), TINYGLTF_TYPE_VEC3, TINYGLTF_COMPONENT_TYPE_FLOAT);
-					data.normals = getGltfAttribute(model, normal_index, sizeof(Vec3), TINYGLTF_TYPE_VEC3, TINYGLTF_COMPONENT_TYPE_FLOAT);
-					data.tangents = getGltfAttribute(model, tangent_index, sizeof(glm::vec4), TINYGLTF_TYPE_VEC4, TINYGLTF_COMPONENT_TYPE_FLOAT);
-					data.uvs = getGltfAttribute(model, uv_index, sizeof(glm::vec2), TINYGLTF_TYPE_VEC2, TINYGLTF_COMPONENT_TYPE_FLOAT);
+					data.positions = getGltfAttribute(model, pos_index, vec3_size, TINYGLTF_TYPE_VEC3, TINYGLTF_COMPONENT_TYPE_FLOAT);
+					data.normals = getGltfAttribute(model, normal_index, vec3_size, TINYGLTF_TYPE_VEC3, TINYGLTF_COMPONENT_TYPE_FLOAT);
+					data.tangents = getGltfAttribute(model, tangent_index, vec4_size, TINYGLTF_TYPE_VEC4, TINYGLTF_COMPONENT_TYPE_FLOAT);
+					data.uvs = getGltfAttribute(model, uv_index, vec2_size, TINYGLTF_TYPE_VEC2, TINYGLTF_COMPONENT_TYPE_FLOAT);
 				}
 
 				if (model.accessors[tris.indices].componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT)

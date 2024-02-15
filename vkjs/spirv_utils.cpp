@@ -1,9 +1,9 @@
 #include "spirv_utils.h"
 #include "VulkanInitializers.hpp"
 
-namespace vkjs {
+namespace jvk {
  
-    std::vector<DescriptorSetLayoutData> vkjs::get_descriptor_set_layout_data(uint32_t size, const void* code)
+    std::vector<DescriptorSetLayoutData> jvk::get_descriptor_set_layout_data(uint32_t size, const void* code)
     {
         SpvReflectShaderModule module = {};
         SpvReflectResult result = spvReflectCreateShaderModule(size, code, &module);

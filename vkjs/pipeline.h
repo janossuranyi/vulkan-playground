@@ -6,7 +6,7 @@
 #include "vk_descriptors.h"
 #include "vertex.h"
 
-namespace vkjs {
+namespace jvk {
 
 	class ShaderModule;
 

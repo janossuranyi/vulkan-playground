@@ -1,6 +1,6 @@
 #include "buffer.h"
 
-namespace vkjs {
+namespace jvk {
 	
 	Buffer::Buffer(Device* device) : device_(device)
 	{

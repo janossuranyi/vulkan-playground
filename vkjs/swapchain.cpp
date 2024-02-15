@@ -1,7 +1,7 @@
 #include "swapchain.h"
 #include "image.h"
 
-VkResult vkjs::SwapChain::acquire_next_image(VkSemaphore presentCompleteSemaphore, uint32_t* imageIndex)
+VkResult jvk::SwapChain::acquire_next_image(VkSemaphore presentCompleteSemaphore, uint32_t* imageIndex)
 {
 	// By setting timeout to UINT64_MAX we will always wait until the next image has been acquired or an actual error is thrown
 	// With that we don't have to handle VK_NOT_READY
@@ -9,7 +9,7 @@ VkResult vkjs::SwapChain::acquire_next_image(VkSemaphore presentCompleteSemaphor
 	return vkAcquireNextImageKHR(vkb_swapchain.device, vkb_swapchain, UINT64_MAX, presentCompleteSemaphore, VK_NULL_HANDLE, imageIndex);
 }
 
-VkResult vkjs::SwapChain::present_image(VkQueue queue, uint32_t imageIndex, VkSemaphore waitSemaphore)
+VkResult jvk::SwapChain::present_image(VkQueue queue, uint32_t imageIndex, VkSemaphore waitSemaphore)
 {
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -26,9 +26,9 @@ VkResult vkjs::SwapChain::present_image(VkQueue queue, uint32_t imageIndex, VkSe
 	return vkQueuePresentKHR(queue, &presentInfo);
 }
 
-std::vector<vkjs::Image> vkjs::SwapChain::get_swapchain_images()
+std::vector<jvk::Image> jvk::SwapChain::get_swapchain_images()
 {
-	auto ret = std::vector<vkjs::Image>(this->images.size());
+	auto ret = std::vector<jvk::Image>(this->images.size());
 	for (size_t i(0); i < images.size(); ++i)
 	{
 		ret[i].device_ = nullptr;

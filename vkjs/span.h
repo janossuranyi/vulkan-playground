@@ -1,7 +1,7 @@
 #ifndef VKJS_SPAN_H_
 #define VKJS_SPAN_H_
 
-namespace vkjs {
+namespace jvk {
 
 	template<class T>
 	class span {

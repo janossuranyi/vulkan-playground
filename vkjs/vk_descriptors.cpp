@@ -388,7 +388,7 @@ namespace vkutil {
 		return result;
 	}
 
-	void DescriptorManager::init(vkjs::Device* device)
+	void DescriptorManager::init(jvk::Device* device)
 	{
 		assert(device);
 		_device = device;

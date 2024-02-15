@@ -2,7 +2,7 @@
 #include "vkcheck.h"
 #include "jsrlib/jsr_logger.h"
 
-namespace vkjs {
+namespace jvk {
 
 	Device::Device(vkb::PhysicalDevice vkb_physical_device_, VkInstance instance) : vkbPhysicalDevice(vkb_physical_device_)
 	{

@@ -3,7 +3,7 @@
 
 #include "vkjs.h"
 
-namespace vkjs {
+namespace jvk {
 	struct SwapChain {
 		vkb::Swapchain vkb_swapchain{};
 		std::vector<VkImage> images;

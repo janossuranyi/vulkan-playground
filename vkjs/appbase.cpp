@@ -77,7 +77,7 @@ static void handle_dpi_awareness() {
 	}
 }
 #endif
-namespace vkjs
+namespace jvk
 {
 	static void check_vk_result(VkResult err)
 	{

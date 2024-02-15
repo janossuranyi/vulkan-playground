@@ -4,7 +4,7 @@
 #include "vk_descriptors.h"
 #include "VulkanInitializers.hpp"
 #include "vkcheck.h"
-namespace vkjs {
+namespace jvk {
 
 	VkPipeline PipelineBuilder::build_pipeline(VkDevice device, VkRenderPass pass)
 	{
@@ -120,7 +120,7 @@ namespace vkjs {
 		_pipelineLayout = VK_NULL_HANDLE;
 		_pipeline = VK_NULL_HANDLE;
 
-		auto merged_sets = vkjs::extract_descriptor_set_layout_data({ shaderInfo.vert,shaderInfo.frag });
+		auto merged_sets = jvk::extract_descriptor_set_layout_data({ shaderInfo.vert,shaderInfo.frag });
 		
 		_descriptorSetCount = static_cast<uint32_t>( merged_sets.size() );
 

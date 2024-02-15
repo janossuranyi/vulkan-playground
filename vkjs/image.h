@@ -3,7 +3,7 @@
 
 #include "vkjs.h"
 
-namespace vkjs {
+namespace jvk {
 
 	struct Device;
 	struct Buffer;

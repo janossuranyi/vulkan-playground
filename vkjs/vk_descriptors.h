@@ -114,7 +114,7 @@ namespace vkutil {
 		DescriptorManager() = default;
 		~DescriptorManager() {};
 
-		void init(vkjs::Device* device);
+		void init(jvk::Device* device);
 		VkDescriptorSetLayout create_descriptor_layout(const VkDescriptorSetLayoutCreateInfo* info);
 		void reset_pool(VkDescriptorSetLayout layout);
 		DescriptorAllocator* get_allocator(VkDescriptorSetLayout layout);
@@ -123,7 +123,7 @@ namespace vkutil {
 	private:
 		
 
-		vkjs::Device* _device;
+		jvk::Device* _device;
 		std::unique_ptr<DescriptorLayoutCache> _pLayoutCache;
 		std::unordered_map<uint64_t, std::unique_ptr<DescriptorAllocator>> _pAllocators;
 		std::unordered_map<uint64_t, std::unique_ptr<DescriptorSetList>> _descriptorMap;

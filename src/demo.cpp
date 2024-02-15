@@ -44,15 +44,15 @@ inline static size_t align_size(size_t size, size_t alignment) {
 }
 
 struct UniformBufferPool {
-    vkjs::Buffer* buffer{};
+    jvk::Buffer* buffer{};
     std::atomic_uint32_t bytesAlloced = 0u;
     uint32_t offsetAligment = 64u;
     uint32_t internalOffset = 0u;
-    size_t _size = 0;
+    size_t _size = 0ULL;
     VkDescriptorBufferInfo descriptor = {};
     
     UniformBufferPool() = delete;
-    UniformBufferPool(vkjs::Buffer* buffer, size_t size, uint32_t startOffset, uint32_t offsetAligment) :
+    UniformBufferPool(jvk::Buffer* buffer, size_t size, uint32_t startOffset, uint32_t offsetAligment) :
         buffer(buffer), _size(size), offsetAligment(offsetAligment), bytesAlloced(0) {
     
         internalOffset = startOffset;
@@ -74,12 +74,12 @@ struct UniformBufferPool {
         VkDescriptorBufferInfo out = {};
         out.buffer = buffer->buffer;
         out.offset = offset;
-        out.range = sizeof(T);
+        out.range = count * sizeof(T);
 
         if (data)
         {
             size_t it_offset = internalOffset + offset;
-            for (uint32_t it = 0; it < count; ++it)
+            for (size_t it = 0; it < count; ++it)
             {
                 buffer->copyTo(it_offset, sizeof(T), &data[it]);
                 it_offset += alignedSize;
@@ -90,7 +90,7 @@ struct UniformBufferPool {
     void reset() { bytesAlloced = 0; }
 };
 
-class App : public vkjs::AppBase {
+class App : public jvk::AppBase {
 private:
     //const VkFormat HDR_FMT = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
     const VkFormat HDR_RT_FMT = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -102,14 +102,14 @@ private:
     bool smaaChanged = false;
     bool firstRun = true;
 
-    vkjs::Image uvChecker;
-    vkjs::Image ssaoNoise;
+    jvk::Image uvChecker;
+    jvk::Image ssaoNoise;
     std::array<VkImageView, MAX_CONCURRENT_FRAMES> depthResolvedView{};
-    std::array<vkjs::Image, MAX_CONCURRENT_FRAMES> depthResolved{};
-    std::array<vkjs::Image, MAX_CONCURRENT_FRAMES> HDRImage_MS{};
-    std::array<vkjs::Image, MAX_CONCURRENT_FRAMES> HDRImage{};
-    std::array<vkjs::Image, MAX_CONCURRENT_FRAMES> HDR_NormalImage_MS{};
-    std::array<vkjs::Image, MAX_CONCURRENT_FRAMES> HDR_NormalImage{};
+    std::array<jvk::Image, MAX_CONCURRENT_FRAMES> depthResolved{};
+    std::array<jvk::Image, MAX_CONCURRENT_FRAMES> HDRImage_MS{};
+    std::array<jvk::Image, MAX_CONCURRENT_FRAMES> HDRImage{};
+    std::array<jvk::Image, MAX_CONCURRENT_FRAMES> HDR_NormalImage_MS{};
+    std::array<jvk::Image, MAX_CONCURRENT_FRAMES> HDR_NormalImage{};
     std::array<VkFramebuffer, MAX_CONCURRENT_FRAMES> HDRFramebuffer{};
     std::array<VkDescriptorSet, MAX_CONCURRENT_FRAMES> HDRDescriptor{};
     std::array<UniformBufferPool*, MAX_CONCURRENT_FRAMES> drawPool{};
@@ -119,21 +119,21 @@ private:
 
     vkutil::DescriptorManager descMgr;
 
-    std::unordered_map<std::string, vkjs::Image> imageCache;
+    std::unordered_map<std::string, jvk::Image> imageCache;
 
-    vkjs::Buffer vtxbuf;
-    vkjs::Buffer idxbuf;
+    jvk::Buffer vtxbuf;
+    jvk::Buffer idxbuf;
     size_t minUboAlignment = 0;
 
-    vkjs::Buffer vtxStagingBuffer;
-    std::array<vkjs::Buffer, MAX_CONCURRENT_FRAMES> transientVtxBuf;
+    jvk::Buffer vtxStagingBuffer;
+    std::array<jvk::Buffer, MAX_CONCURRENT_FRAMES> transientVtxBuf;
 
-    std::array<vkjs::Buffer, MAX_CONCURRENT_FRAMES> uboPassData;
-    std::array<vkjs::Buffer, MAX_CONCURRENT_FRAMES> uboPostProcessData;
+    std::array<jvk::Buffer, MAX_CONCURRENT_FRAMES> uboPassData;
+    std::array<jvk::Buffer, MAX_CONCURRENT_FRAMES> uboPostProcessData;
 
     size_t drawDataBufferSize = 0;
 
-    vkjs::Buffer uboDrawData;
+    jvk::Buffer uboDrawData;
 
     size_t dynamicAlignment = 0;
 
@@ -199,7 +199,7 @@ private:
 
     struct RenderPass {
         VkRenderPass pass;
-        vkjs::GraphicsPipeline* pPipeline;
+        jvk::GraphicsPipeline* pPipeline;
     };
 
     VkDescriptorSet triangleDescriptors[MAX_CONCURRENT_FRAMES];
@@ -314,7 +314,7 @@ public:
     virtual void get_enabled_extensions() override;
 
     void create_material_texture(const std::string& filename);
-    bool load_texture2d(std::string filename, vkjs::Image* dest, bool autoMipmap, int& w, int& h, int& nchannel);
+    bool load_texture2d(std::string filename, jvk::Image* dest, bool autoMipmap, int& w, int& h, int& nchannel);
 };
 
 void demo()
@@ -773,7 +773,7 @@ void App::setup_debug_pipeline(RenderPass& pass)
     auto vertexInput = jsr::Vertex::vertex_input_description_position_only();
 
     const std::vector<VkDynamicState> dynStates = { VK_DYNAMIC_STATE_SCISSOR,VK_DYNAMIC_STATE_VIEWPORT };
-    vkjs::PipelineBuilder pb = {};
+    jvk::PipelineBuilder pb = {};
     pb._rasterizer = vks::initializers::pipelineRasterizationStateCreateInfo(
         VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
     pb._rasterizer.lineWidth = 1.0f;
@@ -787,8 +787,8 @@ void App::setup_debug_pipeline(RenderPass& pass)
 
     pb._colorBlendAttachments.push_back(vks::initializers::pipelineColorBlendAttachmentState(0x0f, VK_FALSE));
 
-    vkjs::ShaderModule vert_module(*device);
-    vkjs::ShaderModule frag_module(*device);
+    jvk::ShaderModule vert_module(*device);
+    jvk::ShaderModule frag_module(*device);
     const fs::path vert_spirv_filename = basePath / "shaders/bin/debug.vert.spv";
     const fs::path frag_spirv_filename = basePath / "shaders/bin/debug.frag.spv";
     VK_CHECK(vert_module.create(vert_spirv_filename));
@@ -832,17 +832,17 @@ void App::setup_debug_pipeline(RenderPass& pass)
 void App::setup_tonemap_pipeline(RenderPass& pass)
 {
 
-    vkjs::ShaderModule vert_module(*device);
-    vkjs::ShaderModule frag_module(*device);
+    jvk::ShaderModule vert_module(*device);
+    jvk::ShaderModule frag_module(*device);
     const fs::path vert_spirv_filename = basePath / "shaders/bin/triquad.vert.spv";
     const fs::path frag_spirv_filename = basePath / "shaders/bin/post.frag.spv";
     VK_CHECK(vert_module.create(vert_spirv_filename));
     VK_CHECK(frag_module.create(frag_spirv_filename));
-    vkjs::GraphicsShaderInfo shaders{};
+    jvk::GraphicsShaderInfo shaders{};
     shaders.vert = &vert_module;
     shaders.frag = &frag_module;
 
-    pass.pPipeline = new vkjs::GraphicsPipeline(device, shaders, &descMgr);
+    pass.pPipeline = new jvk::GraphicsPipeline(device, shaders, &descMgr);
 
     // New create info to define color, depth and stencil attachments at pipeline create time
     VkPipelineRenderingCreateInfoKHR pipelineRenderingCreateInfo{};
@@ -876,12 +876,12 @@ void App::setup_triangle_pipeline(RenderPass& pass)
 
     auto vertexInput = jsr::Vertex::vertex_input_description();
 
-    vkjs::ShaderModule vert_module(*device);
-    vkjs::ShaderModule frag_module(*device);
+    jvk::ShaderModule vert_module(*device);
+    jvk::ShaderModule frag_module(*device);
     VK_CHECK(vert_module.create(basePath / "shaders/bin/triangle_v2.vert.spv"));
     VK_CHECK(frag_module.create(basePath / "shaders/bin/triangle_v2.frag.spv"));
 
-    vkjs::GraphicsShaderInfo shaders = {};
+    jvk::GraphicsShaderInfo shaders = {};
     shaders.vert = &vert_module;
     shaders.frag = &frag_module;
 
@@ -889,8 +889,8 @@ void App::setup_triangle_pipeline(RenderPass& pass)
     VkPipelineColorBlendAttachmentState blend0 = vks::initializers::pipelineColorBlendAttachmentState(0x0f, VK_FALSE);
 
     {
-        pass.pPipeline = new vkjs::GraphicsPipeline(device, shaders, &descMgr);
-        vkjs::GraphicsPipeline& p = *pass.pPipeline;
+        pass.pPipeline = new jvk::GraphicsPipeline(device, shaders, &descMgr);
+        jvk::GraphicsPipeline& p = *pass.pPipeline;
         p.set_name("Forward pipeline");
         p.add_dynamic_state(VK_DYNAMIC_STATE_SCISSOR)
             .add_dynamic_state(VK_DYNAMIC_STATE_VIEWPORT)
@@ -1286,7 +1286,7 @@ void App::setup_images()
 
                 ssaoNoise.push_back(noise);
             }
-            vkjs::Buffer tmpbuf;
+            jvk::Buffer tmpbuf;
             device->create_staging_buffer(16 * 4, &tmpbuf);
             tmpbuf.copyTo(0, 16 * 4, &ssaoNoise[0]);
             this->ssaoNoise.upload(VkExtent3D{ 4,4,1 }, 0, 0, 0, 0, &tmpbuf);
@@ -1302,7 +1302,7 @@ void App::setup_images()
 
 void App::prepare()
 {
-    vkjs::AppBase::prepare();
+    jvk::AppBase::prepare();
 
     setup_descriptor_pools();
     setup_samplers();
@@ -1345,7 +1345,7 @@ void App::prepare()
     uvChecker.setup_descriptor();
     uvChecker.descriptor.sampler = sampLinearRepeat;
 
-    vkjs::Buffer* drawBuf = new vkjs::Buffer();
+    jvk::Buffer* drawBuf = new jvk::Buffer();
     device->create_uniform_buffer(drawDataBufferSize * MAX_CONCURRENT_FRAMES, false, drawBuf); drawBuf->map();
 
     for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
@@ -1463,7 +1463,7 @@ void App::prepare()
     VkDeviceSize vertexBytes = sizeof(vertices[0]) * vertices.size();
     VkDeviceSize indexBytes = sizeof(indices[0]) * indices.size();
 
-    vkjs::Buffer stagingBuffer;
+    jvk::Buffer stagingBuffer;
 
     device->create_staging_buffer(std::max(vertexBytes,indexBytes), &stagingBuffer);
     stagingBuffer.copyTo(0, vertexBytes, vertices.data());
@@ -1477,7 +1477,7 @@ void App::prepare()
     const size_t size = drawDataBufferSize * MAX_CONCURRENT_FRAMES;
     device->create_uniform_buffer(size, false, &uboDrawData);
     device->set_buffer_name(&uboDrawData, "DrawData UBO");
-    vkjs::Buffer stage;
+    jvk::Buffer stage;
     device->create_staging_buffer(size, &stage);
     stage.copyTo(0, drawData.size(), drawData.data());
     for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
@@ -1551,7 +1551,7 @@ void App::get_enabled_extensions()
     VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeaturesKHR{};
     dynamicRenderingFeaturesKHR.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
     dynamicRenderingFeaturesKHR.dynamicRendering = VK_TRUE;
-    required_generic_features.push_back(vkjs::GenericFeature(dynamicRenderingFeaturesKHR));
+    required_generic_features.push_back(jvk::GenericFeature(dynamicRenderingFeaturesKHR));
 }
 
 void App::create_material_texture(const std::string& filename)
@@ -1562,7 +1562,7 @@ void App::create_material_texture(const std::string& filename)
     {
         int w, h, nc;
         // load image
-        vkjs::Image newImage;
+        jvk::Image newImage;
         fs::path base = fs::path(fn).parent_path();
         fs::path name = fs::path(fn).filename();
         name.replace_extension("ktx2");
@@ -1641,13 +1641,13 @@ void App::create_material_texture(const std::string& filename)
 
             device->create_texture2d_with_mips(ktxTexture2_GetVkFormat((ktxTexture2*)kTexture), { kTexture->baseWidth,kTexture->baseHeight,kTexture->baseDepth }, &newImage);
 
-            vkjs::Buffer stagebuf;
+            jvk::Buffer stagebuf;
             device->create_staging_buffer(ktxTexture_GetDataSize( kTexture ), &stagebuf);
             stagebuf.copyTo(0, ktxTexture_GetDataSize(kTexture), ktxTexture_GetData(kTexture));
 
             device->execute_commands([&](VkCommandBuffer cmd)
                 {
-                    newImage.record_upload(cmd, [kTexture,baseWidth,baseHeight](uint32_t layer, uint32_t face, uint32_t level, vkjs::Image::UploadInfo* inf)
+                    newImage.record_upload(cmd, [kTexture,baseWidth,baseHeight](uint32_t layer, uint32_t face, uint32_t level, jvk::Image::UploadInfo* inf)
                         {
                             size_t offset{};
                             uint32_t w = baseWidth >> level;
@@ -1693,7 +1693,7 @@ void App::create_material_texture(const std::string& filename)
     }
 }
 
-bool App::load_texture2d(std::string filename, vkjs::Image* dest, bool autoMipmap, int& w, int& h, int& nchannel)
+bool App::load_texture2d(std::string filename, jvk::Image* dest, bool autoMipmap, int& w, int& h, int& nchannel)
 {
     //int err = stbi_info(filename.c_str(), &w, &h, &nchannel);
 
@@ -1705,7 +1705,7 @@ bool App::load_texture2d(std::string filename, vkjs::Image* dest, bool autoMipma
 
 
     size_t size = w * h * 4;
-    vkjs::Buffer stage;
+    jvk::Buffer stage;
     device->create_staging_buffer(size, &stage);
     stage.copyTo(0, size, data);
     stbi_image_free(data);

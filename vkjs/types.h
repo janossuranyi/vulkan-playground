@@ -3,7 +3,7 @@
 
 #include <cinttypes>
 
-namespace vkjs {
+namespace jvk {
 
 	typedef uint64_t	u64;
 	typedef int64_t		s64;

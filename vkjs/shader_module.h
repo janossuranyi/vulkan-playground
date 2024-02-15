@@ -3,12 +3,12 @@
 
 #include "vkjs.h"
 
-namespace vkjs {
+namespace jvk {
 	class ShaderModule {
 	public:
 		ShaderModule(VkDevice device) : _device(device), _module(VK_NULL_HANDLE), _size(0) {}
 		~ShaderModule();
-		VkResult create(std::filesystem::path filename);
+		VkResult create(const std::filesystem::path& filename);
 		VkShaderModule module() const { return _module; }
 		uint32_t size() const;
 		const void* data() const;
