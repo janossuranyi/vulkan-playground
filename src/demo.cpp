@@ -193,7 +193,7 @@ private:
         float fExposure;
         float fZnear;
         float fZfar;
-        int pad0;
+        int bHDR{ 0 };
     } postProcessData;
     static_assert((sizeof(PostProcessData) & 15) == 0);
 
@@ -248,6 +248,7 @@ public:
         ImGui::DragFloat("Light range", &passData.vLightPos[3], 0.05f, 0.0f, 100.0f);
         ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.01f, 1.0f, 50.0f);
         ImGui::Checkbox("Fog On/Off", &fogEnabled);
+        ImGui::Checkbox("HDR On/Off", (bool*)(&postProcessData.bHDR));
         ImGui::DragFloat("Fog density", &postProcessData.vFogParams.x, 0.001f, 0.0f, 10.0f, "%.4f");
         ImGui::DragFloat("Fog scale", &postProcessData.vFogParams.y, 0.001f, 0.001f, 1.0f, "%.4f");
         ImGui::DragFloat3("Sun dir", &postProcessData.vSunPos[0], 1.0f);
@@ -322,6 +323,7 @@ void demo()
     jsrlib::gLogWriter.SetFileName("vulkan_engine.log");
 
     App* app = new App(true);
+    app->settings.hdr = true;
     app->settings.fullscreen = false;
     app->settings.exclusive = false;
     app->settings.vsync = true;

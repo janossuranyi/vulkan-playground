@@ -152,6 +152,8 @@ namespace jvk {
 			bool vsync = false;
 			/** @brief Enable UI overlay */
 			bool overlay = true;
+			/** @brief Enable HDR swapchain */
+			bool hdr = false;
 			/*** @brief Set MSAA level */
 			VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 		} settings;

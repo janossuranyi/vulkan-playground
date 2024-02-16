@@ -14,7 +14,7 @@ struct S_PPDATA {
     float fExposure;
     float fZnear;
     float fZfar;
-    int pad;
+    bool bHDR;
 };
 
 layout(location = 0) in vec2 texcoord;
@@ -92,7 +92,9 @@ void main() {
     inColor.rgb = mix(inColor.rgb, fogColor, bvec3(ppdata.vFogParams.z > 0.0) );
 
 //    inColor.rgb = ACESFitted( mix( ppdata.sFogParams.color, ppdata.fExposure * inColor.rgb, fogFactor ) );
-    //inColor.rgb = ACESFitted( inColor.rgb );
-    //inColor.rgb = linearTosRGB( inColor.rgb );
+    if ( ! ppdata.bHDR) {
+        inColor.rgb = ACESFitted( inColor.rgb );
+        inColor.rgb = linearTosRGB( inColor.rgb );
+    }
     fragColor0 = vec4( inColor.rgb, inColor.a );
 }
