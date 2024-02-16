@@ -200,14 +200,16 @@ namespace jvk
 		vkGetPhysicalDeviceSurfaceFormatsKHR(device->vkbPhysicalDevice, surface, &sfc, formats.data());
 
 		for (const auto& it : formats) {
-			/*if (it.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 && VK_COLOR_SPACE_HDR10_ST2084_EXT) {
+			if (it.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 && VK_COLOR_SPACE_HDR10_ST2084_EXT) {
 				format = it;
 				break;
-			}*/
+			}
+			/*
 			if (it.format == VK_FORMAT_B8G8R8A8_UNORM || it.format == VK_FORMAT_R8G8B8A8_UNORM) {
 				format = it;
 				break;
 			}
+			*/
 		}
 
 		VkPresentModeKHR presentMode = settings.vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_MAILBOX_KHR;
