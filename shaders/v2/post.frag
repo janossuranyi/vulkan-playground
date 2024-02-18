@@ -6,6 +6,27 @@
 #include "../v1/fog.glsl"
 #include "../v1/linearDepth.glsl"
 
+
+const mat3 from709to2020 = mat3(
+    vec3(0.6274040, 0.3292820, 0.0433136),
+    vec3(0.0690970, 0.9195400, 0.0113612),
+    vec3(0.0163916, 0.0880132, 0.8955950)
+);
+const mat3 fromP3to2020 = mat3(
+    vec3(0.753845, 0.198593, 0.047562),
+    vec3(0.0457456, 0.941777, 0.0124772),
+    vec3(-0.00121055, 0.0176041, 0.983607)
+);
+const mat3 fromExpanded709to2020  = mat3(
+    vec3(0.6274040, 0.3292820, 0.0433136),
+    vec3(0.0457456, 0.941777, 0.0124772),
+    vec3(-0.00121055, 0.0176041, 0.983607)
+);
+
+vec3 reinhard(vec3 c){
+    return c / (vec3(1.0) + c);
+}
+
 /* Fd is the displayed luminance in cd/m2 */
 float PQinverseEOTF(float Fd)
 {
@@ -21,6 +42,16 @@ vec3 PQinverseEOTF(vec3 c)
         PQinverseEOTF(c.x),
         PQinverseEOTF(c.y),
         PQinverseEOTF(c.z));
+}
+
+vec3 ACESFilmRec2020( vec3 x )
+{
+    float a = 15.8f;
+    float b = 2.12f;
+    float c = 1.2f;
+    float d = 5.92f;
+    float e = 1.9f;
+    return ( x * ( a * x + b ) ) / ( x * ( c * x + d ) + e );
 }
 
 struct S_PPDATA {
@@ -113,8 +144,10 @@ void main() {
     if (!ppdata.bHDR) {
         inColor.rgb = ACESFitted( inColor.rgb );
         inColor.rgb = linearTosRGB( inColor.rgb );        
-    }else{
-        inColor.rgb = PQinverseEOTF(inColor.rgb );
+    } else {
+        //inColor.rgb = ACESFilmRec2020( inColor.rgb );
+        vec3 rec2020 = (250.0 * inColor.rgb) * fromExpanded709to2020;
+        inColor.rgb = PQinverseEOTF( rec2020 );
     }
 
     fragColor0 = vec4( inColor.rgb, inColor.a );

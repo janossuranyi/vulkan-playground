@@ -192,34 +192,37 @@ namespace jvk
 	{
 		VkSurfaceFormatKHR format{};
 		format.colorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-		format.format = VK_FORMAT_B8G8R8A8_SRGB;
+		format.format = VK_FORMAT_B8G8R8A8_UNORM;
 
 		uint32_t sfc{ 0 };
 		std::vector<VkSurfaceFormatKHR> formats;
 		vkGetPhysicalDeviceSurfaceFormatsKHR(device->vkbPhysicalDevice, surface, &sfc, nullptr);	formats.resize(sfc);
 		vkGetPhysicalDeviceSurfaceFormatsKHR(device->vkbPhysicalDevice, surface, &sfc, formats.data());
 
-
+		bool no_hdr(true);
 		for (const auto& it : formats) {
-#if 0
+#if 1
 			if (settings.hdr && it.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 && it.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT) {
 				format = it;
+				no_hdr = false;
 				break;
 			}
 #endif
 #if 0
-			if (settings.hdr && it.format == VK_FORMAT_R16G16B16A16_SFLOAT) {
+			if (settings.hdr && it.format == VK_FORMAT_R16G16B16A16_SFLOAT && it.colorSpace == VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT) {
 				format = it;
+				no_hdr = false;
 				break;
 			}
 #endif
 #if 1
-			if (it.format == VK_FORMAT_B8G8R8A8_UNORM || it.format == VK_FORMAT_R8G8B8A8_UNORM) {
+			if (!settings.hdr && (it.format == VK_FORMAT_B8G8R8A8_UNORM || it.format == VK_FORMAT_R8G8B8A8_UNORM)) {
 				format = it;
 				break;
 			}
 #endif
 		}
+		settings.hdr = !no_hdr;
 
 		VkPresentModeKHR presentMode = settings.vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_MAILBOX_KHR;
 

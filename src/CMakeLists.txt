@@ -14,6 +14,8 @@ add_executable(demo
     frustum.h
     frustum.cpp
     light.h
+    sample1.h
+    sample1.cpp
     demo.h
     demo.cpp
     demo_utils.cpp
