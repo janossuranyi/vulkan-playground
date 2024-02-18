@@ -199,15 +199,26 @@ namespace jvk
 		vkGetPhysicalDeviceSurfaceFormatsKHR(device->vkbPhysicalDevice, surface, &sfc, nullptr);	formats.resize(sfc);
 		vkGetPhysicalDeviceSurfaceFormatsKHR(device->vkbPhysicalDevice, surface, &sfc, formats.data());
 
+
 		for (const auto& it : formats) {
-			if (settings.hdr && it.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 && VK_COLOR_SPACE_HDR10_ST2084_EXT) {
-				format = it;
-				break;
-			} 
-			else if (it.format == VK_FORMAT_B8G8R8A8_UNORM || it.format == VK_FORMAT_R8G8B8A8_UNORM) {
+#if 0
+			if (settings.hdr && it.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 && it.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT) {
 				format = it;
 				break;
 			}
+#endif
+#if 0
+			if (settings.hdr && it.format == VK_FORMAT_R16G16B16A16_SFLOAT) {
+				format = it;
+				break;
+			}
+#endif
+#if 1
+			if (it.format == VK_FORMAT_B8G8R8A8_UNORM || it.format == VK_FORMAT_R8G8B8A8_UNORM) {
+				format = it;
+				break;
+			}
+#endif
 		}
 
 		VkPresentModeKHR presentMode = settings.vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_MAILBOX_KHR;
@@ -309,6 +320,14 @@ namespace jvk
 		height = uint32_t(y);
 
 		keystate.resize(65535, false);
+		
+		SDL_DisplayMode mode;
+		int res1 = SDL_GetCurrentDisplayMode(0, &mode);
+		SDL_Log("Mode %i\tbpp %i\t%s\t%i x %i",
+			0, SDL_BITSPERPIXEL(mode.format),
+			SDL_GetPixelFormatName(mode.format),
+			mode.w, mode.h);
+
 	}
 
 	void AppBase::init_imgui()

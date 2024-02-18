@@ -244,7 +244,7 @@ public:
         ImGui::Text("maxZ: %.2f, minZ: %.2f", maxZ, minZ);
         ImGui::DragFloat3("Light pos", &passData.vLightPos[0], 0.05f, -20.0f, 20.0f);
         ImGui::ColorPicker3("LightColor", &passData.vLightColor[0]);
-        ImGui::DragFloat("Light intensity", &passData.vLightColor[3], 0.5f, 0.0f, 10000.0f);
+        ImGui::DragFloat("Light intensity", &passData.vLightColor[3], 0.1f, 0.0f, 10000.0f);
         ImGui::DragFloat("Light range", &passData.vLightPos[3], 0.05f, 0.0f, 100.0f);
         ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.01f, 1.0f, 50.0f);
         ImGui::Checkbox("Fog On/Off", &fogEnabled);
@@ -324,7 +324,7 @@ void demo()
 
     App* app = new App(true);
     app->settings.hdr = true;
-    app->settings.fullscreen = false;
+    app->settings.fullscreen = true;
     app->settings.exclusive = false;
     app->settings.vsync = true;
     app->settings.msaaSamples = VK_SAMPLE_COUNT_1_BIT;
@@ -1316,6 +1316,7 @@ void App::prepare()
     passData.vLightPos = glm::vec4(0.f, 1.5f, 0.f, 10.f);
     passData.vLightColor = glm::vec4(0.800f, 0.453f, 0.100f, 15.f);
     postProcessData.vSunPos = { 100.0f, -100.0f, -100.0f, 0.0f };
+    postProcessData.fExposure = 250.f;
     d = *device;
     int w, h, nc;
 

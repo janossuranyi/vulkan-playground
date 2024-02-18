@@ -6,6 +6,23 @@
 #include "../v1/fog.glsl"
 #include "../v1/linearDepth.glsl"
 
+/* Fd is the displayed luminance in cd/m2 */
+float PQinverseEOTF(float Fd)
+{
+    float Y = Fd / 10000.0;
+    float Ym1 = pow(Y, 0.1593017578125);
+    float res = (0.8359375 + (18.8515625 * Ym1)) / (1.0 + (18.6875 * Ym1));
+    res = pow(res, 78.84375);
+    return res;
+}
+vec3 PQinverseEOTF(vec3 c)
+{
+    return vec3(
+        PQinverseEOTF(c.x),
+        PQinverseEOTF(c.y),
+        PQinverseEOTF(c.z));
+}
+
 struct S_PPDATA {
     mat4 mtxInvProj;
     vec4 vCameraPos;
@@ -78,7 +95,6 @@ void main() {
     float distanceToPixel = length ( cameraToPixel );
     // fogFactor = getFogFactor( ppdata.sFogParams, distanceToPixel );
     
-    inColor.rgb *= ppdata.fExposure;
 
     vec3 fogColor = applyFog(
         ppdata.vFogParams.y,
@@ -90,11 +106,16 @@ void main() {
   
 
     inColor.rgb = mix(inColor.rgb, fogColor, bvec3(ppdata.vFogParams.z > 0.0) );
+    inColor.rgb *= ppdata.fExposure;
 
 //    inColor.rgb = ACESFitted( mix( ppdata.sFogParams.color, ppdata.fExposure * inColor.rgb, fogFactor ) );
-    if ( ! ppdata.bHDR) {
+
+    if (!ppdata.bHDR) {
         inColor.rgb = ACESFitted( inColor.rgb );
-        inColor.rgb = linearTosRGB( inColor.rgb );
+        inColor.rgb = linearTosRGB( inColor.rgb );        
+    }else{
+        inColor.rgb = PQinverseEOTF(inColor.rgb );
     }
+
     fragColor0 = vec4( inColor.rgb, inColor.a );
 }

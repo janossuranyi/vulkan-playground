@@ -191,7 +191,7 @@ void main() {
 
     diffuseColor = (1.0 - metalness) * albedoColor.rgb * (1.0 - spec.rgb);
     
-    vec3 ambientColor = 0.02 * albedoColor.rgb;
+    vec3 ambientColor = 0.001 * albedoColor.rgb;
     float reflectionMask = smoothstep(0.8, 1.0, 1.0 - r);
     out_Color0 = vec4((diffuseColor / PI + specColor.rgb) * Attn * NoL + ambientColor, reflectionMask);
     out_Normal = NormalOctEncode(N,false);
