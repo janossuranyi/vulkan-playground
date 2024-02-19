@@ -21,7 +21,7 @@ struct S_PASS {
 	float	fFogDensity;
 };
 
-layout(set = 0, binding = 0) uniform stc_UNIFORM_CB_SPASS_BINDING {
+layout(set = 0, binding = 0) uniform stc_ubo_SPASS {
 	S_PASS gvars;
 };
 
