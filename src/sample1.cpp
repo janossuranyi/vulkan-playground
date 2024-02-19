@@ -127,16 +127,20 @@ void App::setup_objects()
         auto& node = world->scene.nodes[idx];
         mat4 mtxModel = node.getTransform();
         if (node.isMesh()) {
-            for (auto& e : node.getEntities()) {
+            for (auto e : node.getEntities()) {
                 Object obj;
                 obj.mesh = e;
                 obj.mtxModel = mtxModel;
                 obj.aabb = world->meshes[e].aabb.Transform(mtxModel);
                 obj.vkResources = materials[world->meshes[e].material].resources;
 
-                drawDataStruct.emplace_back(DrawData{ mtxModel,
-                    mat4(transpose(inverse(mat3(mtxModel)))),
-                    vec4(range(reng), range(reng), range(reng), 1.0f) });
+                drawDataStruct.emplace_back(
+                    DrawData
+                    {
+                        mtxModel,
+                        mat4(transpose(inverse(mat3(mtxModel)))),
+                        vec4(range(reng), range(reng), range(reng), 1.0f) 
+                    });
                 objects.push_back(obj);
             }
         }
@@ -1006,6 +1010,7 @@ void App::prepare()
     postProcessData.vSunPos = { 100.0f, -100.0f, -100.0f, 0.0f };
     postProcessData.fExposure = 250.f;
     postProcessData.bHDR = settings.hdr;
+    postProcessData.fHDRLuminance = 250.0f;
     d = *device;
     int w, h, nc;
 

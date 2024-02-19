@@ -4,12 +4,22 @@
 //simple fit from: https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
 vec3 ACESFilmApproximate(vec3 x)
 {
-    float a = 2.51f;
-    float b = 0.03f;
-    float c = 2.43f;
-    float d = 0.59f;
-    float e = 0.14f;
-    return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0, 1);
+    const float a = 2.51f;
+    const float b = 0.03f;
+    const float c = 2.43f;
+    const float d = 0.59f;
+    const float e = 0.14f;
+    return clamp( ( x * ( a * x + b ) ) / ( x * ( c * x + d ) + e ), 0, 1);
+}
+
+vec3 ACESFilmRec2020( vec3 x )
+{
+    const float a = 15.8f;
+    const float b = 2.12f;
+    const float c = 1.2f;
+    const float d = 5.92f;
+    const float e = 1.9f;
+    return ( x * ( a * x + b ) ) / ( x * ( c * x + d ) + e );
 }
 
 //code from: https://github.com/TheRealMJP/BakingLab/blob/master/BakingLab/ACES.hlsl

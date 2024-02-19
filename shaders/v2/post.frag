@@ -7,6 +7,11 @@
 #include "../v1/linearDepth.glsl"
 
 
+const mat3 from709toDisplayP3 = mat3(    
+    0.822461969, 0.033194199, 0.017082631,
+    0.1775380,   0.9668058,   0.0723974,
+    0.0000000,   0.0000000,   0.9105199
+);
 const mat3 from709to2020 = mat3(
     vec3(0.6274040, 0.3292820, 0.0433136),
     vec3(0.0690970, 0.9195400, 0.0113612),
@@ -23,9 +28,7 @@ const mat3 fromExpanded709to2020  = mat3(
     vec3(-0.00121055, 0.0176041, 0.983607)
 );
 
-vec3 reinhard(vec3 c){
-    return c / (vec3(1.0) + c);
-}
+vec3 tonemap(vec3 c){return c / (vec3(1.0) + c);}
 
 /* Fd is the displayed luminance in cd/m2 */
 float PQinverseEOTF(float Fd)
@@ -44,16 +47,6 @@ vec3 PQinverseEOTF(vec3 c)
         PQinverseEOTF(c.z));
 }
 
-vec3 ACESFilmRec2020( vec3 x )
-{
-    float a = 15.8f;
-    float b = 2.12f;
-    float c = 1.2f;
-    float d = 5.92f;
-    float e = 1.9f;
-    return ( x * ( a * x + b ) ) / ( x * ( c * x + d ) + e );
-}
-
 struct S_PPDATA {
     mat4 mtxInvProj;
     vec4 vCameraPos;
@@ -62,7 +55,11 @@ struct S_PPDATA {
     float fExposure;
     float fZnear;
     float fZfar;
+    float fHDRLuminance;    
     bool bHDR;
+    int pad0;
+    int pad1;
+    int pad2;
 };
 
 layout(location = 0) in vec2 texcoord;
@@ -76,6 +73,7 @@ layout(set = 0, binding = 2) uniform stc_ubo_PostProcessData {
 layout(location = 0) out vec4 fragColor0;
 
 float saturate( float x ){ return clamp( x, 0.0, 1.0 ) ; }
+vec3 saturate( vec3 x ){ return clamp( x, 0.0, 1.0 ) ; }
 
 vec3 applyFog(  in float a,
                 in float b,        // density falloff
@@ -146,8 +144,8 @@ void main() {
         inColor.rgb = linearTosRGB( inColor.rgb );        
     } else {
         //inColor.rgb = ACESFilmRec2020( inColor.rgb );
-        vec3 rec2020 = (250.0 * inColor.rgb) * fromExpanded709to2020;
-        inColor.rgb = PQinverseEOTF( rec2020 );
+        vec3 dci_p3 = ppdata.fHDRLuminance * (from709toDisplayP3 * inColor.rgb);
+        inColor.rgb = PQinverseEOTF(clamp( dci_p3 , 0.0, 10000.0 ));
     }
 
     fragColor0 = vec4( inColor.rgb, inColor.a );
