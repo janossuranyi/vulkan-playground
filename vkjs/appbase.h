@@ -156,6 +156,8 @@ namespace jvk {
 			bool hdr = false;
 			/*** @brief Set MSAA level */
 			VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+			/** refresh rate */
+			float vfreq = 60.0f;
 		} settings;
 
 		struct window_data

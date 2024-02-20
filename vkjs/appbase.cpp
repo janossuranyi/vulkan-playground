@@ -288,20 +288,19 @@ namespace jvk
 		for (int i = 0; i < numdisplays; ++i)
 		{
 			SDL_GetDisplayBounds(i, &(screens[i].bounds));
+			jsrlib::Info("Screen %d size: [%d, %d]", i, screens[i].bounds.w, screens[i].bounds.h);
 		}
 
 		SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
-		if (settings.fullscreen)
+		if (settings.fullscreen && !settings.exclusive)
 		{
-			if (!settings.exclusive)
-			{
-				// borderless desktop resolution
-				window_flags = (SDL_WindowFlags)(window_flags | SDL_WINDOW_FULLSCREEN_DESKTOP);
-			}
-			else
-			{
-				window_flags = (SDL_WindowFlags)(window_flags | SDL_WINDOW_FULLSCREEN);
-			}
+			// borderless desktop resolution
+			window_flags = (SDL_WindowFlags)(window_flags | SDL_WINDOW_FULLSCREEN_DESKTOP);
+		}
+		if (settings.fullscreen && settings.exclusive)
+		{
+			// borderless desktop resolution
+			window_flags = (SDL_WindowFlags)(window_flags | SDL_WINDOW_FULLSCREEN);
 		}
 
 		window = SDL_CreateWindow(
@@ -317,6 +316,16 @@ namespace jvk
 			throw std::runtime_error("SDL cannot create window !");
 		}
 
+		if (settings.fullscreen && settings.exclusive)
+		{
+			SDL_DisplayMode mode;
+			int res1 = SDL_GetCurrentDisplayMode(0, &mode);
+			mode.refresh_rate = static_cast<int>( settings.vfreq );
+			int result = SDL_SetWindowDisplayMode(window, &mode);
+			if (result != 0) {
+				jsrlib::Error("Cannot change to fullscreen mode ! [%s]", SDL_GetError());
+			}
+		}
 		int x, y;
 		SDL_GetWindowSize(window, &x, &y);
 		width = uint32_t(x);
