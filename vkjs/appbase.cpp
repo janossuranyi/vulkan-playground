@@ -224,7 +224,7 @@ namespace jvk
 		}
 		settings.hdr = !no_hdr;
 
-		VkPresentModeKHR presentMode = settings.vsync ? VK_PRESENT_MODE_FIFO_RELAXED_KHR : VK_PRESENT_MODE_MAILBOX_KHR;
+		VkPresentModeKHR presentMode = settings.vsync ? VK_PRESENT_MODE_FIFO_RELAXED_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
 
 		vkb::SwapchainBuilder builder{ device->vkbDevice };
 		auto swap_ret = builder
