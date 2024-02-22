@@ -16,9 +16,9 @@
 #define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2  ((DPI_AWARENESS_CONTEXT)-4)
 #endif
 
-/*
-https://handmade.network/p/58/seabird/blog/p/2460-be_aware_of_high_dpi
-*/
+/** 
+ ** https://handmade.network/p/58/seabird/blog/p/2460-be_aware_of_high_dpi 
+ */
 static void handle_dpi_awareness() {
 	//NOTE: SetProcessDpiAwarenessContext isn't available on targets older than win10-1703
 	//      and will therefore crash at startup on those systems if we call it normally,
@@ -224,7 +224,7 @@ namespace jvk
 		}
 		settings.hdr = !no_hdr;
 
-		VkPresentModeKHR presentMode = settings.vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_MAILBOX_KHR;
+		VkPresentModeKHR presentMode = settings.vsync ? VK_PRESENT_MODE_FIFO_RELAXED_KHR : VK_PRESENT_MODE_MAILBOX_KHR;
 
 		vkb::SwapchainBuilder builder{ device->vkbDevice };
 		auto swap_ret = builder
@@ -291,16 +291,33 @@ namespace jvk
 			jsrlib::Info("Screen %d size: [%d, %d]", i, screens[i].bounds.w, screens[i].bounds.h);
 		}
 
-		SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+		int display_in_use = 0;
+		int display_mode_count = SDL_GetNumDisplayModes(display_in_use);
+		SDL_DisplayMode dispmode;
+		for (int display_mode = 0; display_mode < display_mode_count; ++display_mode)
+		{
+			if (SDL_GetDisplayMode(display_in_use, display_mode, &dispmode) != 0)
+			{
+				jsrlib::Error("SDL_GetDisplayMode failed [%d]", display_mode);
+				continue;
+			}
+			jsrlib::Info("Displaymode %d: Res: %dx%d, Pixel fmt: %s, Hfreq: %dHz", display_mode, dispmode.w, dispmode.h, SDL_GetPixelFormatName(dispmode.format), dispmode.refresh_rate);
+		}
+
+		SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_ALLOW_HIGHDPI);
 		if (settings.fullscreen && !settings.exclusive)
 		{
 			// borderless desktop resolution
 			window_flags = (SDL_WindowFlags)(window_flags | SDL_WINDOW_FULLSCREEN_DESKTOP);
 		}
-		if (settings.fullscreen && settings.exclusive)
+		else if (settings.fullscreen && settings.exclusive)
 		{
-			// borderless desktop resolution
+			// exclusive fullscreen
 			window_flags = (SDL_WindowFlags)(window_flags | SDL_WINDOW_FULLSCREEN);
+		}
+		else
+		{
+			window_flags = (SDL_WindowFlags)(window_flags | SDL_WINDOW_RESIZABLE);
 		}
 
 		window = SDL_CreateWindow(

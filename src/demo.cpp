@@ -11,8 +11,8 @@ void demo()
 
     App* app = new App(true);
     app->settings.hdr = false;
-    app->settings.fullscreen = true;
-    app->settings.exclusive = true;
+    app->settings.fullscreen = false;
+    app->settings.exclusive = false;
     app->settings.vsync = true;
     app->settings.vfreq = static_cast<float>(60);
     app->settings.msaaSamples = VK_SAMPLE_COUNT_1_BIT;
