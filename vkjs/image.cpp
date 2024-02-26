@@ -25,7 +25,7 @@ namespace jvk {
 
 		device_->execute_commands([&](VkCommandBuffer cmd)
 			{
-				record_change_layout(cmd, 
+				record_layout_change(cmd, 
 				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
 				VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -86,7 +86,7 @@ namespace jvk {
 		subresourceRange.layerCount = face_total;
 
 
-		record_change_layout(cmd, 
+		record_layout_change(cmd, 
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
 			VK_PIPELINE_STAGE_HOST_BIT, 
 			VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -142,7 +142,7 @@ namespace jvk {
 				int32_t mipWidth = extent.width;
 				int32_t mipHeight = extent.height;
 
-				record_change_layout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+				record_layout_change(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 
 				for (uint32_t i = 1; i < levels; i++) 
 				{
@@ -219,20 +219,20 @@ namespace jvk {
 	}
 
 
-	void Image::change_layout(VkImageLayout newLayout, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask)
+	void Image::layout_change(VkImageLayout newLayout, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask)
 	{
 		assert(image);
 		if (layout == newLayout) return;
 
 		device_->execute_commands([&](VkCommandBuffer cmd)
 			{
-				record_change_layout(cmd, newLayout, srcStageMask, dstStageMask);
+				record_layout_change(cmd, newLayout, srcStageMask, dstStageMask);
 			});
 
 		layout = newLayout;
 	}
 
-	void Image::record_change_layout(VkCommandBuffer cmd, VkImageLayout newLayout, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkAccessFlags srcAccess, VkAccessFlags dstAccess, bool update)
+	void Image::record_layout_change(VkCommandBuffer cmd, VkImageLayout newLayout, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkAccessFlags srcAccess, VkAccessFlags dstAccess, bool update)
 	{
 		assert(image);
 		

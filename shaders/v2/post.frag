@@ -33,9 +33,9 @@ vec3 tonemap(vec3 c){return c / (vec3(1.0) + c);}
 /* Fd is the displayed luminance in cd/m2 */
 float PQinverseEOTF(float Fd)
 {
-    float Y = Fd / 10000.0;
-    float Ym1 = pow(Y, 0.1593017578125);
-    float res = (0.8359375 + (18.8515625 * Ym1)) / (1.0 + (18.6875 * Ym1));
+    const float Y = Fd / 10000.0;
+    const float m1 = pow(Y, 0.1593017578125);
+    float res = (0.8359375 + (18.8515625 * m1)) / (1.0 + (18.6875 * m1));
     res = pow(res, 78.84375);
     return res;
 }
