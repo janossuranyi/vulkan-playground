@@ -35,6 +35,35 @@ inline static size_t align_size(size_t size, size_t alignment) {
 
 
 
+void App::init_lights()
+{
+    std::uniform_real_distribution<float> randomFloats(0.0, 1.0); // random floats between [0.0, 1.0]
+    std::default_random_engine generator(SDL_GetTicks64());
+    jvk::Buffer stage;
+
+    /* Init ligths */
+
+    for (size_t i(0); i < lights.size(); ++i)
+    {
+        float x = -10.0f + randomFloats(generator) * 20.0f;
+        float y = 0.0f + randomFloats(generator) * 9.0f;
+        float z = -3.0f + randomFloats(generator) * 6.0f;
+
+        glm::vec3 pos{ x,y,z };
+        glm::vec3 col{ randomFloats(generator) * 0.7,randomFloats(generator) * 0.7,randomFloats(generator) * 0.7 };
+        lights[i] = {};
+        lights[i].set_position(pos);
+        lights[i].set_color(col);
+        lights[i].intensity = randomFloats(generator) * 4.0f + 3.0f;
+        lights[i].type = LightType_Point;
+        lights[i].range = 5.0f;
+    }
+    device->create_staging_buffer(lights.size() * sizeof(lights[0]), &stage);
+    stage.copyTo(0, stage.size, lights.data());
+    device->buffer_copy(&stage, &uboLights, 0, 0, stage.size);
+    device->destroy_buffer(&stage);
+}
+
 void App::on_window_resized()
 {
     setup_images();
@@ -69,11 +98,13 @@ void App::setup_descriptor_sets()
         uboPassData[i].descriptor.range = sizeof(PassData);
         uboPassData[i].descriptor.offset = 0;
         const VkShaderStageFlags stageBits = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+        uboLights.setup_descriptor();
 
         descMgr.builder()
             .bind_buffer(0, &uboPassData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
             .bind_buffer(1, &drawbufInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT)
             .bind_image(2, &ssaoNoise.descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+            .bind_buffer(3, &uboLights.descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .build(triangleDescriptors[i]);
 
         HDRImage[i].setup_descriptor();
@@ -1007,6 +1038,7 @@ void App::prepare()
     camera.MovementSpeed = 0.003f;
     passData.vLightPos = glm::vec4(0.f, 1.5f, 0.f, 10.f);
     passData.vLightColor = glm::vec4(0.800f, 0.453f, 0.100f, 15.f);
+    passData.vParams[0] = 0.05f;    // global ambient scale
     postProcessData.vSunPos = { 100.0f, -100.0f, -100.0f, 0.0f };
     postProcessData.fExposure = 250.f;
     postProcessData.bHDR = settings.hdr;
@@ -1044,6 +1076,7 @@ void App::prepare()
 
     jvk::Buffer* drawBuf = new jvk::Buffer();
     device->create_uniform_buffer(drawDataBufferSize * MAX_CONCURRENT_FRAMES, false, drawBuf); drawBuf->map();
+    device->create_uniform_buffer(lights.size() * sizeof(Light), true, &uboLights);
 
     for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
     {
@@ -1181,26 +1214,15 @@ void App::prepare()
     {
         device->buffer_copy(&stage, &uboDrawData, 0, i * drawDataBufferSize, drawData.size());
     }
-    setup_descriptor_sets();
+    device->destroy_buffer(&stage);
+
 
     const int kernelSize = sizeof(passData.avSSAOkernel) / sizeof(passData.avSSAOkernel[0]);
     std::uniform_real_distribution<float> randomFloats(0.0, 1.0); // random floats between [0.0, 1.0]
     std::default_random_engine generator;
-    for (unsigned int i = 0; i < kernelSize; ++i)
-    {
-        glm::vec4 sample(
-            randomFloats(generator) * 2.0 - 1.0,
-            randomFloats(generator) * 2.0 - 1.0,
-            randomFloats(generator),
-            0.0f
-        );
-        sample = glm::normalize(sample);
-        float scale = (float)i / float(kernelSize);
-        scale = jsrlib::lerp(0.1f, 1.0f, scale * scale);
-        sample *= scale;
-        //sample *= randomFloats(generator);
-        passData.avSSAOkernel[i] = sample;
-    }
+
+    init_lights();
+    setup_descriptor_sets();
 
     postProcessData.fExposure = 1.0f;
     postProcessData.vFogParams = { 0.001f,0.0001f,0.0f,0.0f };

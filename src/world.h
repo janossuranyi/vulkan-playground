@@ -39,6 +39,7 @@ namespace jsr {
 		const glm::vec3& getScale() const;
 		const glm::quat& getRotation() const;
 		void updateTransform(const glm::mat4& parentMatrix);
+		jsr::Bounds& bounds();
 	private:
 		std::vector<int> m_entity;
 		bool m_needToUpdate = false;
@@ -48,6 +49,7 @@ namespace jsr {
 		glm::vec3 m_scale = glm::vec3(1.0f);
 		glm::quat m_rotation = glm::quat(1.f, 0.f, 0.f, 0.f);
 		std::vector<int> m_children;
+		jsr::Bounds bv;
 	};
 
 	struct ObjectBinary {

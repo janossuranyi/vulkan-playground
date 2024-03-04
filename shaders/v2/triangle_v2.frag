@@ -27,8 +27,12 @@ layout(location = 0) in INTERFACE {
     S_INTERFACE In;
 };
 
-layout(set = 0, binding = 0) uniform stc_PassDataUBO {
+layout(set = 0, binding = 0) uniform stc_ubo_PassData {
     S_PASS passdata;
+};
+
+layout(set = 0, binding = 3) uniform stc_ubo_LightData {
+    S_LIGHT lightdata[16];
 };
 
 layout(set = 0, binding = 2) uniform sampler2D samp0;
@@ -48,22 +52,24 @@ layout(set = 1, binding = 2) uniform sampler2D samp_pbr;
 const float PI = 3.14159265359;
 
 // Normal Distribution function --------------------------------------
-float D_GGX(float dotNH, float roughness)
-{
-	float alpha = roughness * roughness;
-	float alpha2 = alpha * alpha;
-	float denom = dotNH * dotNH * (alpha2 - 1.0) + 1.0;
-	return (alpha2)/(PI * denom*denom); 
+float D_GGX(float NoH, float a) {
+    float a2 = a * a;
+    float f = (NoH * a2 - NoH) * NoH + 1.0;
+    return a2 / (PI * f * f);
 }
 
-// Geometric Shadowing function --------------------------------------
-float G_SchlicksmithGGX(float dotNL, float dotNV, float roughness)
-{
-	float r = (roughness + 1.0);
-	float k = (r*r) / 8.0;
-	float GL = dotNL / (dotNL * (1.0 - k) + k);
-	float GV = dotNV / (dotNV * (1.0 - k) + k);
-	return GL * GV;
+float V_SmithGGXCorrelated(float NoV, float NoL, float a) {
+    float a2 = a * a;
+    float GGXL = NoV * sqrt((-NoL * a2 + NoL) * NoL + a2);
+    float GGXV = NoL * sqrt((-NoV * a2 + NoV) * NoV + a2);
+    return 0.5 / (GGXV + GGXL + 1e-8);
+}
+
+float V_SmithGGXCorrelatedFast(float NoV, float NoL, float roughness) {
+    float a = roughness;
+    float GGXV = NoL * (NoV * (1.0 - a) + a);
+    float GGXL = NoV * (NoL * (1.0 - a) + a);
+    return 0.5 / (GGXV + GGXL + 1e-8);
 }
 
 // Fresnel function ----------------------------------------------------
@@ -73,39 +79,41 @@ vec3 F_Schlick(vec3 F0, float cosTheta)
 	return F;
 }
 
-// Specular BRDF composition --------------------------------------------
-
-vec4 specBRDF(vec3 F0, vec3 L, vec3 V, vec3 N, float roughness)
-{
-	// Precalculate vectors and dot products	
-	vec3 H = normalize (V + L);
-	float dotNV = clamp(dot(N, V), 0.0, 1.0);
-	float dotNL = clamp(dot(N, L), 0.0, 1.0);
-	float dotLH = clamp(dot(L, H), 0.0, 1.0);
-	float dotNH = clamp(dot(N, H), 0.0, 1.0);
-
-	vec4 color = vec4(0.0);
-
-    float rroughness = max(0.05, roughness);
-    // D = Normal distribution (Distribution of the microfacets)
-    float D = D_GGX(dotNH, roughness); 
-    // G = Geometric shadowing term (Microfacets shadowing)
-    float G = G_SchlicksmithGGX(dotNL, dotNV, rroughness);
-    // F = Fresnel factor (Reflectance depending on angle of incidence)
-    vec3 F = F_Schlick(F0, dotLH);
-
-    float spec = D * G / (4.0 * dotNL * dotNV + 1e-8); 
-    color.rgb = F;
-    color.a = spec;
-
-	return color;
+float Fd_Lambert() {
+    return 1.0 / PI;
 }
 
-vec4 specBRDF_DOOM( vec3 f0,vec3 L, vec3 V, vec3 N, float r ) {
+// Specular BRDF composition --------------------------------------------
+vec3 specBRDF(vec3 f0, vec3 l, vec3 v, vec3 n, float perceptualRoughness)
+{
+    vec3 h = normalize(v + l);
+
+    float NoV = abs(dot(n, v)) + 1e-5;
+    float NoL = clamp(dot(n, l), 0.0, 1.0);
+    float NoH = clamp(dot(n, h), 0.0, 1.0);
+    float LoH = clamp(dot(l, h), 0.0, 1.0);
+
+    // perceptually linear roughness to roughness (see parameterization)
+    float roughness = perceptualRoughness;
+    roughness *= roughness;
+    roughness = clamp(roughness, 0.089, 1.0);
+    
+    float D = D_GGX(NoH, roughness);
+    vec3  F = F_Schlick(f0, LoH);
+    float V = V_SmithGGXCorrelatedFast(NoV, NoL, roughness);
+
+    // specular BRDF
+    vec3 Fr = (D * V) * F;
+    
+    return Fr;
+}
+
+
+vec3 specBRDF_DOOM( vec3 f0,vec3 L, vec3 V, vec3 N, float r ) {
 	const vec3 H = normalize( V + L );
 	float m = 0.2 + r * 0.8;
     m *= m;
-    /*m *= m;*/
+    m *= m;
     float m2 = m * m;
 	float NdotH = clamp( dot( N, H ), 0.0, 1.0 );
 	float spec = (NdotH * NdotH) * (m2 - 1) + 1;
@@ -113,8 +121,10 @@ vec4 specBRDF_DOOM( vec3 f0,vec3 L, vec3 V, vec3 N, float r ) {
 	float Gv = clamp( dot( N, V ), 0.0, 1.0 ) * (1.0 - m) + m;
 	float Gl = clamp( dot( N, L ), 0.0, 1.0 ) * (1.0 - m) + m;
 	spec /= ( 4.0 * Gv * Gl + 1e-8 );
-	return vec4(F_Schlick( f0, clamp(dot( L, H ), 0.0, 1.0) ), spec);
+    
+	return F_Schlick( f0, clamp(dot( L, H ), 0.0, 1.0) ) * spec;
 }
+
 
 void main() {
 
@@ -139,6 +149,8 @@ void main() {
 
     if (albedoColor.a < .5) discard;
 
+    albedoColor.rgb = sRGBToLinear(albedoColor.rgb /* In.Color.rgb*/);
+
     if (hasEmissive) {
         out_Color0 = vec4(emissiveColor,albedoColor.a);
         return;
@@ -150,16 +162,18 @@ void main() {
     const float r = pbrSample.g;
     const float metalness = pbrSample.b;
     const float microAO = pbrSample.r;
+    const float reflectance = 0.5;
+    const float Df0 = 0.16 * reflectance * reflectance;
+    const vec3 diffuseColor = (1.0 - metalness) * albedoColor.rgb;
 
 //	float roughness = max(perceptualRoughness, step( fract(In.FragCoordVS.y * 2.02), 0.5 ) );
 
     normalTS = normalize(normalTS) * vec3(1.0,-1.0,1.0);
+    vec3 F0 = mix(vec3(Df0), albedoColor.rgb, metalness);
 
     vec3 N = (tbn * normalTS);
-    vec3 L = normalize(In.LightVS - In.FragCoordVS);
     vec3 V = normalize(-In.FragCoordVS);
-    vec3 H = normalize(V + L);
-    
+/*    
     S_LIGHT light;
     light.position = In.LightVS;
     light.direction = In.LightDir;;
@@ -169,31 +183,25 @@ void main() {
     light.color = passdata.vLightColor.rgb;
     light.intensity = passdata.vLightColor.a;
     light.type = LightType_Point;
-    vec3 Attn = getLightIntensity( light, In.LightVS - In.FragCoordVS  );
-
-
-    albedoColor.rgb = sRGBToLinear(albedoColor.rgb /* In.Color.rgb*/);
-
-    float NoL = saturate(dot(N,L));
-    vec3 F0 = mix(vec3(0.04), albedoColor.rgb, metalness);
-    vec3 specColor;
-    vec3 diffuseColor;
-
-/*
-    const float NoV = saturate(dot(N,V));
-    const float NoH = saturate(dot(N,H));
-    const float VoH = saturate(dot(V,H));
-    
-    specColor = GGXSingleScattering(r, F0, NoH, NoV, VoH, NoL);
 */
-    vec4 spec = specBRDF_DOOM(F0, L,V,N, r);
-    specColor = spec.rgb * spec.a;
+    const vec3 Fd = diffuseColor * Fd_Lambert();
+    vec3 finalColor = vec3(0.0);
+    for(uint i = 0; i < lightdata.length(); ++i)
+    {
+        vec4 lightPosVS = passdata.mtxView * vec4(lightdata[i].position,1.0);
+        vec3 L = normalize(lightPosVS.xyz - In.FragCoordVS);
+        vec3 H = normalize(V + L);
+        float NoL = saturate(dot(N,L));
 
-    diffuseColor = (1.0 - metalness) * albedoColor.rgb * (1.0 - spec.rgb);
-    
-    vec3 ambientColor = 0.001 * albedoColor.rgb;
+        vec3 Attn = getLightIntensity( lightdata[i], lightPosVS.xyz - In.FragCoordVS  );
+
+        vec3 Fr = specBRDF(F0, L,V,N, r);
+        finalColor += (Fr + Fd) * Attn * NoL;
+    }
+
+    vec3 ambientColor = passdata.vParams.x * albedoColor.rgb;
     float reflectionMask = smoothstep(0.8, 1.0, 1.0 - r);
-    out_Color0 = vec4((diffuseColor / PI + specColor.rgb) * Attn * NoL + ambientColor, reflectionMask);
+    out_Color0 = vec4(finalColor + ambientColor, reflectionMask);
     out_Normal = NormalOctEncode(N,false);
 //    outColor0.rgb = mix(checkerColor.rgb, outColor0.rgb, 0.98);
 }

@@ -11,7 +11,7 @@ void demo()
 
     App* app = new App(true);
     app->settings.hdr = false;
-    app->settings.fullscreen = false;
+    app->settings.fullscreen = true;
     app->settings.exclusive = false;
     app->settings.vsync = true;
     app->settings.vfreq = static_cast<float>(60);

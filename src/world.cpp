@@ -81,6 +81,10 @@ namespace jsr {
 
 		m_nodeMatrix = parentMatrix * mModel;
 	}
+	jsr::Bounds& Node3d::bounds()
+	{
+		return bv;
+	}
 	int World::add(const Node3d& n)
 	{
 		scene.nodes.push_back(n);

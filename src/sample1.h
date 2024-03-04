@@ -9,6 +9,7 @@
 #include "bounds.h"
 #include "imgui.h"
 #include "world.h"
+#include "light.h"
 
 struct UniformBufferPool {
     jvk::Buffer* buffer{};
@@ -69,6 +70,7 @@ private:
     VkDevice d;
     bool smaaChanged = false;
     bool firstRun = true;
+    bool initLights = false;
 
     jvk::Image uvChecker;
     jvk::Image ssaoNoise;
@@ -98,6 +100,8 @@ private:
 
     std::array<jvk::Buffer, MAX_CONCURRENT_FRAMES> uboPassData;
     std::array<jvk::Buffer, MAX_CONCURRENT_FRAMES> uboPostProcessData;
+    std::array<jsr::Light, 16> lights;
+    jvk::Buffer uboLights;
 
     size_t drawDataBufferSize = 0;
 
@@ -142,6 +146,7 @@ private:
         glm::vec4 avSSAOkernel[12];
         glm::vec4 vLightPos;
         glm::vec4 vLightColor;
+        glm::vec4 vParams;
     } passData;
 
 
@@ -194,6 +199,8 @@ private:
     uint32_t visibleObjectCount{};
 
     static const uint32_t TRIANGLE_DESCRIPTOR_ID = 100;
+    void init_lights();
+
 public:
 
     glm::mat4 perspective_revZ(float fovy, float aspect, float zNear, float zFar)
@@ -215,17 +222,20 @@ public:
         ImGui::Text("ViewOrg: X: %.3f  Y: %.3f  Z: %.3f", camera.Position.x, camera.Position.y, camera.Position.z);
         ImGui::Text("obj in frustum: %d", visibleObjectCount);
         ImGui::Text("maxZ: %.2f, minZ: %.2f", maxZ, minZ);
-        ImGui::DragFloat3("Light pos", &passData.vLightPos[0], 0.05f, -20.0f, 20.0f);
-        ImGui::ColorPicker3("LightColor", &passData.vLightColor[0]);
+        //ImGui::DragFloat3("Light pos", &passData.vLightPos[0], 0.05f, -20.0f, 20.0f);
+        //ImGui::ColorPicker3("LightColor", &passData.vLightColor[0]);
         ImGui::DragFloat("Light intensity", &passData.vLightColor[3], 0.1f, 0.0f, 10000.0f);
         ImGui::DragFloat("Light range", &passData.vLightPos[3], 0.05f, 0.0f, 100.0f);
         ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.01f, 1.0f, 50.0f);
+        ImGui::Checkbox("Init lights", &initLights);
         ImGui::Checkbox("Fog On/Off", &fogEnabled);
         ImGui::Checkbox("HDR On/Off", (bool*)(&postProcessData.bHDR));
         ImGui::DragFloat("HDR Luminance", &postProcessData.fHDRLuminance, 0.5f, 1.0f, 1000.0f, "%.1f");
         ImGui::DragFloat("Fog density", &postProcessData.vFogParams.x, 0.001f, 0.0f, 10.0f, "%.4f");
         ImGui::DragFloat("Fog scale", &postProcessData.vFogParams.y, 0.001f, 0.001f, 1.0f, "%.4f");
         ImGui::DragFloat3("Sun dir", &postProcessData.vSunPos[0], 1.0f);
+        ImGui::DragFloat("AO", &passData.vParams[0], 0.001f, 0.001f, 1.0f);
+
         if (ImGui::BeginCombo("MSAA", current_msaa_item, ImGuiComboFlags_HeightRegular))
         {
             for (int n = 0; n < IM_ARRAYSIZE(items); ++n)
@@ -280,6 +290,11 @@ public:
 
         uboPassData[currentFrame].copyTo(0, sizeof(passData), &passData);
         uboPostProcessData[currentFrame].copyTo(0, sizeof(PostProcessData), &postProcessData);
+        if (initLights)
+        {
+            initLights = false;
+            init_lights();
+        }
     }
 
     virtual void prepare() override;

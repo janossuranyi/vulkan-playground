@@ -8,6 +8,7 @@ struct S_PASS {
     vec4 avSSAOkernel[12];
     vec4 vLightPos;
     vec4 vLightColor;
+    vec4 vParams;
 };
 
 #endif
