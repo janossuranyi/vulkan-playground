@@ -37,7 +37,8 @@ namespace jvk {
 
 		const size_t n = size >> 2;
 		uint32_t* ptr = (uint32_t*)(mapped + offset);
-		for (size_t i = 0; i < n; ++i) {
+		for (size_t i = 0; i < n; ++i)
+		{
 			*(ptr++) = data;
 		}
 	}

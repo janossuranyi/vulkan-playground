@@ -51,7 +51,7 @@ namespace jvk {
 	protected:
 		bool minimized = false;
 		bool quit = false;
-		Device* device;
+		Device* pDevice;
 
 		std::vector<GenericFeature> required_generic_features;
 

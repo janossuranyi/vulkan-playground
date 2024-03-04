@@ -125,14 +125,14 @@ void App::setup_descriptor_sets()
             .bind_buffer(2, &uboPostProcessData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .build(HDRDescriptor[i]);
 
-        device->set_descriptor_set_name(HDRDescriptor[i], "Tonemap DSET " + std::to_string(i));
+        pDevice->set_descriptor_set_name(HDRDescriptor[i], "Tonemap DSET " + std::to_string(i));
     }
 
 }
 
 void App::setup_descriptor_pools()
 {
-    descMgr.init(device);
+    descMgr.init(pDevice);
 }
 
 void App::setup_objects()
@@ -207,8 +207,8 @@ void App::setup_samplers()
     samplerCI.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     samplerCI.minLod = -1000.f;
     samplerCI.maxLod = 1000.f;
-    VK_CHECK(device->create_sampler(samplerCI, &sampLinearRepeat));
-    device->set_object_name((uint64_t)sampLinearRepeat, VK_DEBUG_REPORT_OBJECT_TYPE_SAMPLER_EXT, "Linear-Repeat Samp");
+    VK_CHECK(pDevice->create_sampler(samplerCI, &sampLinearRepeat));
+    pDevice->set_object_name((uint64_t)sampLinearRepeat, VK_DEBUG_REPORT_OBJECT_TYPE_SAMPLER_EXT, "Linear-Repeat Samp");
 
     samplerCI.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
     samplerCI.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
@@ -218,8 +218,8 @@ void App::setup_samplers()
     samplerCI.minLod = 0.0f;
     samplerCI.maxLod = 0.0f;
     samplerCI.anisotropyEnable = VK_FALSE;
-    VK_CHECK(device->create_sampler(samplerCI, &sampNearestClampBorder));
-    device->set_object_name((uint64_t)sampNearestClampBorder, VK_DEBUG_REPORT_OBJECT_TYPE_SAMPLER_EXT, "Nearest-Border Samp");
+    VK_CHECK(pDevice->create_sampler(samplerCI, &sampNearestClampBorder));
+    pDevice->set_object_name((uint64_t)sampNearestClampBorder, VK_DEBUG_REPORT_OBJECT_TYPE_SAMPLER_EXT, "Nearest-Border Samp");
 
 }
 
@@ -264,7 +264,7 @@ void App::build_command_buffers()
     drawPool[currentFrame]->reset();
 
     auto const col1 = vec4(1.f, .5f, 0.f, 1.f);
-    device->begin_debug_marker_region(cmd, &col1.r, "Forward Pass");
+    pDevice->begin_debug_marker_region(cmd, &col1.r, "Forward Pass");
     VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
     VkClearValue clearVal[3];
     glm::vec4 sky = glm::vec4{ 0.5f, 0.6f, 0.7f, 1.0f };
@@ -341,7 +341,7 @@ void App::build_command_buffers()
         objIdx++;
     }
     vkCmdEndRenderPass(cmd);
-    device->end_debug_marker_region(cmd);
+    pDevice->end_debug_marker_region(cmd);
 
     if (transientVtxOffset > 0)
     {
@@ -363,7 +363,7 @@ void App::build_command_buffers()
     HDR_NormalImage_MS[currentFrame].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     auto const col2 = vec4(.5f, 1.f, .5f, 1.f);
-    device->begin_debug_marker_region(cmd, &col2.r, "PostProcess Pass");
+    pDevice->begin_debug_marker_region(cmd, &col2.r, "PostProcess Pass");
 
     clearVal[0].color = { 0.f,0.f,0.f,1.f };
     beginPass.clearValueCount = 1;
@@ -391,7 +391,7 @@ void App::build_command_buffers()
 
     if (swapchain_images[currentBuffer].layout != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
     {
-        swapchain_images[currentBuffer].record_change_layout(cmd,
+        swapchain_images[currentBuffer].record_layout_change(cmd,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -422,7 +422,7 @@ void App::build_command_buffers()
     // End dynamic rendering
     vkCmdEndRenderingKHR(cmd);
 
-    device->end_debug_marker_region(cmd);
+    pDevice->end_debug_marker_region(cmd);
 }
 
 void App::render()
@@ -512,8 +512,8 @@ void App::setup_debug_pipeline(RenderPass& pass)
 
     pb._colorBlendAttachments.push_back(vks::initializers::pipelineColorBlendAttachmentState(0x0f, VK_FALSE));
 
-    jvk::ShaderModule vert_module(*device);
-    jvk::ShaderModule frag_module(*device);
+    jvk::ShaderModule vert_module(*pDevice);
+    jvk::ShaderModule frag_module(*pDevice);
     const fs::path vert_spirv_filename = basePath / "shaders/bin/debug.vert.spv";
     const fs::path frag_spirv_filename = basePath / "shaders/bin/debug.frag.spv";
     VK_CHECK(vert_module.create(vert_spirv_filename));
@@ -550,15 +550,15 @@ void App::setup_debug_pipeline(RenderPass& pass)
     debugPipeline = pb.build_pipeline(d, /*pass.pass*/ VK_NULL_HANDLE);
 
     assert(debugPipeline);
-    device->set_object_name((uint64_t)debugPipeline, VK_DEBUG_REPORT_OBJECT_TYPE_PIPELINE_EXT, "Debug pipeline");
+    pDevice->set_object_name((uint64_t)debugPipeline, VK_DEBUG_REPORT_OBJECT_TYPE_PIPELINE_EXT, "Debug pipeline");
 
 }
 
 void App::setup_tonemap_pipeline(RenderPass& pass)
 {
 
-    jvk::ShaderModule vert_module(*device);
-    jvk::ShaderModule frag_module(*device);
+    jvk::ShaderModule vert_module(*pDevice);
+    jvk::ShaderModule frag_module(*pDevice);
     const fs::path vert_spirv_filename = basePath / "shaders/bin/triquad.vert.spv";
     const fs::path frag_spirv_filename = basePath / "shaders/bin/post.frag.spv";
     VK_CHECK(vert_module.create(vert_spirv_filename));
@@ -567,7 +567,7 @@ void App::setup_tonemap_pipeline(RenderPass& pass)
     shaders.vert = &vert_module;
     shaders.frag = &frag_module;
 
-    pass.pPipeline = new jvk::GraphicsPipeline(device, shaders, &descMgr);
+    pass.pPipeline = new jvk::GraphicsPipeline(pDevice, shaders, &descMgr);
 
     // New create info to define color, depth and stencil attachments at pipeline create time
     VkPipelineRenderingCreateInfoKHR pipelineRenderingCreateInfo{};
@@ -601,8 +601,8 @@ void App::setup_triangle_pipeline(RenderPass& pass)
 
     auto vertexInput = jsr::Vertex::vertex_input_description();
 
-    jvk::ShaderModule vert_module(*device);
-    jvk::ShaderModule frag_module(*device);
+    jvk::ShaderModule vert_module(*pDevice);
+    jvk::ShaderModule frag_module(*pDevice);
     VK_CHECK(vert_module.create(basePath / "shaders/bin/triangle_v2.vert.spv"));
     VK_CHECK(frag_module.create(basePath / "shaders/bin/triangle_v2.frag.spv"));
 
@@ -614,7 +614,7 @@ void App::setup_triangle_pipeline(RenderPass& pass)
     VkPipelineColorBlendAttachmentState blend0 = vks::initializers::pipelineColorBlendAttachmentState(0x0f, VK_FALSE);
 
     {
-        pass.pPipeline = new jvk::GraphicsPipeline(device, shaders, &descMgr);
+        pass.pPipeline = new jvk::GraphicsPipeline(pDevice, shaders, &descMgr);
         jvk::GraphicsPipeline& p = *pass.pPipeline;
         p.set_name("Forward pipeline");
         p.add_dynamic_state(VK_DYNAMIC_STATE_SCISSOR)
@@ -677,7 +677,7 @@ void App::setup_preZ_pass()
     rpci.subpassCount = 1;
     rpci.pSubpasses = &subpass0;
 
-    VK_CHECK(vkCreateRenderPass(*device, &rpci, nullptr, &passes.preZ.pass));
+    VK_CHECK(vkCreateRenderPass(*pDevice, &rpci, nullptr, &passes.preZ.pass));
 }
 
 void App::setup_triangle_pass()
@@ -842,7 +842,7 @@ void App::setup_triangle_pass()
     rpci.pSubpasses = &subpass0;
 
     VK_CHECK(vkCreateRenderPass2(d, &rpci, nullptr, &passes.triangle.pass));
-    device->set_object_name((uint64_t)passes.triangle.pass, VK_DEBUG_REPORT_OBJECT_TYPE_RENDER_PASS_EXT, "Forward pass");
+    pDevice->set_object_name((uint64_t)passes.triangle.pass, VK_DEBUG_REPORT_OBJECT_TYPE_RENDER_PASS_EXT, "Forward pass");
 
 }
 
@@ -893,8 +893,8 @@ void App::setup_tonemap_pass()
     rpci.subpassCount = 1;
     rpci.pSubpasses = &subpass0;
 
-    VK_CHECK(vkCreateRenderPass(*device, &rpci, nullptr, &passes.tonemap.pass));
-    device->set_object_name((uint64_t)passes.tonemap.pass, VK_DEBUG_REPORT_OBJECT_TYPE_RENDER_PASS_EXT, "Tonemap pass");
+    VK_CHECK(vkCreateRenderPass(*pDevice, &rpci, nullptr, &passes.tonemap.pass));
+    pDevice->set_object_name((uint64_t)passes.tonemap.pass, VK_DEBUG_REPORT_OBJECT_TYPE_RENDER_PASS_EXT, "Tonemap pass");
 
 }
 
@@ -903,28 +903,28 @@ void App::setup_images()
     for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
     {
         if (HDRFramebuffer[i] != VK_NULL_HANDLE) {
-            vkDestroyFramebuffer(*device, HDRFramebuffer[i], nullptr);
+            vkDestroyFramebuffer(*pDevice, HDRFramebuffer[i], nullptr);
         }
         if (depthResolved[i].image != VK_NULL_HANDLE) {
-            device->destroy_image(&depthResolved[i]);
+            pDevice->destroy_image(&depthResolved[i]);
             vkDestroyImageView(d, depthResolvedView[i], nullptr);
         }
         if (HDRImage_MS[i].image != VK_NULL_HANDLE) {
-            device->destroy_image(&HDRImage_MS[i]);
+            pDevice->destroy_image(&HDRImage_MS[i]);
         }
         if (HDR_NormalImage_MS[i].image != VK_NULL_HANDLE) {
-            device->destroy_image(&HDR_NormalImage_MS[i]);
+            pDevice->destroy_image(&HDR_NormalImage_MS[i]);
         }
         if (HDR_NormalImage[i].image != VK_NULL_HANDLE) {
-            device->destroy_image(&HDR_NormalImage[i]);
+            pDevice->destroy_image(&HDR_NormalImage[i]);
         }
 
-        VK_CHECK(device->create_depth_stencil_attachment(depth_format,
+        VK_CHECK(pDevice->create_depth_stencil_attachment(depth_format,
             swapchain.extent(),
             VK_SAMPLE_COUNT_1_BIT,
             &depthResolved[i]));
 
-        device->set_image_name(&depthResolved[i], "Resolved Depth Img");
+        pDevice->set_image_name(&depthResolved[i], "Resolved Depth Img");
 
         VkImageViewCreateInfo view = vks::initializers::imageViewCreateInfo();
         view.format = depth_format;
@@ -934,39 +934,39 @@ void App::setup_images()
         view.subresourceRange.layerCount = 1;
         view.subresourceRange.levelCount = 1;
         VK_CHECK(vkCreateImageView(d, &view, nullptr, &depthResolvedView[i]));
-        device->set_object_name((uint64_t)depthResolvedView[i], VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT, "Resolved Depth View");
+        pDevice->set_object_name((uint64_t)depthResolvedView[i], VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT, "Resolved Depth View");
 
-        VK_CHECK(device->create_color_attachment(HDR_RT_FMT,
+        VK_CHECK(pDevice->create_color_attachment(HDR_RT_FMT,
             swapchain.extent(),
             settings.msaaSamples,
             &HDRImage_MS[i]));
-        VK_CHECK(device->create_color_attachment(HDR_RT_FMT,
+        VK_CHECK(pDevice->create_color_attachment(HDR_RT_FMT,
             swapchain.extent(),
             VK_SAMPLE_COUNT_1_BIT,
             &HDRImage[i]));
-        VK_CHECK(device->create_color_attachment(NORMAL_RT_FMT,
+        VK_CHECK(pDevice->create_color_attachment(NORMAL_RT_FMT,
             swapchain.extent(),
             settings.msaaSamples,
             &HDR_NormalImage_MS[i]));
-        VK_CHECK(device->create_color_attachment(NORMAL_RT_FMT,
+        VK_CHECK(pDevice->create_color_attachment(NORMAL_RT_FMT,
             swapchain.extent(),
             VK_SAMPLE_COUNT_1_BIT,
             &HDR_NormalImage[i]));
 
-        device->set_image_name(&HDRImage_MS[i], "HDR MS Img");
-        device->set_image_name(&HDRImage[i], "Resolved HDR Img");
-        device->set_image_name(&HDR_NormalImage_MS[i], "Normal map MS Img");
-        device->set_image_name(&HDR_NormalImage[i], "Normal map Img");
+        pDevice->set_image_name(&HDRImage_MS[i], "HDR MS Img");
+        pDevice->set_image_name(&HDRImage[i], "Resolved HDR Img");
+        pDevice->set_image_name(&HDR_NormalImage_MS[i], "Normal map MS Img");
+        pDevice->set_image_name(&HDR_NormalImage[i], "Normal map Img");
 
-        device->set_object_name((uint64_t)HDRImage_MS[i].view, VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT, "HDR MS View");
-        device->set_object_name((uint64_t)HDRImage[i].view, VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT, "Resolved HDR View");
-        device->set_object_name((uint64_t)HDR_NormalImage_MS[i].view, VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT, "Normal map View");
-        device->set_object_name((uint64_t)HDR_NormalImage[i].view, VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT, "Resolved Normal map View");
+        pDevice->set_object_name((uint64_t)HDRImage_MS[i].view, VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT, "HDR MS View");
+        pDevice->set_object_name((uint64_t)HDRImage[i].view, VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT, "Resolved HDR View");
+        pDevice->set_object_name((uint64_t)HDR_NormalImage_MS[i].view, VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT, "Normal map View");
+        pDevice->set_object_name((uint64_t)HDR_NormalImage[i].view, VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT, "Resolved Normal map View");
 
         //depthResolved[i].change_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-        device->set_image_name(&HDRImage_MS[i], "Forward Color Attachment " + std::to_string(i));
-        device->set_image_name(&HDR_NormalImage_MS[i], "Forward Normal Attachment " + std::to_string(i));
+        pDevice->set_image_name(&HDRImage_MS[i], "Forward Color Attachment " + std::to_string(i));
+        pDevice->set_image_name(&HDR_NormalImage_MS[i], "Forward Normal Attachment " + std::to_string(i));
 
         std::vector<VkImageView> targets;
         if (settings.msaaSamples > VK_SAMPLE_COUNT_1_BIT)
@@ -999,7 +999,7 @@ void App::setup_images()
 
         if (ssaoNoise.image == VK_NULL_HANDLE)
         {
-            VK_CHECK(device->create_texture2d(VK_FORMAT_R16G16_SFLOAT, VkExtent3D{ 4,4,1 }, &ssaoNoise));
+            VK_CHECK(pDevice->create_texture2d(VK_FORMAT_R16G16_SFLOAT, VkExtent3D{ 4,4,1 }, &ssaoNoise));
             std::uniform_real_distribution<float> randomFloats(0.0, 1.0); // random floats between [0.0, 1.0]
             std::default_random_engine generator;
             std::vector<glm::uint> ssaoNoise;
@@ -1012,13 +1012,13 @@ void App::setup_images()
                 ssaoNoise.push_back(noise);
             }
             jvk::Buffer tmpbuf;
-            device->create_staging_buffer(16 * 4, &tmpbuf);
+            pDevice->create_staging_buffer(16 * 4, &tmpbuf);
             tmpbuf.copyTo(0, 16 * 4, &ssaoNoise[0]);
             this->ssaoNoise.upload(VkExtent3D{ 4,4,1 }, 0, 0, 0, 0, &tmpbuf);
-            this->ssaoNoise.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            this->ssaoNoise.layout_change(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
             this->ssaoNoise.setup_descriptor();
             this->ssaoNoise.descriptor.sampler = sampNearestClampBorder;
-            device->destroy_buffer(&tmpbuf);
+            pDevice->destroy_buffer(&tmpbuf);
         }
         //HDRImage[i].change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
@@ -1033,7 +1033,7 @@ void App::prepare()
     setup_samplers();
 
     // Calculate required alignment based on minimum device offset alignment
-    minUboAlignment = device->vkbPhysicalDevice.properties.limits.minUniformBufferOffsetAlignment;
+    minUboAlignment = pDevice->vkbPhysicalDevice.properties.limits.minUniformBufferOffsetAlignment;
     drawDataBufferSize = 1024 * align_size(sizeof(DrawData), minUboAlignment);
     camera.MovementSpeed = 0.003f;
     passData.vLightPos = glm::vec4(0.f, 1.5f, 0.f, 10.f);
@@ -1043,7 +1043,7 @@ void App::prepare()
     postProcessData.fExposure = 250.f;
     postProcessData.bHDR = settings.hdr;
     postProcessData.fHDRLuminance = 250.0f;
-    d = *device;
+    d = *pDevice;
     int w, h, nc;
 
     setup_triangle_pass();
@@ -1054,21 +1054,21 @@ void App::prepare()
 
     setup_images();
 
-    device->create_buffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 128ULL * 1024 * 1024, &vtxbuf);
-    device->create_buffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 128ULL * 1024 * 1024, &idxbuf);
+    pDevice->create_buffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 128ULL * 1024 * 1024, &vtxbuf);
+    pDevice->create_buffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 128ULL * 1024 * 1024, &idxbuf);
 
-    device->create_staging_buffer(static_cast<VkDeviceSize>(1 * 1024) * 1024, &vtxStagingBuffer);
+    pDevice->create_staging_buffer(static_cast<VkDeviceSize>(1 * 1024) * 1024, &vtxStagingBuffer);
 
-    device->set_buffer_name(&vtxbuf, "Vertex Buffer");
-    device->set_buffer_name(&idxbuf, "Index Buffer");
+    pDevice->set_buffer_name(&vtxbuf, "Vertex Buffer");
+    pDevice->set_buffer_name(&idxbuf, "Index Buffer");
 
     if (!load_texture2d("../../resources/images/uv_checker_large.png", &uvChecker, true, w, h, nc))
     {
-        device->create_texture2d(VK_FORMAT_R8G8B8A8_SRGB, { 1,1,1 }, &uvChecker);
-        uvChecker.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        pDevice->create_texture2d(VK_FORMAT_R8G8B8A8_SRGB, { 1,1,1 }, &uvChecker);
+        uvChecker.layout_change(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
 
-    device->set_image_name(&uvChecker, "UV-Map debug image");
+    pDevice->set_image_name(&uvChecker, "UV-Map debug image");
 
     //uvChecker.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     uvChecker.setup_descriptor();
@@ -1080,18 +1080,18 @@ void App::prepare()
 
     for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
     {
-        VK_CHECK(device->create_buffer(
+        VK_CHECK(pDevice->create_buffer(
             VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
             1ULL * 1024 * 1024, &transientVtxBuf[i]));
 
-        device->create_uniform_buffer(8 * 1024, false, &uboPassData[i]);
+        pDevice->create_uniform_buffer(8 * 1024, false, &uboPassData[i]);
         uboPassData[i].map();
-        device->set_buffer_name(&uboPassData[i], "PerPass UBO " + std::to_string(i));
+        pDevice->set_buffer_name(&uboPassData[i], "PerPass UBO " + std::to_string(i));
 
-        device->create_uniform_buffer(sizeof(PostProcessData), false, &uboPostProcessData[i]);
+        pDevice->create_uniform_buffer(sizeof(PostProcessData), false, &uboPostProcessData[i]);
         uboPostProcessData[i].map();
-        device->set_buffer_name(&uboPostProcessData[i], "PostProcData UBO " + std::to_string(i));
+        pDevice->set_buffer_name(&uboPostProcessData[i], "PostProcData UBO " + std::to_string(i));
 
         drawPool[i] = new UniformBufferPool(drawBuf, drawDataBufferSize, i * drawDataBufferSize, minUboAlignment);
     }
@@ -1195,24 +1195,24 @@ void App::prepare()
 
     jvk::Buffer stagingBuffer;
 
-    device->create_staging_buffer(std::max(vertexBytes, indexBytes), &stagingBuffer);
+    pDevice->create_staging_buffer(std::max(vertexBytes, indexBytes), &stagingBuffer);
     stagingBuffer.copyTo(0, vertexBytes, vertices.data());
-    device->buffer_copy(&stagingBuffer, &vtxbuf, 0, 0, vertexBytes);
+    pDevice->buffer_copy(&stagingBuffer, &vtxbuf, 0, 0, vertexBytes);
     stagingBuffer.copyTo(0, indexBytes, indices.data());
-    device->buffer_copy(&stagingBuffer, &idxbuf, 0, 0, indexBytes);
-    device->destroy_buffer(&stagingBuffer);
+    pDevice->buffer_copy(&stagingBuffer, &idxbuf, 0, 0, indexBytes);
+    pDevice->destroy_buffer(&stagingBuffer);
 
     setup_objects();
 
     const size_t size = drawDataBufferSize * MAX_CONCURRENT_FRAMES;
-    device->create_uniform_buffer(size, false, &uboDrawData);
-    device->set_buffer_name(&uboDrawData, "DrawData UBO");
+    pDevice->create_uniform_buffer(size, false, &uboDrawData);
+    pDevice->set_buffer_name(&uboDrawData, "DrawData UBO");
     jvk::Buffer stage;
-    device->create_staging_buffer(size, &stage);
+    pDevice->create_staging_buffer(size, &stage);
     stage.copyTo(0, drawData.size(), drawData.data());
     for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
     {
-        device->buffer_copy(&stage, &uboDrawData, 0, i * drawDataBufferSize, drawData.size());
+        pDevice->buffer_copy(&stage, &uboDrawData, 0, i * drawDataBufferSize, drawData.size());
     }
     device->destroy_buffer(&stage);
 
@@ -1324,7 +1324,7 @@ void App::create_material_texture(const std::string& filename)
                 // Using VkGetPhysicalDeviceFeatures or GL_COMPRESSED_TEXTURE_FORMATS or
                 // extension queries, determine what compressed texture formats are
                 // supported and pick a format. For example
-                VkPhysicalDeviceFeatures deviceFeatures = device->vkbPhysicalDevice.features;
+                VkPhysicalDeviceFeatures deviceFeatures = pDevice->vkbPhysicalDevice.features;
                 khr_df_model_e colorModel = ktxTexture2_GetColorModel_e((ktxTexture2*)kTexture);
                 if (colorModel == KHR_DF_MODEL_UASTC
                     && deviceFeatures.textureCompressionASTC_LDR) {
@@ -1358,13 +1358,13 @@ void App::create_material_texture(const std::string& filename)
             ktx_uint32_t baseHeight = kTexture->baseHeight;
             ktx_bool_t isArray = kTexture->isArray;
 
-            device->create_texture2d_with_mips(ktxTexture2_GetVkFormat((ktxTexture2*)kTexture), { kTexture->baseWidth,kTexture->baseHeight,kTexture->baseDepth }, &newImage);
+            pDevice->create_texture2d_with_mips(ktxTexture2_GetVkFormat((ktxTexture2*)kTexture), { kTexture->baseWidth,kTexture->baseHeight,kTexture->baseDepth }, &newImage);
 
             jvk::Buffer stagebuf;
-            device->create_staging_buffer(ktxTexture_GetDataSize(kTexture), &stagebuf);
+            pDevice->create_staging_buffer(ktxTexture_GetDataSize(kTexture), &stagebuf);
             stagebuf.copyTo(0, ktxTexture_GetDataSize(kTexture), ktxTexture_GetData(kTexture));
 
-            device->execute_commands([&](VkCommandBuffer cmd)
+            pDevice->execute_commands([&](VkCommandBuffer cmd)
                 {
                     newImage.record_upload(cmd, [kTexture, baseWidth, baseHeight](uint32_t layer, uint32_t face, uint32_t level, jvk::Image::UploadInfo* inf)
                         {
@@ -1384,7 +1384,7 @@ void App::create_material_texture(const std::string& filename)
 
                         }, &stagebuf);
 
-                    newImage.record_change_layout(cmd,
+                    newImage.record_layout_change(cmd,
                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                         VK_PIPELINE_STAGE_TRANSFER_BIT,
                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
@@ -1394,13 +1394,13 @@ void App::create_material_texture(const std::string& filename)
 
             //newImage.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
             ktxTexture_Destroy(kTexture);
-            device->destroy_buffer(&stagebuf);
+            pDevice->destroy_buffer(&stagebuf);
         }
         else if (!load_texture2d(fn, &newImage, true, w, h, nc))
         {
             jsrlib::Error("%s notfund", fn.c_str());
-            device->create_texture2d(VK_FORMAT_R8G8B8A8_UNORM, { 1,1,1 }, &newImage);
-            newImage.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            pDevice->create_texture2d(VK_FORMAT_R8G8B8A8_UNORM, { 1,1,1 }, &newImage);
+            newImage.layout_change(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         }
         else
         {
@@ -1425,15 +1425,15 @@ bool App::load_texture2d(std::string filename, jvk::Image* dest, bool autoMipmap
 
     size_t size = w * h * 4;
     jvk::Buffer stage;
-    device->create_staging_buffer(size, &stage);
+    pDevice->create_staging_buffer(size, &stage);
     stage.copyTo(0, size, data);
     stbi_image_free(data);
 
     if (autoMipmap) {
-        device->create_texture2d_with_mips(VK_FORMAT_R8G8B8A8_UNORM, { (uint32_t)w,(uint32_t)h,1 }, dest);
+        pDevice->create_texture2d_with_mips(VK_FORMAT_R8G8B8A8_UNORM, { (uint32_t)w,(uint32_t)h,1 }, dest);
     }
     else {
-        device->create_texture2d(VK_FORMAT_R8G8B8A8_UNORM, { (uint32_t)w,(uint32_t)h,1 }, dest);
+        pDevice->create_texture2d(VK_FORMAT_R8G8B8A8_UNORM, { (uint32_t)w,(uint32_t)h,1 }, dest);
     }
 
     dest->upload({ (uint32_t)w,(uint32_t)h,1 }, 0, 0, 0, 0ull, &stage);
@@ -1441,7 +1441,7 @@ bool App::load_texture2d(std::string filename, jvk::Image* dest, bool autoMipmap
         dest->generate_mipmaps();
     }
     else {
-        dest->change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        dest->layout_change(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
 
     return true;

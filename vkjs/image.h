@@ -45,9 +45,9 @@ namespace jvk {
 
 		void upload(const VkExtent3D& extent, uint32_t layer, uint32_t face, uint32_t level, VkDeviceSize offset, Buffer* buffer);
 		void upload(UploadCallbackFn&& callback, Buffer* buffer);
-		void change_layout(VkImageLayout newLayout, VkPipelineStageFlags srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+		void layout_change(VkImageLayout newLayout, VkPipelineStageFlags srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
 
-		void record_change_layout(
+		void record_layout_change(
 			VkCommandBuffer cmd, 
 			VkImageLayout newLayout, 
 			VkPipelineStageFlags srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
