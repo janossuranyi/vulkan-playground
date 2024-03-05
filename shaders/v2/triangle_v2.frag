@@ -193,10 +193,10 @@ void main() {
         vec3 H = normalize(V + L);
         float NoL = saturate(dot(N,L));
 
-        vec3 Attn = getLightIntensity( lightdata[i], lightPosVS.xyz - In.FragCoordVS  );
+        vec3 lightColor = getLightIntensity( lightdata[i], lightPosVS.xyz - In.FragCoordVS  );
 
         vec3 Fr = specBRDF(F0, L,V,N, r);
-        finalColor += (Fr + Fd) * Attn * NoL;
+        finalColor += (Fr + Fd) * lightColor * NoL;
     }
 
     vec3 ambientColor = passdata.vParams.x * albedoColor.rgb;
