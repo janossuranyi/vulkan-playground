@@ -58,10 +58,10 @@ void App::init_lights()
         lights[i].type = LightType_Point;
         lights[i].range = 5.0f;
     }
-    device->create_staging_buffer(lights.size() * sizeof(lights[0]), &stage);
+    pDevice->create_staging_buffer(lights.size() * sizeof(lights[0]), &stage);
     stage.copyTo(0, stage.size, lights.data());
-    device->buffer_copy(&stage, &uboLights, 0, 0, stage.size);
-    device->destroy_buffer(&stage);
+    pDevice->buffer_copy(&stage, &uboLights, 0, 0, stage.size);
+    pDevice->destroy_buffer(&stage);
 }
 
 void App::on_window_resized()
@@ -1075,8 +1075,8 @@ void App::prepare()
     uvChecker.descriptor.sampler = sampLinearRepeat;
 
     jvk::Buffer* drawBuf = new jvk::Buffer();
-    device->create_uniform_buffer(drawDataBufferSize * MAX_CONCURRENT_FRAMES, false, drawBuf); drawBuf->map();
-    device->create_uniform_buffer(lights.size() * sizeof(Light), true, &uboLights);
+    pDevice->create_uniform_buffer(drawDataBufferSize * MAX_CONCURRENT_FRAMES, false, drawBuf); drawBuf->map();
+    pDevice->create_uniform_buffer(lights.size() * sizeof(Light), true, &uboLights);
 
     for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
     {
@@ -1214,7 +1214,7 @@ void App::prepare()
     {
         pDevice->buffer_copy(&stage, &uboDrawData, 0, i * drawDataBufferSize, drawData.size());
     }
-    device->destroy_buffer(&stage);
+    pDevice->destroy_buffer(&stage);
 
 
     const int kernelSize = sizeof(passData.avSSAOkernel) / sizeof(passData.avSSAOkernel[0]);
