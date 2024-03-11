@@ -11,7 +11,7 @@ namespace jvk {
 		auto device_build_result = deviceBuilder.build();
 		if (!device_build_result)
 		{
-			throw std::runtime_error("FATAL: VKJS Cannot create logical device");
+			throw std::runtime_error("FATAL: JVK Cannot create logical device");
 		}
 
 		vkbDevice = device_build_result.value();
