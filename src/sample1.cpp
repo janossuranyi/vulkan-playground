@@ -46,8 +46,8 @@ void App::init_lights()
     for (size_t i(0); i < lights.size(); ++i)
     {
         float x = -10.0f + randomFloats(generator) * 20.0f;
-        float y = 0.0f + randomFloats(generator) * 9.0f;
-        float z = -3.0f + randomFloats(generator) * 6.0f;
+        float y =   0.0f + randomFloats(generator) * 9.0f;
+        float z =  -3.0f + randomFloats(generator) * 6.0f;
 
         glm::vec3 pos{ x,y,z };
         glm::vec3 col{ randomFloats(generator) * 0.7,randomFloats(generator) * 0.7,randomFloats(generator) * 0.7 };
