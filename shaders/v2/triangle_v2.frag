@@ -100,7 +100,7 @@ vec3 specBRDF(vec3 f0, vec3 l, vec3 v, vec3 n, float perceptualRoughness)
     
     float D = D_GGX(NoH, roughness);
     vec3  F = F_Schlick(f0, LoH);
-    float V = V_SmithGGXCorrelatedFast(NoV, NoL, roughness);
+    float V = V_SmithGGXCorrelated(NoV, NoL, roughness);
 
     // specular BRDF
     vec3 Fr = (D * V) * F;
@@ -168,7 +168,7 @@ void main() {
 
 //	float roughness = max(perceptualRoughness, step( fract(In.FragCoordVS.y * 2.02), 0.5 ) );
 
-    normalTS = normalize(normalTS) * vec3(1.0,-1.0,1.0);
+    normalTS = normalize(normalTS); // * vec3(1.0,-1.0,1.0);
     vec3 F0 = mix(vec3(Df0), albedoColor.rgb, metalness);
 
     vec3 N = (tbn * normalTS);

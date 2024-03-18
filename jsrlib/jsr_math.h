@@ -1,5 +1,7 @@
 #pragma once
 
+#include <inttypes.h>
+
 namespace jsrlib {
 
 	inline float lerp(float v0, float v1, float t) {

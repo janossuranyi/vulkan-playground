@@ -35,7 +35,7 @@ inline static size_t align_size(size_t size, size_t alignment) {
 
 
 
-void App::init_lights()
+void Sample1App::init_lights()
 {
     std::uniform_real_distribution<float> randomFloats(0.0, 1.0); // random floats between [0.0, 1.0]
     std::default_random_engine generator(SDL_GetTicks64());
@@ -64,7 +64,7 @@ void App::init_lights()
     pDevice->destroy_buffer(&stage);
 }
 
-void App::on_window_resized()
+void Sample1App::on_window_resized()
 {
     setup_images();
     for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i) {
@@ -86,7 +86,7 @@ void App::on_window_resized()
     }
 }
 
-void App::setup_descriptor_sets()
+void Sample1App::setup_descriptor_sets()
 {
     for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
     {
@@ -130,12 +130,12 @@ void App::setup_descriptor_sets()
 
 }
 
-void App::setup_descriptor_pools()
+void Sample1App::setup_descriptor_pools()
 {
     descMgr.init(pDevice);
 }
 
-void App::setup_objects()
+void Sample1App::setup_objects()
 {
     std::vector<int> nodesToProcess = world->scene.rootNodes;
     objects.clear();
@@ -191,7 +191,7 @@ void App::setup_objects()
     //    memcpy(drawData.data(), drawDataStruct.data(), drawDataStruct.size() * sizeof(DrawData));
 }
 
-void App::setup_samplers()
+void Sample1App::setup_samplers()
 {
     auto samplerCI = vks::initializers::samplerCreateInfo();
     samplerCI.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
@@ -223,7 +223,7 @@ void App::setup_samplers()
 
 }
 
-App::~App()
+Sample1App::~Sample1App()
 {
     if (!d || !prepared) return;
 
@@ -254,7 +254,7 @@ App::~App()
     jsrlib::Info("Allocated descriptors: %d", vkutil::DescriptorAllocator::allocatedDescriptorCount);
 }
 
-void App::build_command_buffers()
+void Sample1App::build_command_buffers()
 {
     const bool MSAA_ENABLED = (settings.msaaSamples > VK_SAMPLE_COUNT_1_BIT);
 
@@ -425,7 +425,7 @@ void App::build_command_buffers()
     pDevice->end_debug_marker_region(cmd);
 }
 
-void App::render()
+void Sample1App::render()
 {
     static float lastTime = 0.f;
     static uint32_t lastFrame = 0;
@@ -493,7 +493,7 @@ void App::render()
     swapchain_images[currentBuffer].layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 }
 
-void App::setup_debug_pipeline(RenderPass& pass)
+void Sample1App::setup_debug_pipeline(RenderPass& pass)
 {
     auto vertexInput = jsr::Vertex::vertex_input_description_position_only();
 
@@ -554,7 +554,7 @@ void App::setup_debug_pipeline(RenderPass& pass)
 
 }
 
-void App::setup_tonemap_pipeline(RenderPass& pass)
+void Sample1App::setup_tonemap_pipeline(RenderPass& pass)
 {
 
     jvk::ShaderModule vert_module(*pDevice);
@@ -594,7 +594,7 @@ void App::setup_tonemap_pipeline(RenderPass& pass)
     VK_CHECK(pass.pPipeline->build_pipeline());
 }
 
-void App::setup_triangle_pipeline(RenderPass& pass)
+void Sample1App::setup_triangle_pipeline(RenderPass& pass)
 {
 
     if (pass.pPipeline) delete pass.pPipeline;
@@ -638,7 +638,7 @@ void App::setup_triangle_pipeline(RenderPass& pass)
 
 }
 
-void App::setup_preZ_pass()
+void Sample1App::setup_preZ_pass()
 {
     VkRenderPassCreateInfo rpci = vks::initializers::renderPassCreateInfo();
 
@@ -680,7 +680,7 @@ void App::setup_preZ_pass()
     VK_CHECK(vkCreateRenderPass(*pDevice, &rpci, nullptr, &passes.preZ.pass));
 }
 
-void App::setup_triangle_pass()
+void Sample1App::setup_triangle_pass()
 {
     if (passes.triangle.pass != VK_NULL_HANDLE)
     {
@@ -846,7 +846,7 @@ void App::setup_triangle_pass()
 
 }
 
-void App::setup_tonemap_pass()
+void Sample1App::setup_tonemap_pass()
 {
     VkRenderPassCreateInfo rpci = vks::initializers::renderPassCreateInfo();
 
@@ -898,7 +898,7 @@ void App::setup_tonemap_pass()
 
 }
 
-void App::setup_images()
+void Sample1App::setup_images()
 {
     for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
     {
@@ -1025,7 +1025,7 @@ void App::setup_images()
 }
 
 
-void App::prepare()
+void Sample1App::prepare()
 {
     jvk::AppBase::prepare();
 
@@ -1235,7 +1235,7 @@ void App::prepare()
     prepared = true;
 }
 
-void App::get_enabled_features()
+void Sample1App::get_enabled_features()
 {
     enabled_features.samplerAnisotropy = VK_TRUE;
     enabled_features.fragmentStoresAndAtomics = VK_TRUE;
@@ -1258,7 +1258,7 @@ void App::get_enabled_features()
     enabled_features12.descriptorIndexing = VK_TRUE;
 }
 
-void App::get_enabled_extensions()
+void Sample1App::get_enabled_extensions()
 {
     enabled_device_extensions.push_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
     enabled_device_extensions.push_back(VK_EXT_SHADER_SUBGROUP_BALLOT_EXTENSION_NAME);
@@ -1273,7 +1273,7 @@ void App::get_enabled_extensions()
     required_generic_features.push_back(jvk::GenericFeature(dynamicRenderingFeaturesKHR));
 }
 
-void App::create_material_texture(const std::string& filename)
+void Sample1App::create_material_texture(const std::string& filename)
 {
     std::string fn = filename;
 
@@ -1412,7 +1412,7 @@ void App::create_material_texture(const std::string& filename)
     }
 }
 
-bool App::load_texture2d(std::string filename, jvk::Image* dest, bool autoMipmap, int& w, int& h, int& nchannel)
+bool Sample1App::load_texture2d(std::string filename, jvk::Image* dest, bool autoMipmap, int& w, int& h, int& nchannel)
 {
     //int err = stbi_info(filename.c_str(), &w, &h, &nchannel);
 

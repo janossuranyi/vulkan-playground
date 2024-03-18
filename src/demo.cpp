@@ -9,7 +9,7 @@ void demo()
 {
     jsrlib::gLogWriter.SetFileName("vulkan_engine.log");
 
-    App* app = new App(true);
+    Sample1App* app = new Sample1App(true);
     app->settings.hdr = false;
     app->settings.fullscreen = true;
     app->settings.exclusive = false;

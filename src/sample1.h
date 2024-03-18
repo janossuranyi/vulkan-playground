@@ -59,7 +59,7 @@ struct UniformBufferPool {
 };
 
 
-class App : public jvk::AppBase {
+class Sample1App : public jvk::AppBase {
 private:
     //const VkFormat HDR_FMT = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
     const VkFormat HDR_RT_FMT = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -264,12 +264,12 @@ public:
     void setup_samplers();
 
 
-    App(bool b) : AppBase(b) {
+    Sample1App(bool b) : AppBase(b) {
         depth_format = VK_FORMAT_D32_SFLOAT_S8_UINT;
         settings.validation = b;
     }
 
-    virtual ~App();
+    virtual ~Sample1App();
 
     virtual void build_command_buffers() override;
 
