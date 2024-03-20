@@ -100,8 +100,8 @@ private:
 
     std::array<jvk::Buffer, MAX_CONCURRENT_FRAMES> uboPassData;
     std::array<jvk::Buffer, MAX_CONCURRENT_FRAMES> uboPostProcessData;
+    std::array<jvk::Buffer, MAX_CONCURRENT_FRAMES> uboLights;
     std::array<jsr::Light, 16> lights;
-    jvk::Buffer uboLights;
 
     size_t drawDataBufferSize = 0;
 
