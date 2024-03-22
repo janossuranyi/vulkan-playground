@@ -666,6 +666,9 @@ namespace jvk
 			else if (e.type == SDL_KEYUP) {
 				const uint32_t keycode = (uint32_t) (e.key.keysym.sym & 0xffff);
 				keystate[keycode] = false;
+				if (e.key.keysym.sym == SDLK_i) {
+					settings.overlay ^= 1;
+				}
 			}
 			else if (e.type == SDL_MOUSEBUTTONDOWN)
 			{

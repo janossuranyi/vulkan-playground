@@ -140,7 +140,7 @@ void main() {
 //    inColor.rgb = ACESFitted( mix( ppdata.sFogParams.color, ppdata.fExposure * inColor.rgb, fogFactor ) );
 
     if (!ppdata.bHDR) {
-        inColor.rgb = ACESFitted( inColor.rgb );
+        inColor.rgb = tonemap_Uncharted2( inColor.rgb );
         inColor.rgb = linearTosRGB( inColor.rgb );        
     } else {
         //inColor.rgb = ACESFilmRec2020( inColor.rgb );

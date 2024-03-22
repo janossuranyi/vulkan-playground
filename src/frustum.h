@@ -12,6 +12,7 @@ namespace jsr {
 
 		plane_t() : normal(glm::vec3(0, 0, 1)), distance(0.0f) {}
 		plane_t(const glm::vec3& n, float d) : normal(glm::normalize(n)), distance(d) {}
+		plane_t(const glm::vec4& v) : normal(glm::normalize(glm::vec3(v))), distance(v.z) {}
 		float PointDistance(const glm::vec3& p) const { return glm::dot(normal, p) + distance; }
 		glm::vec4 GetVec4() const { return glm::vec4(normal, distance); }
 	};

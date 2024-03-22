@@ -30,7 +30,7 @@ void demo()
 
 
     Sample1App* app = new Sample1App(true);
-    app->settings.hdr = false;
+    app->settings.hdr = true;
     app->settings.fullscreen = false;
     app->settings.exclusive = false;
     app->settings.vsync = true;
