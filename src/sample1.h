@@ -62,7 +62,7 @@ struct UniformBufferPool {
 class Sample1App : public jvk::AppBase {
 private:
     //const VkFormat HDR_FMT = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
-    const VkFormat HDR_RT_FMT = VK_FORMAT_R16G16B16A16_SFLOAT;
+    const VkFormat HDR_RT_FMT = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
     const VkFormat NORMAL_RT_FMT = VK_FORMAT_R16G16_SFLOAT;
     bool fogEnabled = true;
     float fps = 0.f;
@@ -100,8 +100,8 @@ private:
 
     std::array<jvk::Buffer, MAX_CONCURRENT_FRAMES> uboPassData;
     std::array<jvk::Buffer, MAX_CONCURRENT_FRAMES> uboPostProcessData;
+    std::array<jvk::Buffer, MAX_CONCURRENT_FRAMES> uboLights;
     std::array<jsr::Light, 16> lights;
-    jvk::Buffer uboLights;
 
     size_t drawDataBufferSize = 0;
 
@@ -213,6 +213,8 @@ public:
 
     virtual void on_update_gui() override
     {
+        if (settings.overlay == false) return;
+
         static const char* items[] = { "Off","MSAAx2","MSAAx4","MSAAx8" };
         static const char* current_msaa_item = items[static_cast<size_t>(settings.msaaSamples) - 1];
 

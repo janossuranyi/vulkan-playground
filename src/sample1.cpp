@@ -37,8 +37,9 @@ inline static size_t align_size(size_t size, size_t alignment) {
 
 void Sample1App::init_lights()
 {
+    std::random_device rdev;
     std::uniform_real_distribution<float> randomFloats(0.0, 1.0); // random floats between [0.0, 1.0]
-    std::default_random_engine generator(SDL_GetTicks64());
+    std::default_random_engine generator(rdev());
     jvk::Buffer stage;
 
     /* Init ligths */
@@ -60,7 +61,9 @@ void Sample1App::init_lights()
     }
     pDevice->create_staging_buffer(lights.size() * sizeof(lights[0]), &stage);
     stage.copyTo(0, stage.size, lights.data());
-    pDevice->buffer_copy(&stage, &uboLights, 0, 0, stage.size);
+    for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i) {
+        pDevice->buffer_copy(&stage, &uboLights[ i ], 0, 0, stage.size);
+    }
     pDevice->destroy_buffer(&stage);
 }
 
@@ -98,13 +101,13 @@ void Sample1App::setup_descriptor_sets()
         uboPassData[i].descriptor.range = sizeof(PassData);
         uboPassData[i].descriptor.offset = 0;
         const VkShaderStageFlags stageBits = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-        uboLights.setup_descriptor();
+        uboLights[i].setup_descriptor();
 
         descMgr.builder()
             .bind_buffer(0, &uboPassData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
             .bind_buffer(1, &drawbufInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT)
             .bind_image(2, &ssaoNoise.descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
-            .bind_buffer(3, &uboLights.descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT)
+            .bind_buffer(3, &uboLights[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .build(triangleDescriptors[i]);
 
         HDRImage[i].setup_descriptor();
@@ -1076,7 +1079,6 @@ void Sample1App::prepare()
 
     jvk::Buffer* drawBuf = new jvk::Buffer();
     pDevice->create_uniform_buffer(drawDataBufferSize * MAX_CONCURRENT_FRAMES, false, drawBuf); drawBuf->map();
-    pDevice->create_uniform_buffer(lights.size() * sizeof(Light), true, &uboLights);
 
     for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
     {
@@ -1094,6 +1096,7 @@ void Sample1App::prepare()
         pDevice->set_buffer_name(&uboPostProcessData[i], "PostProcData UBO " + std::to_string(i));
 
         drawPool[i] = new UniformBufferPool(drawBuf, drawDataBufferSize, i * drawDataBufferSize, minUboAlignment);
+        pDevice->create_uniform_buffer(lights.size() * sizeof(Light), true, &uboLights[i]);
     }
 
     world = std::make_unique<World>();
@@ -1218,8 +1221,6 @@ void Sample1App::prepare()
 
 
     const int kernelSize = sizeof(passData.avSSAOkernel) / sizeof(passData.avSSAOkernel[0]);
-    std::uniform_real_distribution<float> randomFloats(0.0, 1.0); // random floats between [0.0, 1.0]
-    std::default_random_engine generator;
 
     init_lights();
     setup_descriptor_sets();

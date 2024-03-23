@@ -111,9 +111,10 @@ vec3 specBRDF(vec3 f0, vec3 l, vec3 v, vec3 n, float perceptualRoughness)
 
 vec3 specBRDF_DOOM( vec3 f0,vec3 L, vec3 V, vec3 N, float r ) {
 	const vec3 H = normalize( V + L );
-	float m = 0.2 + r * 0.8;
+	float m = r; //0.2 + r * 0.8;
     m *= m;
-    m *= m;
+//    m *= m;
+    m = clamp(m, 0.089, 1.0);
     float m2 = m * m;
 	float NdotH = clamp( dot( N, H ), 0.0, 1.0 );
 	float spec = (NdotH * NdotH) * (m2 - 1) + 1;
@@ -168,7 +169,7 @@ void main() {
 
 //	float roughness = max(perceptualRoughness, step( fract(In.FragCoordVS.y * 2.02), 0.5 ) );
 
-    normalTS = normalize(normalTS); // * vec3(1.0,-1.0,1.0);
+    normalTS = normalize(normalTS) * vec3(1.0,-1.0,1.0);
     vec3 F0 = mix(vec3(Df0), albedoColor.rgb, metalness);
 
     vec3 N = (tbn * normalTS);
@@ -189,14 +190,14 @@ void main() {
     for(uint i = 0; i < lightdata.length(); ++i)
     {
         vec4 lightPosVS = passdata.mtxView * vec4(lightdata[i].position,1.0);
-        vec3 L = normalize(lightPosVS.xyz - In.FragCoordVS);
+        vec3 lightVec = lightPosVS.xyz - In.FragCoordVS;
+        vec3 L = normalize(lightVec);
         vec3 H = normalize(V + L);
-        float NoL = saturate(dot(N,L));
 
-        vec3 lightColor = getLightIntensity( lightdata[i], lightPosVS.xyz - In.FragCoordVS  );
+        vec3 lightColor = getLightIntensity( lightdata[i], lightVec  );
 
         vec3 Fr = specBRDF(F0, L,V,N, r);
-        finalColor += (Fr + Fd) * lightColor * NoL;
+        finalColor += (Fr + Fd) * lightColor * saturate(dot(N,L));
     }
 
     vec3 ambientColor = passdata.vParams.x * albedoColor.rgb;
