@@ -16,6 +16,8 @@ add_executable(demo
     light.h
     sample1.h
     sample1.cpp
+    sample2.h
+    sample2.cpp
     demo.h
     demo.cpp
     demo_utils.cpp

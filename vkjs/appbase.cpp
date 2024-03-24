@@ -544,6 +544,9 @@ namespace jvk
 
 		init_window();
 
+		get_enabled_features();
+		get_enabled_extensions();
+
 		res = create_instance(settings.validation);
 		if (res != VK_SUCCESS) {
 			jsrlib::Error("Could not create Vulkan instance :%d", res);
@@ -555,8 +558,6 @@ namespace jvk
 #ifdef VKJS_USE_VOLK
 		volkLoadInstanceOnly(instance);
 #endif
-		get_enabled_features();
-		get_enabled_extensions();
 
 		VkPhysicalDeviceShaderDrawParametersFeatures shader_draw_parameters_features = {};
 		shader_draw_parameters_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES;
@@ -763,6 +764,10 @@ namespace jvk
 
 		if (sysinf.debug_utils_available)
 		{
+		}
+
+		for (auto& ext : enabled_instance_extensions) {
+			builder.enable_extension(ext);
 		}
 
 		auto instance_builder_result = builder.build();

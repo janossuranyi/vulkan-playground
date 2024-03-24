@@ -5,7 +5,7 @@
 #include "../v1/colorConversion.glsl"
 #include "../v1/fog.glsl"
 #include "../v1/linearDepth.glsl"
-
+#include "../v1/luminance.glsl"
 
 const mat3 from709toDisplayP3 = mat3(    
     0.822461969, 0.033194199, 0.017082631,
@@ -56,10 +56,10 @@ struct S_PPDATA {
     float fZnear;
     float fZfar;
     float fHDRLuminance;    
+    float fHDRbias;
     bool bHDR;
     int pad0;
     int pad1;
-    int pad2;
 };
 
 layout(location = 0) in vec2 texcoord;
@@ -108,6 +108,11 @@ vec3 ComputePositionViewFromZ(vec2 positionScreen, float viewSpaceZ, mat4 mCamer
     
     return positionView;
 }
+
+float max3(vec3 c) {
+    return max(c.r, max(c.g,c.b));
+}
+
 void main() {
 
     vec4 inColor = texelFetch( samp_input, ivec2(gl_FragCoord.xy), 0 );
@@ -140,12 +145,12 @@ void main() {
 //    inColor.rgb = ACESFitted( mix( ppdata.sFogParams.color, ppdata.fExposure * inColor.rgb, fogFactor ) );
 
     if (!ppdata.bHDR) {
-        inColor.rgb = tonemap_Uncharted2( inColor.rgb );
+        inColor.rgb = ACESFilmApproximate( inColor.rgb );
         inColor.rgb = linearTosRGB( inColor.rgb );        
     } else {
-        //inColor.rgb = ACESFilmRec2020( inColor.rgb );
-        vec3 dci_p3 = ppdata.fHDRLuminance * (from709toDisplayP3 * inColor.rgb);
-        inColor.rgb = PQinverseEOTF(clamp( dci_p3 , 0.0, 10000.0 ));
+        vec3 rec2020 = (inColor.xyz) * from709to2020 ;
+        rec2020 = ACESFilmRec2020(rec2020);
+        inColor.rgb = PQinverseEOTF(clamp( ppdata.fHDRLuminance * rec2020 , 0.0, 400.0 ));
     }
 
     fragColor0 = vec4( inColor.rgb, inColor.a );

@@ -167,8 +167,8 @@ private:
         float fZnear;
         float fZfar;
         float fHDRLuminance;
+        float fHDRbias;
         bool bHDR;
-        int pad0;
         int pad1;
         int pad2;
     } postProcessData{};
@@ -233,6 +233,7 @@ public:
         ImGui::Checkbox("Fog On/Off", &fogEnabled);
         ImGui::Checkbox("HDR On/Off", (bool*)(&postProcessData.bHDR));
         ImGui::DragFloat("HDR Luminance", &postProcessData.fHDRLuminance, 0.5f, 1.0f, 1000.0f, "%.1f");
+        ImGui::DragFloat("HDR Bias", &postProcessData.fHDRbias, 0.001f, -2.0f, 2.0f, "%.3f");
         ImGui::DragFloat("Fog density", &postProcessData.vFogParams.x, 0.001f, 0.0f, 10.0f, "%.4f");
         ImGui::DragFloat("Fog scale", &postProcessData.vFogParams.y, 0.001f, 0.001f, 1.0f, "%.4f");
         ImGui::DragFloat3("Sun dir", &postProcessData.vSunPos[0], 1.0f);

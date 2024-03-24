@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "sample1.h"
+#include "sample2.h"
 #include "vkjs/vkjs.h"
 #include "jsrlib/jsr_logger.h"
 
@@ -29,7 +30,7 @@ void demo()
     jsrlib::gLogWriter.SetFileName("vulkan_engine.log");
 
 
-    Sample1App* app = new Sample1App(true);
+    auto* app = new Sample1App(true);
     app->settings.hdr = true;
     app->settings.fullscreen = false;
     app->settings.exclusive = false;
@@ -41,9 +42,6 @@ void demo()
     
     if (app->init())
     {
-        MyFunc fn;
-
-        std::cout << "fn()=" << foo(2,3,5,fn) << "\n";
         app->prepare();
         app->run();
     }

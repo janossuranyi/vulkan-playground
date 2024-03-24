@@ -1046,6 +1046,7 @@ void Sample1App::prepare()
     postProcessData.fExposure = 250.f;
     postProcessData.bHDR = settings.hdr;
     postProcessData.fHDRLuminance = 250.0f;
+    postProcessData.fHDRbias = 0.0f;
     d = *pDevice;
     int w, h, nc;
 
@@ -1261,6 +1262,7 @@ void Sample1App::get_enabled_features()
 
 void Sample1App::get_enabled_extensions()
 {
+    enabled_instance_extensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
     enabled_device_extensions.push_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
     enabled_device_extensions.push_back(VK_EXT_SHADER_SUBGROUP_BALLOT_EXTENSION_NAME);
     enabled_device_extensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
