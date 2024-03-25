@@ -111,10 +111,10 @@ vec3 specBRDF(vec3 f0, vec3 l, vec3 v, vec3 n, float perceptualRoughness)
 
 vec3 specBRDF_DOOM( vec3 f0,vec3 L, vec3 V, vec3 N, float r ) {
 	const vec3 H = normalize( V + L );
-	float m = r; //0.2 + r * 0.8;
+	float m = 0.2 + r * 0.8;
     m *= m;
-//    m *= m;
-    m = clamp(m, 0.089, 1.0);
+    //m *= m;
+    //m = clamp(m, 0.089, 1.0);
     float m2 = m * m;
 	float NdotH = clamp( dot( N, H ), 0.0, 1.0 );
 	float spec = (NdotH * NdotH) * (m2 - 1) + 1;
@@ -157,7 +157,7 @@ void main() {
         return;
     }
 
-    //normalTS.z = sqrt(1.0 - dot(normalTS.xy, normalTS.xy));
+    normalTS.z = sqrt(1.0 - dot(normalTS.xy, normalTS.xy));
 
 //  const float r = 0.2 + pbrSample.g * 0.8;
     const float r = pbrSample.g;
@@ -196,8 +196,8 @@ void main() {
 
         vec3 lightColor = getLightIntensity( lightdata[i], lightVec  );
 
-        vec3 Fr = specBRDF(F0, L,V,N, r);
-        finalColor += (Fr + Fd) * lightColor * saturate(dot(N,L));
+        vec3 Fr = specBRDF_DOOM(F0, L,V,N, r);
+        finalColor += (Fr + Fd) * lightColor * saturate(dot(N, L));
     }
 
     vec3 ambientColor = passdata.vParams.x * albedoColor.rgb;

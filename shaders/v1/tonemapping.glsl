@@ -49,26 +49,47 @@ vec3 RRTAndODTFit(vec3 v)
 //matrices are transposed because they are from HLSL code
 vec3 ACESFitted(vec3 color)
 {
-    color = transpose(ACESInputMat) * color;
+    //color = transpose(ACESInputMat) * color;
+    color = color * ACESInputMat;
 
     // Apply RRT and ODT
     color = RRTAndODTFit(color);
-    color = transpose(ACESOutputMat) * color;
+    //color = transpose(ACESOutputMat) * color;
+    color = color * ACESOutputMat;
     color = clamp(color, 0, 1);
     return color;
 }
 
+vec3 tonemap_Uncharted2_internal(vec3 x)
+{
+	const float A = 0.15;
+	const float B = 0.50;
+	const float C = 0.10;
+	const float D = 0.20;
+	const float E = 0.02;
+	const float F = 0.30;
+    
+	return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-E/F;
+}
+
 vec3 tonemap_Uncharted2(vec3 x)
 {
-	float A = 0.15;
-	float B = 0.50;
-	float C = 0.10;
-	float D = 0.20;
-	float E = 0.02;
-	float F = 0.30;
-	float W = 11.2;
+	const float W = 11.2;
+    vec3 c = tonemap_Uncharted2_internal(x*2.0);
+    vec3 whiteScale = 1.0/tonemap_Uncharted2_internal(vec3(W));
+    return c * whiteScale;
+}
 
-	return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-E/F;
+vec3 tonemap_filmic(vec3 x) {
+  vec3 X = max(vec3(0.0), x - 0.004);
+  vec3 result = (X * (6.2 * X + 0.5)) / (X * (6.2 * X + 1.7) + 0.06);
+  return pow(result, vec3(2.2));
+}
+
+float tonemap_filmic(float x) {
+  float X = max(0.0, x - 0.004);
+  float result = (X * (6.2 * X + 0.5)) / (X * (6.2 * X + 1.7) + 0.06);
+  return pow(result, 2.2);
 }
 
 #endif // #ifndef TONEMAPPING_INC

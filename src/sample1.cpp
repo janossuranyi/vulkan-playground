@@ -1054,7 +1054,7 @@ void Sample1App::prepare()
     setup_triangle_pipeline(passes.triangle);
     setup_tonemap_pass();
     setup_tonemap_pipeline(passes.tonemap);
-    setup_debug_pipeline(passes.tonemap);
+    //setup_debug_pipeline(passes.tonemap);
 
     setup_images();
 

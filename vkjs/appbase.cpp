@@ -253,6 +253,7 @@ namespace jvk
 			
 			for (const auto& it : swapchain.images) {
 				jsrlib::Info("Swapchain Image: %llx", it);
+
 			}
 
 			swapchain_images = swapchain.get_swapchain_images();

@@ -1,6 +1,6 @@
 #include "sample2.h"
 #include "vkjs/vkcheck.h"
-
+#include "glm/glm.hpp"
 /* Fd is the displayed luminance in cd/m2 */
 float PQinverseEOTF(float Fd)
 {
@@ -19,16 +19,21 @@ glm::vec3 PQinverseEOTF(glm::vec3 c)
 		PQinverseEOTF(c.z));
 }
 
+void Sample2App::init_pipelines()
+{
+
+}
+
 void Sample2App::on_update_gui()
 {
 	if (settings.overlay == false) return;
-	ImGui::DragFloat3("ClearColor", &hdrColor[0], .2f, 0.0f, 400.0f);
+	ImGui::DragFloat3("ClearColor", &hdrColor[0], 1.0f/256.0f, 0.0f, 1.0f);
 }
 
 Sample2App::~Sample2App()
 {
 	vkDeviceWaitIdle(*pDevice);
-	for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
+	for (size_t i(0); i < fb.size(); ++i)
 	{
 		if (fb[i]) vkDestroyFramebuffer(*pDevice, fb[i], nullptr);
 	}
@@ -75,6 +80,20 @@ void Sample2App::prepare()
 
 	VK_CHECK(vkCreateRenderPass(*pDevice, &ci, nullptr, &pass));
 
+	auto fbci = vks::initializers::framebufferCreateInfo();
+	fbci.renderPass = pass;
+	fbci.layers = 1;
+	fbci.attachmentCount = 1;
+	fbci.width = width;
+	fbci.height = height;
+	auto& views = swapchain.views;
+	fb.resize(views.size());
+
+	for (int i(0); i < views.size(); ++i) {
+		fbci.pAttachments = &views[i];
+		VK_CHECK(vkCreateFramebuffer(*pDevice, &fbci, 0, &fb[i]));
+	}
+
 	prepared = true;
 }
 
@@ -84,13 +103,13 @@ void Sample2App::build_command_buffers()
 	VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
 	VkClearValue clearVal;
 
-	glm::vec3 hdr10 = PQinverseEOTF(hdrColor);
+	glm::vec3 hdr10 = glm::pow(hdrColor,glm::vec4(1.0f/2.2f));// PQinverseEOTF(hdrColor);
 
 	clearVal.color = { hdr10.r, hdr10.g, hdr10.b, 1.0f };
 	beginPass.clearValueCount = 1;
 	beginPass.pClearValues = &clearVal;
 	beginPass.renderPass = pass;
-	beginPass.framebuffer = fb[currentFrame];
+	beginPass.framebuffer = fb[currentBuffer];
 	beginPass.renderArea.extent = swapchain.vkb_swapchain.extent;
 	beginPass.renderArea.offset = { 0,0 };
 	vkCmdBeginRenderPass(cmd, &beginPass, VK_SUBPASS_CONTENTS_INLINE);
@@ -100,22 +119,8 @@ void Sample2App::build_command_buffers()
 
 void Sample2App::render()
 {
-	if (fb[currentFrame] != VK_NULL_HANDLE) {
-		vkDestroyFramebuffer(*pDevice, fb[currentFrame], 0);
-	}
-
-	std::array<VkImageView, 1> targets = { swapchain.views[currentBuffer] };
-	auto fbci = vks::initializers::framebufferCreateInfo();
-	fbci.renderPass = pass;
-	fbci.layers = 1;
-	fbci.attachmentCount = (uint32_t)targets.size();
-	fbci.pAttachments = targets.data();
-	fbci.width = width;
-	fbci.height = height;
-	VK_CHECK(vkCreateFramebuffer(*pDevice, &fbci, 0, &fb[currentFrame]));
-
 	build_command_buffers();
-	swapchain_images[currentBuffer].layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	//swapchain_images[currentBuffer].layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
 }
 

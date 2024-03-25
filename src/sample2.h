@@ -13,7 +13,13 @@ class Sample2App : public jvk::AppBase
 private:
 	glm::vec4 hdrColor = { 0.0f,0.0f,0.0f,1.0f };
 	VkRenderPass pass = {};
-	VkFramebuffer fb[MAX_CONCURRENT_FRAMES] = {};
+	std::vector<VkFramebuffer> fb;
+	struct {
+		VkPipeline handle;
+	} pipeline;
+
+	void init_pipelines();
+
 public:
 	Sample2App(bool b) : AppBase(b) {
 		depth_format = VK_FORMAT_D32_SFLOAT_S8_UINT;

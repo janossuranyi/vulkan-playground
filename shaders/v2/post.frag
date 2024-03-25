@@ -113,6 +113,22 @@ float max3(vec3 c) {
     return max(c.r, max(c.g,c.b));
 }
 
+vec3 tonemap_and_transfer(in vec3 x)
+{
+    vec3 r = vec3(0.0);
+
+    if (ppdata.bHDR) {
+        // Transer Rec.709 -> Rec.2020 and apply ST.2084 display curve
+        r = x * from709to2020;
+        r = PQinverseEOTF( r * ppdata.fHDRLuminance );
+    } else {
+        r = tonemap_filmic( x );
+        r = linearTosRGB( x );
+    }
+
+    return r;
+}
+
 void main() {
 
     vec4 inColor = texelFetch( samp_input, ivec2(gl_FragCoord.xy), 0 );
@@ -144,14 +160,6 @@ void main() {
 
 //    inColor.rgb = ACESFitted( mix( ppdata.sFogParams.color, ppdata.fExposure * inColor.rgb, fogFactor ) );
 
-    if (!ppdata.bHDR) {
-        inColor.rgb = ACESFilmApproximate( inColor.rgb );
-        inColor.rgb = linearTosRGB( inColor.rgb );        
-    } else {
-        vec3 rec2020 = (inColor.xyz) * from709to2020 ;
-        rec2020 = ACESFilmRec2020(rec2020);
-        inColor.rgb = PQinverseEOTF(clamp( ppdata.fHDRLuminance * rec2020 , 0.0, 400.0 ));
-    }
-
+    inColor.rgb = tonemap_and_transfer(inColor.rgb);
     fragColor0 = vec4( inColor.rgb, inColor.a );
 }
