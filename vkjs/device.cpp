@@ -729,4 +729,9 @@ namespace jvk {
 		flush_command_buffer(cmd, graphics_queue, pool, false);
 	}
 
+	void Device::wait_idle() const
+	{
+		vkDeviceWaitIdle(this->logicalDevice);
+	}
+
 }

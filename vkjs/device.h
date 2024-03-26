@@ -87,7 +87,7 @@ namespace jvk {
 		VkResult begin_command_buffer(VkCommandBuffer cb);
 		void flush_command_buffer(VkCommandBuffer commandBuffer, VkQueue queue, VkCommandPool pool, bool free);
 		void execute_commands(std::function<void(VkCommandBuffer)>&& callback);
-
+		void wait_idle() const;
 		VkCommandPool command_pool;
 		VkCommandBuffer command_buffer;
 

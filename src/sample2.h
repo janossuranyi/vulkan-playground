@@ -5,20 +5,25 @@
 #include "vkjs/VulkanInitializers.hpp"
 #include "vkjs/appbase.h"
 #include "vkjs/pipeline.h"
+#include "vkjs/vk_descriptors.h"
+
 #include "glm/glm.hpp"
 #include "imgui.h"
+#include <memory>
+#include <filesystem>
 
 class Sample2App : public jvk::AppBase
 {
 private:
 	glm::vec4 hdrColor = { 0.0f,0.0f,0.0f,1.0f };
 	VkRenderPass pass = {};
-	std::vector<VkFramebuffer> fb;
-	struct {
-		VkPipeline handle;
-	} pipeline;
+	std::unique_ptr<VkFramebuffer[]> fb;
+	std::unique_ptr<jvk::GraphicsPipeline> pipeline;
+	std::unique_ptr<vkutil::DescriptorManager> descriptorMgr;
 
 	void init_pipelines();
+	void create_framebuffers();
+	std::filesystem::path basePath;
 
 public:
 	Sample2App(bool b) : AppBase(b) {
@@ -27,6 +32,7 @@ public:
 
 	}
 
+	virtual void on_window_resized() override;
 	virtual void on_update_gui() override;
 	virtual ~Sample2App();
 	virtual void prepare() override;
@@ -35,4 +41,5 @@ public:
 
 	virtual void render() override;
 	virtual void get_enabled_extensions() override;
+
 };

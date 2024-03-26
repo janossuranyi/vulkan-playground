@@ -3,16 +3,15 @@
 #include "sample2.h"
 #include "vkjs/vkjs.h"
 #include "jsrlib/jsr_logger.h"
+#include <memory>
+#include <iostream>
 
 //#include "jsrlib/jsr_jobsystem2.h"
-
 
 void demo()
 {
     jsrlib::gLogWriter.SetFileName("vulkan_engine.log");
-
-
-    auto* app = new Sample1App(true);
+    auto app = std::make_unique<Sample2App>(true);
     app->settings.hdr = true;
     app->settings.fullscreen = false;
     app->settings.exclusive = false;
@@ -28,7 +27,6 @@ void demo()
         app->run();
     }
 
-    delete app;    
 }
 
 int main(int argc, char* argv[])

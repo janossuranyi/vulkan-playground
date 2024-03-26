@@ -1,6 +1,12 @@
 #include "sample2.h"
 #include "vkjs/vkcheck.h"
+#include "vkjs/pipeline.h"
+#include "vkjs/shader_module.h"
 #include "glm/glm.hpp"
+#include <filesystem>
+
+namespace fs = std::filesystem;
+
 /* Fd is the displayed luminance in cd/m2 */
 float PQinverseEOTF(float Fd)
 {
@@ -21,19 +27,44 @@ glm::vec3 PQinverseEOTF(glm::vec3 c)
 
 void Sample2App::init_pipelines()
 {
+	jvk::ShaderModule vert_module(*pDevice);
+	jvk::ShaderModule frag_module(*pDevice);
+	const fs::path vert_spirv_filename = basePath / "shaders/bin/debug.vert.spv";
+	const fs::path frag_spirv_filename = basePath / "shaders/bin/debug.frag.spv";
+	VK_CHECK(vert_module.create(vert_spirv_filename));
+	VK_CHECK(frag_module.create(frag_spirv_filename));
+	jvk::GraphicsShaderInfo shaders{};
+	shaders.vert = &vert_module;
+	shaders.frag = &frag_module;
 
+	pipeline.reset(new jvk::GraphicsPipeline(pDevice, shaders, descriptorMgr.get()));
+
+	pipeline->set_cull_mode(VK_CULL_MODE_NONE)
+		.set_depth_func(VK_COMPARE_OP_ALWAYS)
+		.set_depth_mask(false)
+		.set_depth_test(false)
+		.set_draw_mode(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+		.set_sample_count(VK_SAMPLE_COUNT_1_BIT)
+		.set_polygon_mode(VK_POLYGON_MODE_FILL)
+		.set_render_pass(pass)
+		.add_dynamic_state(VK_DYNAMIC_STATE_VIEWPORT)
+		.add_dynamic_state(VK_DYNAMIC_STATE_SCISSOR)
+		.add_attachment_blend_state(vks::initializers::pipelineColorBlendAttachmentState(0xf,false))
+		.set_name("debug");
+
+	VK_CHECK(pipeline->build_pipeline());
 }
 
 void Sample2App::on_update_gui()
 {
 	if (settings.overlay == false) return;
-	ImGui::DragFloat3("ClearColor", &hdrColor[0], 1.0f/256.0f, 0.0f, 1.0f);
+	ImGui::DragFloat3("ClearColor", &hdrColor[0], 1.0f/1024.0f, 0.0f, 1.0f);
 }
 
 Sample2App::~Sample2App()
 {
 	vkDeviceWaitIdle(*pDevice);
-	for (size_t i(0); i < fb.size(); ++i)
+	for (size_t i(0); i < swapchain.images.size(); ++i)
 	{
 		if (fb[i]) vkDestroyFramebuffer(*pDevice, fb[i], nullptr);
 	}
@@ -43,9 +74,39 @@ Sample2App::~Sample2App()
 	}
 }
 
+void Sample2App::create_framebuffers()
+{
+	if (fb) {
+		for (size_t i(0); i < swapchain.images.size(); ++i)
+		{
+			if (fb[i]) {
+				vkDestroyFramebuffer(*pDevice, fb[i], nullptr);
+				fb[i] = VK_NULL_HANDLE;
+			}
+		}
+	}
+	
+	fb = std::make_unique<VkFramebuffer[]>(swapchain.images.size());
+	
+	auto fbci = vks::initializers::framebufferCreateInfo();
+	fbci.renderPass = pass;
+	fbci.layers = 1;
+	fbci.attachmentCount = 1;
+	fbci.width = width;
+	fbci.height = height;
+	auto& views = swapchain.views;
+
+	for (int i(0); i < views.size(); ++i) {
+		fbci.pAttachments = &views[i];
+		VK_CHECK(vkCreateFramebuffer(*pDevice, &fbci, 0, &fb[i]));
+	}
+}
 void Sample2App::prepare()
 {
 	jvk::AppBase::prepare();
+
+	basePath = fs::path("../..");
+
 	VkAttachmentDescription color = {};
 	color.format = swapchain.vkb_swapchain.image_format;
 	color.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -79,20 +140,12 @@ void Sample2App::prepare()
 	ci.pDependencies = &colorDep;
 
 	VK_CHECK(vkCreateRenderPass(*pDevice, &ci, nullptr, &pass));
+	create_framebuffers();
 
-	auto fbci = vks::initializers::framebufferCreateInfo();
-	fbci.renderPass = pass;
-	fbci.layers = 1;
-	fbci.attachmentCount = 1;
-	fbci.width = width;
-	fbci.height = height;
-	auto& views = swapchain.views;
-	fb.resize(views.size());
+	descriptorMgr.reset(new vkutil::DescriptorManager());
+	descriptorMgr->init(pDevice);
 
-	for (int i(0); i < views.size(); ++i) {
-		fbci.pAttachments = &views[i];
-		VK_CHECK(vkCreateFramebuffer(*pDevice, &fbci, 0, &fb[i]));
-	}
+	init_pipelines();
 
 	prepared = true;
 }
@@ -127,4 +180,10 @@ void Sample2App::render()
 void Sample2App::get_enabled_extensions()
 {
 	enabled_instance_extensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
+}
+
+void Sample2App::on_window_resized()
+{
+	//pDevice->wait_idle();
+	create_framebuffers();
 }
