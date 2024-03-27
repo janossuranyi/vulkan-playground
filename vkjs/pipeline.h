@@ -69,6 +69,7 @@ namespace jvk {
 		VkPipeline pipeline() const;
 		VkPipelineLayout pipeline_layout() const;
 		VkDescriptorPool descriptor_pool() const;
+		virtual void set_specialization_info(VkShaderStageFlagBits stageBits, const VkSpecializationInfo* info) = 0;
 		void bind_descriptor_sets(VkCommandBuffer cmd, uint32_t count, const VkDescriptorSet* sets, uint32_t dynamicOffsetCount = 0, const uint32_t* dynamicOffsets = nullptr);
 	protected:
 
@@ -120,6 +121,7 @@ namespace jvk {
 		GraphicsPipeline& set_next_chain(const void* ptr);
 		GraphicsPipeline& add_dynamic_state(VkDynamicState s);
 		GraphicsPipeline& add_attachment_blend_state(const VkPipelineColorBlendAttachmentState& r);
+		void set_specialization_info(VkShaderStageFlagBits stageBits, const VkSpecializationInfo* info);
 
 		VkResult build_pipeline() override;
 	private:

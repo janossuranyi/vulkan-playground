@@ -244,6 +244,20 @@ namespace jvk {
 		_builder._colorBlendAttachments.push_back(r);
 		return *this;
 	}
+	void GraphicsPipeline::set_specialization_info(VkShaderStageFlagBits stageBits, const VkSpecializationInfo* info)
+	{
+		switch (stageBits)
+		{
+		case VK_SHADER_STAGE_VERTEX_BIT:
+			_builder._shaderStages[0].pSpecializationInfo = info;
+			break;
+		case VK_SHADER_STAGE_FRAGMENT_BIT:
+			_builder._shaderStages[1].pSpecializationInfo = info;
+			break;
+		default:
+			assert(false);
+		}
+	}
 	VkResult GraphicsPipeline::build_pipeline()
 	{
 		_builder._rasterizer = vks::initializers::pipelineRasterizationStateCreateInfo(_polygonMode, _cullMode, _frontFace, 0);

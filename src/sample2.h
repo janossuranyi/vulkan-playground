@@ -20,10 +20,15 @@ private:
 	std::unique_ptr<VkFramebuffer[]> fb;
 	std::unique_ptr<jvk::GraphicsPipeline> pipeline;
 	std::unique_ptr<vkutil::DescriptorManager> descriptorMgr;
+	jvk::Buffer ubo;
+	struct ubo_t {
+		glm::vec4 parms[8];
+	} parms{};
 
 	void init_pipelines();
 	void create_framebuffers();
 	std::filesystem::path basePath;
+	VkDescriptorSet ubo_set{};
 
 public:
 	Sample2App(bool b) : AppBase(b) {

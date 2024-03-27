@@ -205,6 +205,8 @@ namespace jvk {
 		
 		bool init();
 		void handle_events();
+		VkRect2D get_scissor() const;
+		VkViewport get_viewport() const;
 
 		/** @brief (Virtual) Creates the application wide Vulkan instance */
 		virtual VkResult create_instance(bool enable_validation);

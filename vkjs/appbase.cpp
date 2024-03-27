@@ -734,6 +734,16 @@ namespace jvk
 
 	}
 
+	VkRect2D AppBase::get_scissor() const
+	{
+		return VkRect2D{ 0,0,width,height };
+	}
+
+	VkViewport AppBase::get_viewport() const
+	{
+		return VkViewport{ 0.0f,0.0f,float(width),float(height),0.0f,1.0f };
+	}
+
 	VkResult AppBase::create_instance(bool enable_validation)
 	{
 

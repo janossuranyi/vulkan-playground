@@ -37,8 +37,30 @@ void Sample2App::init_pipelines()
 	shaders.vert = &vert_module;
 	shaders.frag = &frag_module;
 
+	struct spec_t {
+		float VSCALE = -1.0f;
+		int PARM_COUNT = 8;
+	} specData;
+
+	int specIdx = 0;
+	VkSpecializationMapEntry specent[2];
+	specent[specIdx].constantID = 1;
+	specent[specIdx].offset = offsetof(spec_t, VSCALE);
+	specent[specIdx].size = sizeof(specData.VSCALE);
+	++specIdx;
+	specent[specIdx].constantID = 2;
+	specent[specIdx].offset = offsetof(spec_t, PARM_COUNT);
+	specent[specIdx].size = sizeof(specData.PARM_COUNT);
+
+	VkSpecializationInfo specinf = {};
+	specinf.dataSize = sizeof(specData);
+	specinf.mapEntryCount = 2;
+	specinf.pMapEntries = &specent[0];
+	specinf.pData = &specData;
+
 	pipeline.reset(new jvk::GraphicsPipeline(pDevice, shaders, descriptorMgr.get()));
 
+	pipeline->set_specialization_info(VK_SHADER_STAGE_VERTEX_BIT, &specinf);
 	pipeline->set_cull_mode(VK_CULL_MODE_NONE)
 		.set_depth_func(VK_COMPARE_OP_ALWAYS)
 		.set_depth_mask(false)
@@ -147,6 +169,17 @@ void Sample2App::prepare()
 
 	init_pipelines();
 
+	pDevice->create_uniform_buffer(sizeof(ubo_t), false, &ubo);
+	parms.parms[0] = { 1.0f,0.0f,0.0f,1.0f };
+	parms.parms[1] = { 0.0f,1.0f,0.0f,1.0f };
+	parms.parms[2] = { 1.0f,1.0f,1.0f,1.0f };
+	ubo.map();
+	ubo.copyTo(0, sizeof(ubo_t), &parms);
+
+	descriptorMgr->builder().
+		bind_buffer(0, &ubo.descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
+		.build(ubo_set);
+
 	prepared = true;
 }
 
@@ -156,6 +189,9 @@ void Sample2App::build_command_buffers()
 	VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
 	VkClearValue clearVal;
 
+	VkRect2D scissor = get_scissor();
+	VkViewport viewport = get_viewport();
+	
 	glm::vec3 hdr10 = glm::pow(hdrColor,glm::vec4(1.0f/2.2f));// PQinverseEOTF(hdrColor);
 
 	clearVal.color = { hdr10.r, hdr10.g, hdr10.b, 1.0f };
@@ -166,6 +202,13 @@ void Sample2App::build_command_buffers()
 	beginPass.renderArea.extent = swapchain.vkb_swapchain.extent;
 	beginPass.renderArea.offset = { 0,0 };
 	vkCmdBeginRenderPass(cmd, &beginPass, VK_SUBPASS_CONTENTS_INLINE);
+	vkCmdSetViewport(cmd, 0, 1, &viewport);
+	vkCmdSetScissor(cmd, 0, 1, &scissor);
+	pipeline->bind(cmd);
+	pipeline->bind_descriptor_sets(cmd, 1, &ubo_set);
+
+	vkCmdDraw(cmd, 3, 1, 0, 0);
+
 	vkCmdEndRenderPass(cmd);
 
 }
