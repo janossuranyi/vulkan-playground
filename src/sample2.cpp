@@ -172,7 +172,10 @@ void Sample2App::prepare()
 	pDevice->create_uniform_buffer(sizeof(ubo_t), false, &ubo);
 	parms.parms[0] = { 1.0f,0.0f,0.0f,1.0f };
 	parms.parms[1] = { 0.0f,1.0f,0.0f,1.0f };
-	parms.parms[2] = { 1.0f,1.0f,1.0f,1.0f };
+	parms.parms[2] = { 0.0f,0.0f,1.0f,1.0f };
+
+	for (int i(0); i < 3; ++i) { parms.parms[i] *= 400.0f; }
+
 	ubo.map();
 	ubo.copyTo(0, sizeof(ubo_t), &parms);
 
@@ -192,7 +195,7 @@ void Sample2App::build_command_buffers()
 	VkRect2D scissor = get_scissor();
 	VkViewport viewport = get_viewport();
 	
-	glm::vec3 hdr10 = glm::pow(hdrColor,glm::vec4(1.0f/2.2f));// PQinverseEOTF(hdrColor);
+	glm::vec3 hdr10 = glm::pow(hdrColor,glm::vec4(1.0f/2.2f));//PQinverseEOTF(hdrColor);
 
 	clearVal.color = { hdr10.r, hdr10.g, hdr10.b, 1.0f };
 	beginPass.clearValueCount = 1;
