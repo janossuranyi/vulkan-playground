@@ -97,13 +97,13 @@ namespace vkutil {
 		bool build(VkDescriptorSet& set);
 	private:
 		
-		std::vector<VkWriteDescriptorSet> writes;
-		std::vector<VkDescriptorSetLayoutBinding> bindings;
+		std::vector<VkWriteDescriptorSet> m_writes;
+		std::vector<VkDescriptorSetLayoutBinding> m_bindings;
 		
-		VkDescriptorSetLayout dsetLayout;
-		DescriptorLayoutCache* cache;
-		DescriptorAllocator* alloc;
-		DescriptorManager* mgr;
+		VkDescriptorSetLayout m_dsetLayout;
+		DescriptorLayoutCache* m_pCache;
+		DescriptorAllocator* m_pAlloc;
+		DescriptorManager* m_pMgr;
 	};
 
 	class DescriptorManager {

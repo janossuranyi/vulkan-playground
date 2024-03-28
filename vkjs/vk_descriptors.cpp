@@ -32,8 +32,7 @@ namespace vkutil {
 			vkResetDescriptorPool(device, p, 0);
 		}
 
-		freePools = usedPools;
-		usedPools.clear();
+		freePools = std::move(usedPools);
 		currentPool = VK_NULL_HANDLE;
 	}
 
@@ -123,7 +122,7 @@ namespace vkutil {
 
 	VkDescriptorPool DescriptorAllocator::grab_pool()
 	{
-		if (freePools.size() > 0)
+		if ( ! freePools.empty() )
 		{
 			VkDescriptorPool pool = freePools.back();
 			freePools.pop_back();
@@ -204,8 +203,8 @@ namespace vkutil {
 	{
 		DescriptorBuilder builder;
 		
-		builder.cache = layoutCache;
-		builder.alloc = allocator;
+		builder.m_pCache = layoutCache;
+		builder.m_pAlloc = allocator;
 		return builder;
 	}
 
@@ -213,9 +212,9 @@ namespace vkutil {
 	{
 		DescriptorBuilder builder;
 
-		builder.mgr = mgr;
-		builder.alloc = nullptr;
-		builder.cache = nullptr;
+		builder.m_pMgr = mgr;
+		builder.m_pAlloc = nullptr;
+		builder.m_pCache = nullptr;
 
 		return builder;
 	}
@@ -241,7 +240,7 @@ namespace vkutil {
 		newBinding.stageFlags = stageFlags;
 		newBinding.binding = binding;
 
-		bindings.push_back(newBinding);
+		m_bindings.push_back(newBinding);
 
 		VkWriteDescriptorSet newWrite{};
 		newWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -253,7 +252,7 @@ namespace vkutil {
 		newWrite.dstBinding = binding;
 		//newWrite.dstArrayElement = 0;
 
-		writes.push_back(newWrite);
+		m_writes.push_back(newWrite);
 
 		return *this;
 	}
@@ -268,7 +267,7 @@ namespace vkutil {
 		newBinding.stageFlags = stageFlags;
 		newBinding.binding = binding;
 
-		bindings.push_back(newBinding);
+		m_bindings.push_back(newBinding);
 
 		VkWriteDescriptorSet newWrite{};
 		newWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -280,7 +279,7 @@ namespace vkutil {
 		newWrite.dstBinding = binding;
 		//newWrite.dstArrayElement = 0;
 
-		writes.push_back(newWrite);
+		m_writes.push_back(newWrite);
 		return *this;
 	}
 
@@ -291,15 +290,15 @@ namespace vkutil {
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 		layoutInfo.pNext = nullptr;
 
-		layoutInfo.pBindings = bindings.data();
-		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+		layoutInfo.pBindings = m_bindings.data();
+		layoutInfo.bindingCount = static_cast<uint32_t>(m_bindings.size());
 
-		if (mgr) {
-			*layout = mgr->create_descriptor_layout(&layoutInfo);
+		if (m_pMgr) {
+			*layout = m_pMgr->create_descriptor_layout(&layoutInfo);
 		}
 		else
 		{
-			*layout = cache->create_descriptor_layout(&layoutInfo);
+			*layout = m_pCache->create_descriptor_layout(&layoutInfo);
 		}
 
 		return build(set, *layout);
@@ -310,23 +309,23 @@ namespace vkutil {
 		//allocate descriptor
 		bool success;
 		
-		if (mgr)
+		if (m_pMgr)
 		{
-			alloc = mgr->get_allocator(layout);
+			m_pAlloc = m_pMgr->get_allocator(layout);
 		}
 		
-		assert(alloc);
-		success = alloc->allocate(&set, layout);
+		assert(m_pAlloc);
+		success = m_pAlloc->allocate(&set, layout);
 
 		if (!success) { return false; };
 
 		//write descriptor
 
-		for (VkWriteDescriptorSet& w : writes) {
+		for (VkWriteDescriptorSet& w : m_writes) {
 			w.dstSet = set;
 		}
 
-		vkUpdateDescriptorSets(alloc->device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+		vkUpdateDescriptorSets(m_pAlloc->device, static_cast<uint32_t>(m_writes.size()), m_writes.data(), 0, nullptr);
 
 		return true;
 	}

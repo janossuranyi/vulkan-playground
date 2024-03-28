@@ -179,8 +179,8 @@ void Sample2App::prepare()
 	ubo.map();
 	ubo.copyTo(0, sizeof(ubo_t), &parms);
 
-	descriptorMgr->builder().
-		bind_buffer(0, &ubo.descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
+	descriptorMgr->builder()
+		.bind_buffer(0, &ubo.descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
 		.build(ubo_set);
 
 	prepared = true;
