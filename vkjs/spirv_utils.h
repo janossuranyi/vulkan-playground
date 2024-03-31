@@ -16,6 +16,7 @@ namespace jvk {
 	std::vector<DescriptorSetLayoutData> get_descriptor_set_layout_data(uint32_t size, const void* code);
 	std::vector<DescriptorSetLayoutData> merge_descriptor_set_layout_data(const std::vector<DescriptorSetLayoutData>& layoutData);
 	std::vector<DescriptorSetLayoutData> extract_descriptor_set_layout_data(const std::vector<const ShaderModule*>& modules);
+	std::vector<VkPushConstantRange> extract_push_constants(const ShaderModule* module);
 }
 
 #endif // !VKJS_SPIRV_UTILS_H_

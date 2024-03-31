@@ -12,6 +12,7 @@ namespace jvk {
 
 	struct PipelineBuilder {
 
+		std::vector<VkPushConstantRange>					_pushConstantRanges;
 		std::vector<VkPipelineShaderStageCreateInfo>		_shaderStages;
 		VkPipelineVertexInputStateCreateInfo				_vertexInputInfo;
 		VkPipelineInputAssemblyStateCreateInfo				_inputAssembly;
@@ -21,6 +22,7 @@ namespace jvk {
 		VkPipelineLayout									_pipelineLayout;
 		VkPipelineDepthStencilStateCreateInfo				_depthStencil;
 		VkPipelineDynamicStateCreateInfo					_dynamicStates;
+		std::vector<VkDescriptorSetLayout>					_descriptorSetLayouts;
 		const void*											_pNext;
 		VkPipeline build_pipeline(VkDevice device, VkRenderPass pass);
 		VkResult result = VK_ERROR_UNKNOWN;
@@ -69,6 +71,7 @@ namespace jvk {
 		VkPipeline pipeline() const;
 		VkPipelineLayout pipeline_layout() const;
 		VkDescriptorPool descriptor_pool() const;
+		virtual VulkanPipeline& add_push_constant_range(const VkPushConstantRange& pcRange) = 0;
 		virtual void set_specialization_info(VkShaderStageFlagBits stageBits, const VkSpecializationInfo* info) = 0;
 		void bind_descriptor_sets(VkCommandBuffer cmd, uint32_t count, const VkDescriptorSet* sets, uint32_t dynamicOffsetCount = 0, const uint32_t* dynamicOffsets = nullptr);
 	protected:
@@ -122,7 +125,7 @@ namespace jvk {
 		GraphicsPipeline& add_dynamic_state(VkDynamicState s);
 		GraphicsPipeline& add_attachment_blend_state(const VkPipelineColorBlendAttachmentState& r);
 		void set_specialization_info(VkShaderStageFlagBits stageBits, const VkSpecializationInfo* info);
-
+		virtual GraphicsPipeline& add_push_constant_range(const VkPushConstantRange& pcRange) override;
 		VkResult build_pipeline() override;
 	private:
 		Device* _device;

@@ -24,6 +24,13 @@ struct S_LIGHT
     int dummy1;
 };
 
+/*
+watts = blender_lamp.energy
+LUMENS_PER_WATT = 683
+PI = 3.14159
+candela = watts * LUMENS_PER_WATT / (4 * PI)
+*/
+
 // https://github.com/KhronosGroup/glTF/blob/master/extensions/2.0/Khronos/KHR_lights_punctual/README.md#range-property
 float getRangeAttenuation(float range, float distance)
 {
@@ -31,7 +38,7 @@ float getRangeAttenuation(float range, float distance)
     if (range <= 0.0)
     {
         // negative range means unlimited
-        return 1.0 / distanceSq;
+        return 1.0 / (1.0 + distanceSq);
     }
     float Kr = distance / range;
     Kr *= Kr;

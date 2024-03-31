@@ -220,17 +220,17 @@ namespace vkutil {
 	}
 
 
-	DescriptorBuilder& DescriptorBuilder::bind_buffer(uint32_t binding, const VkDescriptorBufferInfo* bufferInfo, VkDescriptorType type, VkShaderStageFlags stageFlags)
+	DescriptorBuilder& DescriptorBuilder::bind_buffer(uint32_t binding, const VkDescriptorBufferInfo* bufferInfo, VkDescriptorType type, VkShaderStageFlags stageFlags, uint32_t arrayIndex)
 	{
-		return bind_buffers(binding, 1, bufferInfo, type, stageFlags);
+		return bind_buffers(binding, 1, bufferInfo, type, stageFlags, arrayIndex);
 	}
 
-	DescriptorBuilder& DescriptorBuilder::bind_image(uint32_t binding, const VkDescriptorImageInfo* imageInfo, VkDescriptorType type, VkShaderStageFlags stageFlags)
+	DescriptorBuilder& DescriptorBuilder::bind_image(uint32_t binding, const VkDescriptorImageInfo* imageInfo, VkDescriptorType type, VkShaderStageFlags stageFlags, uint32_t arrayIndex)
 	{
-		return bind_images(binding, 1, imageInfo, type, stageFlags);
+		return bind_images(binding, 1, imageInfo, type, stageFlags, arrayIndex);
 	}
 
-	DescriptorBuilder& DescriptorBuilder::bind_buffers(uint32_t binding, uint32_t bufferCount, const VkDescriptorBufferInfo* bufferInfo, VkDescriptorType type, VkShaderStageFlags stageFlags)
+	DescriptorBuilder& DescriptorBuilder::bind_buffers(uint32_t binding, uint32_t bufferCount, const VkDescriptorBufferInfo* bufferInfo, VkDescriptorType type, VkShaderStageFlags stageFlags, uint32_t arrayIndex)
 	{
 		VkDescriptorSetLayoutBinding newBinding{};
 
@@ -250,14 +250,14 @@ namespace vkutil {
 		newWrite.descriptorType = type;
 		newWrite.pBufferInfo = bufferInfo;
 		newWrite.dstBinding = binding;
-		//newWrite.dstArrayElement = 0;
+		newWrite.dstArrayElement = arrayIndex;
 
 		m_writes.push_back(newWrite);
 
 		return *this;
 	}
 
-	DescriptorBuilder& DescriptorBuilder::bind_images(uint32_t binding, uint32_t imageCount, const VkDescriptorImageInfo* imageInfo, VkDescriptorType type, VkShaderStageFlags stageFlags)
+	DescriptorBuilder& DescriptorBuilder::bind_images(uint32_t binding, uint32_t imageCount, const VkDescriptorImageInfo* imageInfo, VkDescriptorType type, VkShaderStageFlags stageFlags, uint32_t arrayIndex)
 	{
 		VkDescriptorSetLayoutBinding newBinding{};
 
@@ -277,7 +277,7 @@ namespace vkutil {
 		newWrite.descriptorType = type;
 		newWrite.pImageInfo = imageInfo;
 		newWrite.dstBinding = binding;
-		//newWrite.dstArrayElement = 0;
+		newWrite.dstArrayElement = arrayIndex;
 
 		m_writes.push_back(newWrite);
 		return *this;

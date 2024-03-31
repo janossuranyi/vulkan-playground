@@ -7,6 +7,12 @@
 
 namespace fs = std::filesystem;
 
+const glm::mat3 from709to2020 = glm::mat3(
+	glm::vec3(0.6274040, 0.3292820, 0.0433136),
+	glm::vec3(0.0690970, 0.9195400, 0.0113612),
+	glm::vec3(0.0163916, 0.0880132, 0.8955950)
+);
+
 /* Fd is the displayed luminance in cd/m2 */
 float PQinverseEOTF(float Fd)
 {
@@ -39,7 +45,7 @@ void Sample2App::init_pipelines()
 
 	struct spec_t {
 		float VSCALE = -1.0f;
-		int PARM_COUNT = 8;
+		int PARM_COUNT = 1;
 	} specData;
 
 	int specIdx = 0;
@@ -58,10 +64,16 @@ void Sample2App::init_pipelines()
 	specinf.pMapEntries = &specent[0];
 	specinf.pData = &specData;
 
+	VkPushConstantRange pc[2];
+	pc[1].offset = 0;
+	pc[1].size = sizeof(pc);
+	pc[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
 	pipeline.reset(new jvk::GraphicsPipeline(pDevice, shaders, descriptorMgr.get()));
 
 	pipeline->set_specialization_info(VK_SHADER_STAGE_VERTEX_BIT, &specinf);
 	pipeline->set_cull_mode(VK_CULL_MODE_NONE)
+		.add_push_constant_range(pc[1])
 		.set_depth_func(VK_COMPARE_OP_ALWAYS)
 		.set_depth_mask(false)
 		.set_depth_test(false)
@@ -81,6 +93,10 @@ void Sample2App::on_update_gui()
 {
 	if (settings.overlay == false) return;
 	ImGui::DragFloat3("ClearColor", &hdrColor[0], 1.0f/1024.0f, 0.0f, 1.0f);
+	ImGui::DragFloat("Color Scale", &pc.data.x, 0.01f, 0.0f, 2000.0f, "%.2f");
+	ImGui::DragFloat("Exposure", &pc.data.y, 0.01f, 0.0f, 300.0f);
+	ImGui::DragFloat("Max Lum.", &pc.data.z, 1.0f, 100.0f, 2000.0f);
+	ImGui::DragFloat("White level.", &pc.data.w, 1.0f, 00.0f, 200.0f);
 }
 
 Sample2App::~Sample2App()
@@ -173,8 +189,10 @@ void Sample2App::prepare()
 	parms.parms[0] = { 1.0f,0.0f,0.0f,1.0f };
 	parms.parms[1] = { 0.0f,1.0f,0.0f,1.0f };
 	parms.parms[2] = { 0.0f,0.0f,1.0f,1.0f };
-
-	for (int i(0); i < 3; ++i) { parms.parms[i] *= 400.0f; }
+	pc.data.x = 10.0f;
+	pc.data.y = 1.0f;
+	pc.data.z = 400.0f;
+	pc.data.w = 0.0f;
 
 	ubo.map();
 	ubo.copyTo(0, sizeof(ubo_t), &parms);
@@ -195,8 +213,8 @@ void Sample2App::build_command_buffers()
 	VkRect2D scissor = get_scissor();
 	VkViewport viewport = get_viewport();
 	
-	glm::vec3 hdr10 = glm::pow(hdrColor,glm::vec4(1.0f/2.2f));//PQinverseEOTF(hdrColor);
-
+	glm::vec3 hdr10 = PQinverseEOTF( (hdrColor * from709to2020) * (400.0f) );
+	
 	clearVal.color = { hdr10.r, hdr10.g, hdr10.b, 1.0f };
 	beginPass.clearValueCount = 1;
 	beginPass.pClearValues = &clearVal;
@@ -209,7 +227,7 @@ void Sample2App::build_command_buffers()
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 	pipeline->bind(cmd);
 	pipeline->bind_descriptor_sets(cmd, 1, &ubo_set);
-
+	vkCmdPushConstants(cmd, pipeline->pipeline_layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
 	vkCmdDraw(cmd, 3, 1, 0, 0);
 
 	vkCmdEndRenderPass(cmd);

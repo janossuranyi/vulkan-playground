@@ -166,11 +166,15 @@ private:
         float fExposure;
         float fZnear;
         float fZfar;
-        float fHDRLuminance;
-        float fHDRbias;
-        bool bHDR;
-        int pad1;
-        int pad2;
+        float tonemapper_P;  // Max brightness.
+        float tonemapper_a;    // contrast
+        float tonemapper_m;   // linear section start
+        float tonemapper_l;    // linear section length
+        float tonemapper_c;   // black
+        float tonemapper_b;    // pedestal
+        float tonemapper_s;  // scale 
+        float saturation;
+        uint32_t bHDR;
     } postProcessData{};
 
     static_assert((sizeof(PostProcessData) & 15) == 0);
@@ -228,12 +232,20 @@ public:
         //ImGui::ColorPicker3("LightColor", &passData.vLightColor[0]);
         ImGui::DragFloat("Light intensity", &passData.vLightColor[3], 0.1f, 0.0f, 10000.0f);
         ImGui::DragFloat("Light range", &passData.vLightPos[3], 0.05f, 0.0f, 100.0f);
-        ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.01f, 1.0f, 50.0f);
+        ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.1f, 1.0f, 100.0f);
         ImGui::Checkbox("Init lights", &initLights);
         ImGui::Checkbox("Fog On/Off", &fogEnabled);
         ImGui::Checkbox("HDR On/Off", (bool*)(&postProcessData.bHDR));
-        ImGui::DragFloat("HDR Luminance", &postProcessData.fHDRLuminance, 0.5f, 1.0f, 1000.0f, "%.1f");
-        ImGui::DragFloat("HDR Bias", &postProcessData.fHDRbias, 0.001f, -2.0f, 2.0f, "%.3f");
+        
+        ImGui::DragFloat("Max Luminance", &postProcessData.tonemapper_P, 0.5f, 0.0f, 1000.0f, "%.1f");
+        ImGui::DragFloat("Contrast", &postProcessData.tonemapper_a, 0.01f, 0.0f, 10.0f, "%.2f");
+        ImGui::DragFloat("Linear start", &postProcessData.tonemapper_m, 0.001f, 0.001f, 0.4f, "%.3f");
+        ImGui::DragFloat("Linear length", &postProcessData.tonemapper_l, 0.001f, 0.001f, 1.0f, "%.3f");
+        ImGui::DragFloat("Black", &postProcessData.tonemapper_c, 0.01f, 0.0f, 10.0f, "%.2f");
+        ImGui::DragFloat("Pedestral", &postProcessData.tonemapper_b, 0.001f, 0.0f, 1.0f, "%.3f");
+        ImGui::DragFloat("Brightness", &postProcessData.tonemapper_s, 0.01f, 0.0f, 50.0f, "%.2f");
+        ImGui::DragFloat("Saturation", &postProcessData.saturation, 0.01f, 0.0f, 1.0f, "%.2f");
+
         ImGui::DragFloat("Fog density", &postProcessData.vFogParams.x, 0.001f, 0.0f, 10.0f, "%.4f");
         ImGui::DragFloat("Fog scale", &postProcessData.vFogParams.y, 0.001f, 0.001f, 1.0f, "%.4f");
         ImGui::DragFloat3("Sun dir", &postProcessData.vSunPos[0], 1.0f);

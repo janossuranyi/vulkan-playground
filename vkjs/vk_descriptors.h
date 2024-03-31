@@ -87,10 +87,10 @@ namespace vkutil {
 		static DescriptorBuilder begin(DescriptorLayoutCache* layoutCache, DescriptorAllocator* allocator );
 		static DescriptorBuilder begin(DescriptorManager* mgr);
 
-		DescriptorBuilder& bind_buffer(uint32_t binding, const VkDescriptorBufferInfo* bufferInfo, VkDescriptorType type, VkShaderStageFlags stageFlags);
-		DescriptorBuilder& bind_image(uint32_t binding, const VkDescriptorImageInfo* imageInfo, VkDescriptorType type, VkShaderStageFlags stageFlags);
-		DescriptorBuilder& bind_buffers(uint32_t binding, uint32_t bufferCount, const VkDescriptorBufferInfo* bufferInfo, VkDescriptorType type, VkShaderStageFlags stageFlags);
-		DescriptorBuilder& bind_images(uint32_t binding, uint32_t imageCount, const VkDescriptorImageInfo* imageInfo, VkDescriptorType type, VkShaderStageFlags stageFlags);
+		DescriptorBuilder& bind_buffer(uint32_t binding, const VkDescriptorBufferInfo* bufferInfo, VkDescriptorType type, VkShaderStageFlags stageFlags, uint32_t arrayIndex = 0);
+		DescriptorBuilder& bind_image(uint32_t binding, const VkDescriptorImageInfo* imageInfo, VkDescriptorType type, VkShaderStageFlags stageFlags, uint32_t arrayIndex = 0);
+		DescriptorBuilder& bind_buffers(uint32_t binding, uint32_t bufferCount, const VkDescriptorBufferInfo* bufferInfo, VkDescriptorType type, VkShaderStageFlags stageFlags, uint32_t arrayIndex = 0);
+		DescriptorBuilder& bind_images(uint32_t binding, uint32_t imageCount, const VkDescriptorImageInfo* imageInfo, VkDescriptorType type, VkShaderStageFlags stageFlags, uint32_t arrayIndex = 0);
 
 		bool build(VkDescriptorSet& set, VkDescriptorSetLayout* layout);
 		bool build(VkDescriptorSet& set, VkDescriptorSetLayout layout);

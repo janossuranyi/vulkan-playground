@@ -6,6 +6,7 @@
 #include "../v1/fog.glsl"
 #include "../v1/linearDepth.glsl"
 #include "../v1/luminance.glsl"
+#include "colorspace.glsl"
 
 const mat3 from709toDisplayP3 = mat3(    
     0.822461969, 0.033194199, 0.017082631,
@@ -47,6 +48,25 @@ vec3 PQinverseEOTF(vec3 c)
         PQinverseEOTF(c.z));
 }
 
+vec3 ApplyPQ(vec3 color)
+{
+    // Apply ST2084 curve
+    const float m1 = 2610.0 / 4096.0 / 4;
+    const float m2 = 2523.0 / 4096.0 * 128;
+    const float c1 = 3424.0 / 4096.0;
+    const float c2 = 2413.0 / 4096.0 * 32;
+    const float c3 = 2392.0 / 4096.0 * 32;
+    const vec3 cp = pow(abs(color.xyz), vec3(m1));
+    color.xyz = pow((c1 + c2 * cp) / (1 + c3 * cp), vec3(m2));
+    return color;
+}
+
+float InversePQ_approx(float x)
+{
+    float k = pow((x * 0.01f), 0.1593017578125);
+    return (3.61972*(1e-8) + k * (0.00102859 + k * (-0.101284 + 2.05784 * k))) / (0.0495245 + k * (0.135214 + k * (0.772669 + k)));
+}
+
 struct S_PPDATA {
     mat4 mtxInvProj;
     vec4 vCameraPos;
@@ -55,11 +75,15 @@ struct S_PPDATA {
     float fExposure;
     float fZnear;
     float fZfar;
-    float fHDRLuminance;    
-    float fHDRbias;
+    float tonemapper_P;  // Max brightness.
+    float tonemapper_a;    // contrast
+    float tonemapper_m;   // linear section start
+    float tonemapper_l;    // linear section length
+    float tonemapper_c;   // black
+    float tonemapper_b;    // pedestal
+    float tonemapper_s;  // scale 
+    float saturation;
     bool bHDR;
-    int pad0;
-    int pad1;
 };
 
 layout(location = 0) in vec2 texcoord;
@@ -113,17 +137,37 @@ float max3(vec3 c) {
     return max(c.r, max(c.g,c.b));
 }
 
+vec3 applySaturationSRGB(vec3 c, float saturation)
+{
+    return mix(vec3(computeLuminance(c)), c, saturation);
+}
+
 vec3 tonemap_and_transfer(in vec3 x)
 {
-    vec3 r = vec3(0.0);
+    //vec3 r = tonemap_Uncharted2( x );
+
+    const float P = ppdata.bHDR ? ppdata.tonemapper_P : min(1.0, ppdata.tonemapper_P); // max display brightness.
+    const float a = ppdata.tonemapper_a;  // contrast
+    const float m = ppdata.tonemapper_m; // linear section start
+    const float l = ppdata.tonemapper_l;  // linear section length
+    const float c = ppdata.tonemapper_c; // black
+    const float b = ppdata.tonemapper_b;  // pedestal
+    vec3 r;
+    // Tonemapper in srgb color space.
+    r = uchimuraTonemapper(x, P, a, m, l, c, b);
+    //r = ACESFilmApproximate( x );
+    // apply saturation in srgb space.
+    r = applySaturationSRGB(r, ppdata.saturation);
 
     if (ppdata.bHDR) {
         // Transer Rec.709 -> Rec.2020 and apply ST.2084 display curve
-        r = x * from709to2020;
-        r = PQinverseEOTF( r * ppdata.fHDRLuminance );
-    } else {
-        r = tonemap_filmic( x );
-        r = linearTosRGB( x );
+        r = sRGB_2_Rec2020 * r;
+        r *= ppdata.tonemapper_s * (100.0 / 10000.0);
+        r = ApplyPQ( r );
+    }
+    else
+    {
+        r = linearTosRGB( r );
     }
 
     return r;

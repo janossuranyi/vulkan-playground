@@ -131,4 +131,30 @@ namespace jvk {
 
         return merge_descriptor_set_layout_data(in);
     }
+
+    std::vector<VkPushConstantRange> extract_push_constants(const ShaderModule* mod)
+    {
+        std::vector<VkPushConstantRange> res;
+        SpvReflectShaderModule module = {};
+        SpvReflectResult result = spvReflectCreateShaderModule(mod->size(), mod->data(), &module);
+        assert(result == SPV_REFLECT_RESULT_SUCCESS);
+
+        uint32_t count = 0;
+        result = spvReflectEnumerateEntryPointPushConstantBlocks(&module, "main", &count, nullptr);
+        assert(result == SPV_REFLECT_RESULT_SUCCESS);
+
+        std::vector<SpvReflectBlockVariable*> blocks(count);
+        result = spvReflectEnumerateEntryPointPushConstantBlocks(&module, "main", &count, blocks.data());
+        assert(result == SPV_REFLECT_RESULT_SUCCESS);
+
+        // Process push constant ranges
+        for (size_t it_pc(0); it_pc < blocks.size(); ++it_pc)
+        {
+            res.emplace_back();
+            res[it_pc].offset = blocks[it_pc]->offset;
+            res[it_pc].size = blocks[it_pc]->size;
+        }
+
+        return res;
+    }
 }

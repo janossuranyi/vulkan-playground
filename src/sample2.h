@@ -30,6 +30,10 @@ private:
 	std::filesystem::path basePath;
 	VkDescriptorSet ubo_set{};
 
+	struct FragPushConstants {
+		glm::vec4 data;
+	} pc{};
+
 public:
 	Sample2App(bool b) : AppBase(b) {
 		depth_format = VK_FORMAT_D32_SFLOAT_S8_UINT;

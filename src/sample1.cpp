@@ -55,9 +55,9 @@ void Sample1App::init_lights()
         lights[i] = {};
         lights[i].set_position(pos);
         lights[i].set_color(col);
-        lights[i].intensity = randomFloats(generator) * 4.0f + 3.0f;
+        lights[i].intensity = randomFloats(generator) * 2.0f + 0.5f;
         lights[i].type = LightType_Point;
-        lights[i].range = 5.0f;
+        lights[i].range = std::sqrtf(lights[i].intensity / (2.0f/255.0f));
     }
     pDevice->create_staging_buffer(lights.size() * sizeof(lights[0]), &stage);
     stage.copyTo(0, stage.size, lights.data());
@@ -1045,8 +1045,14 @@ void Sample1App::prepare()
     postProcessData.vSunPos = { 100.0f, -100.0f, -100.0f, 0.0f };
     postProcessData.fExposure = 250.f;
     postProcessData.bHDR = settings.hdr;
-    postProcessData.fHDRLuminance = 250.0f;
-    postProcessData.fHDRbias = 0.0f;
+    postProcessData.tonemapper_P = 1000.0f;     // Max luminance
+    postProcessData.tonemapper_a = 1.0f;        // contrast
+    postProcessData.tonemapper_b = 0.0f;        // pedestal
+    postProcessData.tonemapper_c = 1.33f;       // black
+    postProcessData.tonemapper_m = 0.22f;      // linear section start
+    postProcessData.tonemapper_l = 0.4f;       // linear section length
+    postProcessData.tonemapper_s = 4.0f;        // scale
+    postProcessData.saturation = 1.0f;
     d = *pDevice;
     int w, h, nc;
 
@@ -1361,7 +1367,10 @@ void Sample1App::create_material_texture(const std::string& filename)
             ktx_uint32_t baseHeight = kTexture->baseHeight;
             ktx_bool_t isArray = kTexture->isArray;
 
-            pDevice->create_texture2d_with_mips(ktxTexture2_GetVkFormat((ktxTexture2*)kTexture), { kTexture->baseWidth,kTexture->baseHeight,kTexture->baseDepth }, &newImage);
+            pDevice->create_texture2d_with_mips(
+                ktxTexture2_GetVkFormat((ktxTexture2*)kTexture),
+                VkExtent3D{ kTexture->baseWidth,kTexture->baseHeight,kTexture->baseDepth },
+                &newImage);
 
             jvk::Buffer stagebuf;
             pDevice->create_staging_buffer(ktxTexture_GetDataSize(kTexture), &stagebuf);

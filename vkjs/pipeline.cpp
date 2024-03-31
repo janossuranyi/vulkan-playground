@@ -144,16 +144,11 @@ namespace jvk {
 		_builder._shaderStages[1].pName = "main";
 		_builder._shaderStages[1].module = shaderInfo.frag->module();
 
-		std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
 		for (const auto& dsl : merged_sets)
 		{
-			descriptorSetLayouts.push_back(_descMgr->create_descriptor_layout(&dsl.create_info));
+			_builder._descriptorSetLayouts.push_back(_descMgr->create_descriptor_layout(&dsl.create_info));
 		}
 
-		VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo((uint32_t)descriptorSetLayouts.size());
-		plci.pSetLayouts = descriptorSetLayouts.data();
-		VK_CHECK(vkCreatePipelineLayout(*_device, &plci, nullptr, &_builder._pipelineLayout));
-		_pipelineLayout = _builder._pipelineLayout;
 	}
 	GraphicsPipeline::~GraphicsPipeline()
 	{
@@ -258,8 +253,21 @@ namespace jvk {
 			assert(false);
 		}
 	}
+	GraphicsPipeline& GraphicsPipeline::add_push_constant_range(const VkPushConstantRange& pcRange)
+	{
+		_builder._pushConstantRanges.push_back(pcRange);
+		return *this;
+	}
 	VkResult GraphicsPipeline::build_pipeline()
 	{
+
+		VkPipelineLayoutCreateInfo plci = vks::initializers::pipelineLayoutCreateInfo((uint32_t)_builder._descriptorSetLayouts.size());
+		plci.pSetLayouts = _builder._descriptorSetLayouts.data();
+		plci.pushConstantRangeCount = uint32_t(_builder._pushConstantRanges.size());
+		plci.pPushConstantRanges = _builder._pushConstantRanges.data();
+		VK_CHECK(vkCreatePipelineLayout(*_device, &plci, nullptr, &_builder._pipelineLayout));
+
+		_pipelineLayout = _builder._pipelineLayout;
 		_builder._rasterizer = vks::initializers::pipelineRasterizationStateCreateInfo(_polygonMode, _cullMode, _frontFace, 0);
 		_builder._depthStencil = vks::initializers::pipelineDepthStencilStateCreateInfo(VkBool32(_depthTest), VkBool32(_depthMask), _depthCompareOp);
 		_builder._dynamicStates = vks::initializers::pipelineDynamicStateCreateInfo(_dynamicStates);
