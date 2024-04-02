@@ -154,8 +154,8 @@ vec3 tonemap_and_transfer(in vec3 x)
     const float b = ppdata.tonemapper_b;  // pedestal
     vec3 r;
     // Tonemapper in srgb color space.
-    r = uchimuraTonemapper(x, P, a, m, l, c, b);
-    //r = ACESFilmApproximate( x );
+    //r = uchimuraTonemapper(x, P, a, m, l, c, b);
+    r = ACESFilmApproximate( x );
     // apply saturation in srgb space.
     r = applySaturationSRGB(r, ppdata.saturation);
 

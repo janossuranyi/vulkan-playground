@@ -62,7 +62,7 @@ struct UniformBufferPool {
 class Sample1App : public jvk::AppBase {
 private:
     //const VkFormat HDR_FMT = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
-    const VkFormat HDR_RT_FMT = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+    const VkFormat HDR_RT_FMT = VK_FORMAT_R16G16B16A16_SFLOAT;
     const VkFormat NORMAL_RT_FMT = VK_FORMAT_R16G16_SFLOAT;
     bool fogEnabled = true;
     float fps = 0.f;
@@ -232,13 +232,13 @@ public:
         //ImGui::ColorPicker3("LightColor", &passData.vLightColor[0]);
         ImGui::DragFloat("Light intensity", &passData.vLightColor[3], 0.1f, 0.0f, 10000.0f);
         ImGui::DragFloat("Light range", &passData.vLightPos[3], 0.05f, 0.0f, 100.0f);
-        ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.1f, 1.0f, 100.0f);
+        ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.1f, 0.0f, 100.0f);
         ImGui::Checkbox("Init lights", &initLights);
         ImGui::Checkbox("Fog On/Off", &fogEnabled);
         ImGui::Checkbox("HDR On/Off", (bool*)(&postProcessData.bHDR));
         
         ImGui::DragFloat("Max Luminance", &postProcessData.tonemapper_P, 0.5f, 0.0f, 1000.0f, "%.1f");
-        ImGui::DragFloat("Contrast", &postProcessData.tonemapper_a, 0.01f, 0.0f, 10.0f, "%.2f");
+        ImGui::DragFloat("Contrast", &postProcessData.tonemapper_a, 0.01f, 0.01f, 10.0f, "%.2f");
         ImGui::DragFloat("Linear start", &postProcessData.tonemapper_m, 0.001f, 0.001f, 0.4f, "%.3f");
         ImGui::DragFloat("Linear length", &postProcessData.tonemapper_l, 0.001f, 0.001f, 1.0f, "%.3f");
         ImGui::DragFloat("Black", &postProcessData.tonemapper_c, 0.01f, 0.0f, 10.0f, "%.2f");

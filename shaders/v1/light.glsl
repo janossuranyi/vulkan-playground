@@ -25,26 +25,29 @@ struct S_LIGHT
 };
 
 /*
-watts = blender_lamp.energy
+watts = blender_lamp.energy (radiant intensity)
 LUMENS_PER_WATT = 683
 PI = 3.14159
 candela = watts * LUMENS_PER_WATT / (4 * PI)
 */
 
+
 // https://github.com/KhronosGroup/glTF/blob/master/extensions/2.0/Khronos/KHR_lights_punctual/README.md#range-property
 float getRangeAttenuation(float range, float distance)
 {
+    const float FOUR_PI = 4.0 * 3.14159265359;
+    const float LIGHT_SIZE_SQ = 0.01*0.01;
     const float distanceSq = distance * distance;
     if (range <= 0.0)
     {
         // negative range means unlimited
-        return 1.0 / (1.0 + distanceSq);
+        return 1.0 / max(distanceSq, LIGHT_SIZE_SQ);
     }
     float Kr = distance / range;
     Kr *= Kr;
     Kr *= Kr;
     //return max(min(1.0 - Kr, 1.0), 0.0) / distanceSq;
-    return clamp(1.0 - Kr, 0.0, 1.0) / distanceSq;
+    return clamp(1.0 - Kr, 0.0, 1.0) / max(distanceSq, LIGHT_SIZE_SQ);
 }
 
 // https://github.com/KhronosGroup/glTF/blob/master/extensions/2.0/Khronos/KHR_lights_punctual/README.md#inner-and-outer-cone-angles

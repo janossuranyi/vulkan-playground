@@ -24,6 +24,7 @@
 #include "jsrlib/jsr_math.h"
 
 #include <random>
+#include <cmath>
 
 namespace fs = std::filesystem;
 using namespace glm;
@@ -33,6 +34,9 @@ inline static size_t align_size(size_t size, size_t alignment) {
     return (size + alignment - 1) & ~(alignment - 1);
 }
 
+constexpr float Inverse4PI() { return 1.0f / (4.0f * glm::pi<float>()); }
+
+static float Watt2Candela(const float w) { return (w * 683.0f) * Inverse4PI(); }
 
 
 void Sample1App::init_lights()
@@ -42,7 +46,10 @@ void Sample1App::init_lights()
     std::default_random_engine generator(rdev());
     jvk::Buffer stage;
 
+   
     /* Init ligths */
+    lights = {};
+    const float AttThreshold = 5.0f / 255.0f;
 
     for (size_t i(0); i < lights.size(); ++i)
     {
@@ -51,13 +58,18 @@ void Sample1App::init_lights()
         float z =  -3.0f + randomFloats(generator) * 6.0f;
 
         glm::vec3 pos{ x,y,z };
-        glm::vec3 col{ randomFloats(generator) * 0.7,randomFloats(generator) * 0.7,randomFloats(generator) * 0.7 };
-        lights[i] = {};
+        //glm::vec3 pos{ 0.0f,3.0f,0.0f };
+        //glm::vec3 col{ randomFloats(generator) * 0.7,randomFloats(generator) * 0.7,randomFloats(generator) * 0.7 };
+        float r = 0.65f + randomFloats(generator) * 0.2f;
+        glm::vec3 col{ 1.0f,r,r };
         lights[i].set_position(pos);
         lights[i].set_color(col);
-        lights[i].intensity = randomFloats(generator) * 2.0f + 0.5f;
+        lights[i].intensity = Watt2Candela(240.f * Inverse4PI());
         lights[i].type = LightType_Point;
-        lights[i].range = std::sqrtf(lights[i].intensity / (2.0f/255.0f));
+
+        float a = lights[i].intensity / 683.0f;
+        float b = a / AttThreshold;
+        lights[i].range = std::sqrtf(b);
     }
     pDevice->create_staging_buffer(lights.size() * sizeof(lights[0]), &stage);
     stage.copyTo(0, stage.size, lights.data());
