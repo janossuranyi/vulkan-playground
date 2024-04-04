@@ -24,6 +24,7 @@
 #include "jsrlib/jsr_math.h"
 
 #include <random>
+//#define _USE_MATH_DEFINES
 #include <cmath>
 
 namespace fs = std::filesystem;
@@ -34,10 +35,10 @@ inline static size_t align_size(size_t size, size_t alignment) {
     return (size + alignment - 1) & ~(alignment - 1);
 }
 
-constexpr float Inverse4PI() { return 1.0f / (4.0f * glm::pi<float>()); }
+constexpr float Rec4PI() { return 1.0f / (4.0f * M_PI); }
 
-static float Watt2Candela(const float w) { return (w * 683.0f) * Inverse4PI(); }
-
+static float Watt2Candela(const float w) { return (w * 683.0f) * Rec4PI(); }
+static float Watt2Lumen(const float w) { return (w * 683.0f); }
 
 void Sample1App::init_lights()
 {
@@ -50,7 +51,7 @@ void Sample1App::init_lights()
     /* Init ligths */
     lights = {};
     const float AttThreshold = 5.0f / 255.0f;
-
+    
     for (size_t i(0); i < lights.size(); ++i)
     {
         float x = -10.0f + randomFloats(generator) * 20.0f;
@@ -59,17 +60,17 @@ void Sample1App::init_lights()
 
         glm::vec3 pos{ x,y,z };
         //glm::vec3 pos{ 0.0f,3.0f,0.0f };
-        //glm::vec3 col{ randomFloats(generator) * 0.7,randomFloats(generator) * 0.7,randomFloats(generator) * 0.7 };
-        float r = 0.65f + randomFloats(generator) * 0.2f;
-        glm::vec3 col{ 1.0f,r,r };
+        glm::vec3 col{ randomFloats(generator) * 0.7,randomFloats(generator) * 0.7,randomFloats(generator) * 0.7 };
+        //float r = 0.65f + randomFloats(generator) * 0.2f;
+        //glm::vec3 col{ 1.0f };
         lights[i].set_position(pos);
         lights[i].set_color(col);
-        lights[i].intensity = Watt2Candela(240.f * Inverse4PI());
+        lights[i].intensity = Watt2Lumen( passData.vLightColor.x );
         lights[i].type = LightType_Point;
 
         float a = lights[i].intensity / 683.0f;
         float b = a / AttThreshold;
-        lights[i].range = std::sqrtf(b);
+        lights[i].range = -1.0f; // std::sqrtf(b);
     }
     pDevice->create_staging_buffer(lights.size() * sizeof(lights[0]), &stage);
     stage.copyTo(0, stage.size, lights.data());

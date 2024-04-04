@@ -1,6 +1,10 @@
 #ifndef FUNCTIONS_INC_
 #define FUNCTIONS_INC_
 
+#ifndef M_PI
+#define M_PI    3.14159265358979323846264338327950288   /**< pi */
+#endif
+
 float asfloat ( uint x ) { return uintBitsToFloat( x ); }
 uint asuint ( float x ) { return floatBitsToUint( x ); }
 int asint ( float x ) { return floatBitsToInt( x ) ; }

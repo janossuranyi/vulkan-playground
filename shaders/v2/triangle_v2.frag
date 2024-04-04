@@ -49,13 +49,11 @@ layout(set = 1, binding = 1) uniform sampler2D samp_normal;
 layout(set = 1, binding = 2) uniform sampler2D samp_pbr;
 */
 
-const float PI = 3.14159265359;
-
 // Normal Distribution function --------------------------------------
 float D_GGX(float NoH, float a) {
     float a2 = a * a;
     float f = (NoH * a2 - NoH) * NoH + 1.0;
-    return a2 / (PI * f * f);
+    return a2 / (M_PI * f * f);
 }
 
 float V_SmithGGXCorrelated(float NoV, float NoL, float a) {
@@ -80,7 +78,7 @@ vec3 F_Schlick(vec3 F0, float cosTheta)
 }
 
 float Fd_Lambert() {
-    return 1.0 / PI;
+    return 1.0 / M_PI;
 }
 
 // Specular BRDF composition --------------------------------------------

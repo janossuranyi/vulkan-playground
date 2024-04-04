@@ -230,7 +230,7 @@ public:
         ImGui::Text("maxZ: %.2f, minZ: %.2f", maxZ, minZ);
         //ImGui::DragFloat3("Light pos", &passData.vLightPos[0], 0.05f, -20.0f, 20.0f);
         //ImGui::ColorPicker3("LightColor", &passData.vLightColor[0]);
-        ImGui::DragFloat("Light intensity", &passData.vLightColor[3], 0.1f, 0.0f, 10000.0f);
+        ImGui::DragFloat("Light intensity", &passData.vLightColor.x, 1.0f, 0.0f, 100000.0f);
         ImGui::DragFloat("Light range", &passData.vLightPos[3], 0.05f, 0.0f, 100.0f);
         ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.1f, 0.0f, 100.0f);
         ImGui::Checkbox("Init lights", &initLights);
