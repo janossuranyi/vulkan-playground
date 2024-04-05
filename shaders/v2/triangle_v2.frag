@@ -49,13 +49,11 @@ layout(set = 1, binding = 1) uniform sampler2D samp_normal;
 layout(set = 1, binding = 2) uniform sampler2D samp_pbr;
 */
 
-const float PI = 3.14159265359;
-
 // Normal Distribution function --------------------------------------
 float D_GGX(float NoH, float a) {
     float a2 = a * a;
     float f = (NoH * a2 - NoH) * NoH + 1.0;
-    return a2 / (PI * f * f);
+    return a2 / (M_PI * f * f);
 }
 
 float V_SmithGGXCorrelated(float NoV, float NoL, float a) {
@@ -80,7 +78,7 @@ vec3 F_Schlick(vec3 F0, float cosTheta)
 }
 
 float Fd_Lambert() {
-    return 1.0 / PI;
+    return 1.0 / M_PI;
 }
 
 // Specular BRDF composition --------------------------------------------
@@ -88,7 +86,8 @@ vec3 specBRDF(vec3 f0, vec3 l, vec3 v, vec3 n, float perceptualRoughness)
 {
     vec3 h = normalize(v + l);
 
-    float NoV = abs(dot(n, v)) + 1e-5;
+    //float NoV = abs(dot(n, v)) + 1e-5;
+    float NoV = clamp(dot(n, v), 1e-5, 1.0);
     float NoL = clamp(dot(n, l), 0.0, 1.0);
     float NoH = clamp(dot(n, h), 0.0, 1.0);
     float LoH = clamp(dot(l, h), 0.0, 1.0);
@@ -127,6 +126,8 @@ vec3 specBRDF_DOOM( vec3 f0,vec3 L, vec3 V, vec3 N, float r ) {
 }
 
 float max3(vec3 x) { return max(x.r, max(x.g,x.b)); }
+
+vec3 F_LuminanceToEnergy(vec3 L) { return L * vec3(1.0/683.0);  }
 
 void main() {
 
@@ -197,7 +198,7 @@ void main() {
 
         vec3 lightColor = getLightIntensity( lightdata[i], lightVec  );
         float m = max3(lightColor);
-        if (m <= (2.0/255.0)) continue;
+        if (m <= (5.0/255.0)) continue;
 
         vec3 Fr = specBRDF_DOOM(F0, L,V,N, r);
         finalColor += (Fr + Fd) * lightColor * saturate(dot(N, L));
@@ -205,7 +206,7 @@ void main() {
 
     vec3 ambientColor = passdata.vParams.x * albedoColor.rgb;
     float reflectionMask = smoothstep(0.8, 1.0, 1.0 - r);
-    out_Color0 = vec4(finalColor + ambientColor, reflectionMask);
+    out_Color0 = vec4(F_LuminanceToEnergy(finalColor) + ambientColor, reflectionMask);
     out_Normal = NormalOctEncode(N,false);
 //    outColor0.rgb = mix(checkerColor.rgb, outColor0.rgb, 0.98);
 }
