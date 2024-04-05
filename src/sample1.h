@@ -232,7 +232,7 @@ public:
         //ImGui::ColorPicker3("LightColor", &passData.vLightColor[0]);
         ImGui::DragFloat("Light intensity", &passData.vLightColor[3], 0.1f, 0.0f, 10000.0f);
         ImGui::DragFloat("Light range", &passData.vLightPos[3], 0.05f, 0.0f, 100.0f);
-        ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.1f, 1.0f, 100.0f);
+        ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.01f, 0.1f, 100.0f);
         ImGui::Checkbox("Init lights", &initLights);
         ImGui::Checkbox("Fog On/Off", &fogEnabled);
         ImGui::Checkbox("HDR On/Off", (bool*)(&postProcessData.bHDR));

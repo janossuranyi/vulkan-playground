@@ -55,9 +55,10 @@ void Sample1App::init_lights()
         lights[i] = {};
         lights[i].set_position(pos);
         lights[i].set_color(col);
-        lights[i].intensity = randomFloats(generator) * 2.0f + 0.5f;
+        lights[i].intensity = 100.0f + randomFloats(generator) * 100.0f;
+        lights[i].intensity = (lights[i].intensity * (4.0f * glm::pi<float>())) / 683.0f;
         lights[i].type = LightType_Point;
-        lights[i].range = std::sqrtf(lights[i].intensity / (2.0f/255.0f));
+        lights[i].range = -1.0f;// std::sqrtf(lights[i].intensity / (2.0f / 255.0f));
     }
     pDevice->create_staging_buffer(lights.size() * sizeof(lights[0]), &stage);
     stage.copyTo(0, stage.size, lights.data());
@@ -1042,7 +1043,7 @@ void Sample1App::prepare()
     passData.vLightPos = glm::vec4(0.f, 1.5f, 0.f, 10.f);
     passData.vLightColor = glm::vec4(0.800f, 0.453f, 0.100f, 15.f);
     passData.vParams[0] = 0.05f;    // global ambient scale
-    postProcessData.vSunPos = { 100.0f, -100.0f, -100.0f, 0.0f };
+    postProcessData.vSunPos = { 45.0f, 0.0f, 0.0f, 0.0f };
     postProcessData.fExposure = 250.f;
     postProcessData.bHDR = settings.hdr;
     postProcessData.tonemapper_P = 1000.0f;     // Max luminance
