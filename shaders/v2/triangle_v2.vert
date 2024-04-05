@@ -6,7 +6,7 @@ layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec2 inUV;
 layout(location = 2) in vec3 inNormal;
 layout(location = 3) in vec4 inTangent;
-layout(location = 4) in vec4 inColor;
+//layout(location = 4) in vec4 inColor;
 
 #include "passData.glsl"
 
@@ -25,10 +25,7 @@ layout(set = 0, binding = 1) uniform dyn_ubo_DrawData {
 };
 
 struct S_INTERFACE {
-    vec4 Color;
     vec3 FragCoordVS;
-    vec3 LightVS;
-    vec3 LightDir;
     vec2 UV;
     vec3 NormalVS;
     vec3 TangentVS;
@@ -60,9 +57,6 @@ void main() {
     Out.NormalVS = N;
     Out.TangentVS = T;
     Out.BitangentVS = B;
-    Out.Color = drawdata.color;
     Out.FragCoordVS = posVS.xyz;
-    Out.LightVS = ( passdata.mtxView * vec4( light, 1.0 ) ).xyz;
-    Out.LightDir = ( passdata.mtxView * vec4( 0.5,-0.5,0.0,0 ) ).xyz;
     Out.UV = inUV;
 }

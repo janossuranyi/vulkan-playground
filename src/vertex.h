@@ -7,11 +7,10 @@
 namespace jsr {
 
 	struct Vertex {
-		float				xyz[3];
+		float				xyz[4];
 		float				uv[2];
-		uint8_t				normal[4];
-		uint8_t				tangent[4];
-		uint8_t				color[4];
+		uint16_t			normal[4];
+		uint16_t			tangent[4];
 
 		static inline VertexInputDescription vertex_input_description() {
 
@@ -29,7 +28,7 @@ namespace jsr {
 			VkVertexInputAttributeDescription positionAttribute = {};
 			positionAttribute.binding = 0;
 			positionAttribute.location = 0;
-			positionAttribute.format = VK_FORMAT_R32G32B32_SFLOAT;
+			positionAttribute.format = VK_FORMAT_R32G32B32A32_SFLOAT;
 			positionAttribute.offset = offsetof(Vertex, xyz);
 
 			//UV will be stored at Location 1
@@ -43,28 +42,29 @@ namespace jsr {
 			VkVertexInputAttributeDescription normalAttribute = {};
 			normalAttribute.binding = 0;
 			normalAttribute.location = 2;
-			normalAttribute.format = VK_FORMAT_R8G8B8A8_UNORM;
+			normalAttribute.format = VK_FORMAT_R16G16B16A16_UNORM;
 			normalAttribute.offset = offsetof(Vertex, normal);
 
 			//Tangent will be stored at Location 3
 			VkVertexInputAttributeDescription tangentAttribute = {};
 			tangentAttribute.binding = 0;
 			tangentAttribute.location = 3;
-			tangentAttribute.format = VK_FORMAT_R8G8B8A8_UNORM;
+			tangentAttribute.format = VK_FORMAT_R16G16B16A16_UNORM;
 			tangentAttribute.offset = offsetof(Vertex, tangent);
 
 			//Color will be stored at Location 4
+			/*
 			VkVertexInputAttributeDescription colorAttribute = {};
 			colorAttribute.binding = 0;
 			colorAttribute.location = 4;
 			colorAttribute.format = VK_FORMAT_R8G8B8A8_UNORM;
 			colorAttribute.offset = offsetof(Vertex, color);
-
+			*/
 			ret.attributes.push_back(positionAttribute);
 			ret.attributes.push_back(uvAttribute);
 			ret.attributes.push_back(normalAttribute);
 			ret.attributes.push_back(tangentAttribute);
-			ret.attributes.push_back(colorAttribute);
+			//ret.attributes.push_back(colorAttribute);
 
 			return ret;
 		}
@@ -102,34 +102,34 @@ namespace jsr {
 
 		inline void pack_tangent(const float* v) {
 			const glm::vec4 t{ v[0],v[1],v[2],v[3] };
-			auto res = round((0.5f + 0.5f * glm::clamp(t, -1.0f, 1.0f)) * 255.0f);
-			tangent[0] = static_cast<uint8_t>(res[0]);
-			tangent[1] = static_cast<uint8_t>(res[1]);
-			tangent[2] = static_cast<uint8_t>(res[2]);
-			tangent[3] = static_cast<uint8_t>(res[3]);
+			auto res = round((0.5f + 0.5f * glm::clamp(t, -1.0f, 1.0f)) * 65535.0f);
+			tangent[0] = static_cast<uint16_t>(res[0]);
+			tangent[1] = static_cast<uint16_t>(res[1]);
+			tangent[2] = static_cast<uint16_t>(res[2]);
+			tangent[3] = static_cast<uint16_t>(res[3]);
 		}
 
 		inline void pack_normal(const float* v)
 		{
 			const glm::vec3 t{ v[0],v[1],v[2] };
-			const glm::vec3 tmp(round((0.5f + 0.5f * glm::clamp(t, -1.0f, 1.0f)) * 255.0f));
-			normal[0] = static_cast<uint8_t>(tmp[0]);
-			normal[1] = static_cast<uint8_t>(tmp[1]);
-			normal[2] = static_cast<uint8_t>(tmp[2]);
-			normal[3] = static_cast<uint8_t>(0);
+			const glm::vec3 tmp(round((0.5f + 0.5f * glm::clamp(t, -1.0f, 1.0f)) * 65535.0f));
+			normal[0] = static_cast<uint16_t>(tmp[0]);
+			normal[1] = static_cast<uint16_t>(tmp[1]);
+			normal[2] = static_cast<uint16_t>(tmp[2]);
+			normal[3] = static_cast<uint16_t>(0);
 		}
 
 		inline void pack_color(const float* v)
-		{
+		{/*
 			const glm::vec4 t{ v[0],v[1],v[2],v[3] };
 			auto c = round(glm::clamp(t, 0.0f, 1.0f) * 255.0f);
 			color[0] = static_cast<uint8_t>(c[0]);
 			color[1] = static_cast<uint8_t>(c[1]);
 			color[2] = static_cast<uint8_t>(c[2]);
-			color[3] = static_cast<uint8_t>(c[3]);
+			color[3] = static_cast<uint8_t>(c[3]);*/
 		}
 
 	};
-	static_assert(sizeof(Vertex) == 32);
+	static_assert(sizeof(Vertex) == 40);
 }
 #endif

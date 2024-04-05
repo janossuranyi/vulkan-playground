@@ -13,10 +13,7 @@ layout(location = 0) out vec4 out_Color0;
 layout(location = 1) out vec2 out_Normal;
 
 struct S_INTERFACE {
-    vec4 Color;
     vec3 FragCoordVS;
-    vec3 LightVS;
-    vec3 LightDir;
     vec2 UV;
     vec3 NormalVS;
     vec3 TangentVS;
@@ -38,13 +35,13 @@ layout(set = 0, binding = 3) uniform stc_ubo_LightData {
 layout(set = 0, binding = 2) uniform sampler2D samp0;
 layout(set = 1, binding = 0) uniform sampler2D samp_material[4];
 
-#define SAMP_ALBEDO 0
+#define SAMP_BASECOLOR 0
 #define SAMP_NORMAL 1
 #define SAMP_PBR 2
 #define SAMP_EMISSIVE 3
 
 /*
-layout(set = 1, binding = 0) uniform sampler2D samp_albedo;
+layout(set = 1, binding = 0) uniform sampler2D SAMP_BASECOLOR;
 layout(set = 1, binding = 1) uniform sampler2D samp_normal;
 layout(set = 1, binding = 2) uniform sampler2D samp_pbr;
 */
@@ -143,19 +140,19 @@ void main() {
         normalize(In.NormalVS));
 
     vec4 checkerColor = texture(samp0,In.UV);
-    vec4 albedoColor = texture(samp_material[SAMP_ALBEDO], In.UV);
+    vec4 baseColor = texture(samp_material[SAMP_BASECOLOR], In.UV);
     vec3 normalTS = texture(samp_material[SAMP_NORMAL], In.UV).xyz * 2.0 - 1.0;
     vec4 pbrSample = texture(samp_material[SAMP_PBR], In.UV);
     vec3 emissiveColor = texture(samp_material[SAMP_EMISSIVE], In.UV).rgb;
 
     const bool hasEmissive = any(greaterThan(emissiveColor, vec3(0)));
 
-    if (albedoColor.a < .5) discard;
+    if (baseColor.a < .5) discard;
 
-    albedoColor.rgb = sRGBToLinear(albedoColor.rgb /* In.Color.rgb*/);
+    baseColor.rgb = sRGBToLinear(baseColor.rgb /* In.Color.rgb*/);
 
     if (hasEmissive) {
-        out_Color0 = vec4(emissiveColor,albedoColor.a);
+        out_Color0 = vec4(emissiveColor,baseColor.a);
         return;
     }
 
@@ -167,12 +164,12 @@ void main() {
     const float microAO = pbrSample.r;
     const float reflectance = 0.5;
     const float Df0 = 0.16 * reflectance * reflectance;
-    const vec3 diffuseColor = (1.0 - metalness) * albedoColor.rgb;
+    const vec3 diffuseColor = (1.0 - metalness) * baseColor.rgb;
 
 //	float roughness = max(perceptualRoughness, step( fract(In.FragCoordVS.y * 2.02), 0.5 ) );
 
     normalTS = normalize(normalTS) * vec3(1.0,-1.0,1.0);
-    vec3 F0 = mix(vec3(Df0), albedoColor.rgb, metalness);
+    vec3 F0 = mix(vec3(Df0), baseColor.rgb, metalness);
 
     vec3 N = (tbn * normalTS);
     vec3 V = normalize(-In.FragCoordVS);
@@ -204,7 +201,7 @@ void main() {
         finalColor += (Fr + Fd) * lightColor * saturate(dot(N, L));
     }
 
-    vec3 ambientColor = passdata.vParams.x * albedoColor.rgb;
+    vec3 ambientColor = passdata.vParams.x * baseColor.rgb;
     float reflectionMask = smoothstep(0.8, 1.0, 1.0 - r);
     out_Color0 = vec4(F_LuminanceToEnergy(finalColor) + ambientColor, reflectionMask);
     out_Normal = NormalOctEncode(N,false);
