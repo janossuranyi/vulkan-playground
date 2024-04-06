@@ -23,9 +23,9 @@ namespace jsr {
 		float innerConeCos;
 
 		float outerConeCos;
+		float falloff;
 		int type;
 		int dummy0;
-		int dummy1;
 
 		void set_direction(const glm::vec3& v);
 		void set_position(const glm::vec3& v);

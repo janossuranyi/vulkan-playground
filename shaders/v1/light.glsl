@@ -19,8 +19,8 @@ struct S_LIGHT
     float innerConeCos;
 
     float outerConeCos;
+    float falloff;
     int type;
-    int dummy0;
     int dummy1;
 };
 
@@ -33,20 +33,27 @@ candela = watts * LUMENS_PER_WATT / (4 * PI)
 
 
 // https://github.com/KhronosGroup/glTF/blob/master/extensions/2.0/Khronos/KHR_lights_punctual/README.md#range-property
-float getRangeAttenuation(float range, float distance)
+float getRangeAttenuation(in float range, in float distance, in float falloff)
 {
     const float SQR_MIN_DIST = 0.01*0.01;
-    const float distanceSqr = distance * distance;
+    const float distanceSqr = max(distance * distance, SQR_MIN_DIST);
     if (range <= 0.0)
     {
         // negative range means unlimited
-        return 1.0 / max(distanceSqr, SQR_MIN_DIST);
+        return 1.0 / distanceSqr;
     }
-    float Kr = distance / range;
-    Kr *= Kr;
-    Kr *= Kr;
-    //return max(min(1.0 - Kr, 1.0), 0.0) / distanceSq;
-    return clamp(1.0 - Kr, 0.0, 1.0) / max(distanceSqr, SQR_MIN_DIST);
+
+    float s = distance / range;    
+
+    s *= s;
+    s *= s;
+    return max(min(1.0 - s, 1.0), 0.0) / distanceSqr;
+
+    // https://lisyarus.github.io/blog/graphics/2022/07/30/point-light-attenuation.html
+    if ( s >= 1.0 ) return 0.0;
+
+    float s2 = sqr( s );
+    return sqr(1 - s2) / (1 + falloff * s2);
 }
 
 // https://github.com/KhronosGroup/glTF/blob/master/extensions/2.0/Khronos/KHR_lights_punctual/README.md#inner-and-outer-cone-angles
@@ -71,7 +78,7 @@ vec3 getLightIntensity(S_LIGHT light, vec3 pointToLight)
     float K = 1.0;
     if (light.type != LightType_Directional)
     {
-        rangeAttenuation = getRangeAttenuation(light.range, length(pointToLight));
+        rangeAttenuation = getRangeAttenuation(light.range, length(pointToLight), light.falloff);
         K = 1.0/(4*M_PI);
     }
     if (light.type == LightType_Spot)

@@ -5,6 +5,7 @@
 #define M_PI    3.14159265358979323846264338327950288   /**< pi */
 #endif
 
+float sqr(float x) { return x*x;}
 float asfloat ( uint x ) { return uintBitsToFloat( x ); }
 uint asuint ( float x ) { return floatBitsToUint( x ); }
 int asint ( float x ) { return floatBitsToInt( x ) ; }
