@@ -67,7 +67,7 @@ private:
     bool fogEnabled = true;
     float fps = 0.f;
     float maxZ = 0.0f, minZ = 0.0f;
-    float falloff = 1.0f;
+    float falloff = -1.0f;
     float range = 4.0f;
     VkDevice d;
     bool smaaChanged = false;
@@ -234,7 +234,7 @@ public:
         //ImGui::ColorPicker3("LightColor", &passData.vLightColor[0]);
         ImGui::DragFloat("L luminous power", &passData.vLightColor.w, 1.0f, 0.0f, 100000.0f);
         ImGui::DragFloat("L range", &range, 0.05f, 0.0f, 100.0f);
-        ImGui::DragFloat("L falloff", &falloff, 1.0f, 0.0f, 50.0f);
+        ImGui::DragFloat("L falloff", &falloff, 1.0f, -1.0f, 50.0f);
         ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.1f, 0.0f, 100.0f);
         ImGui::Checkbox("Init lights", &initLights);
         ImGui::Checkbox("Fog On/Off", &fogEnabled);

@@ -43,12 +43,14 @@ float getRangeAttenuation(in float range, in float distance, in float falloff)
         return 1.0 / distanceSqr;
     }
 
-    float s = distance / range;    
+    float s = distance / range;
 
-    s *= s;
-    s *= s;
-    return max(min(1.0 - s, 1.0), 0.0) / distanceSqr;
-
+    if (falloff < 0.0)
+    {
+        s *= s;
+        s *= s;
+        return max(min(1.0 - s, 1.0), 0.0) / distanceSqr;
+    }
     // https://lisyarus.github.io/blog/graphics/2022/07/30/point-light-attenuation.html
     if ( s >= 1.0 ) return 0.0;
 
