@@ -12,7 +12,7 @@ void demo()
 {
     jsrlib::gLogWriter.SetFileName("vulkan_engine.log");
     auto app = std::make_unique<Sample1App>(true);
-    app->settings.hdr = false;
+    app->settings.hdr = true;
     app->settings.fullscreen = false;
     app->settings.exclusive = false;
     app->settings.vsync = true;
