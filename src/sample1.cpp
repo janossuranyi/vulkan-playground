@@ -52,20 +52,20 @@ void Sample1App::init_lights()
     lights = {};
     const float AttThreshold = 5.0f / 255.0f;
     
-    for (size_t i(0); i < 1; /* lights.size();*/ ++i)
+    for (size_t i(0); i < lights.size(); ++i)
     {
         float x = -10.0f + randomFloats(generator) * 20.0f;
         float y =   0.0f + randomFloats(generator) * 9.0f;
         float z =  -3.0f + randomFloats(generator) * 6.0f;
 
-        //glm::vec3 pos{ x,y,z };
-        glm::vec3 pos{ 0.0f,3.0f,0.0f };
-        //glm::vec3 col{ randomFloats(generator) * 0.7,randomFloats(generator) * 0.7,randomFloats(generator) * 0.7 };
+        glm::vec3 pos{ x,y,z };
+        //glm::vec3 pos{ 0.0f,3.0f,0.0f };
+        glm::vec3 col{ randomFloats(generator) * 0.7,randomFloats(generator) * 0.7,randomFloats(generator) * 0.7 };
         float r = 0.65f + randomFloats(generator) * 0.2f;
-        glm::vec3 col{ 1.0f };
+        //glm::vec3 col{ 1.0f };
         lights[i].set_position(pos);
         lights[i].set_color(col);
-        lights[i].intensity = Watt2Lumen( passData.vLightColor.w );
+        lights[i].intensity = /*Watt2Lumen*/(passData.vLightColor.w)*4*M_PI;
         lights[i].type = LightType_Point;
 
         float a = lights[i].intensity / 683.0f;
@@ -75,8 +75,10 @@ void Sample1App::init_lights()
     }
     pDevice->create_staging_buffer(lights.size() * sizeof(lights[0]), &stage);
     stage.copyTo(0, stage.size, lights.data());
-    for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i) {
-        pDevice->buffer_copy(&stage, &uboLights[ i ], 0, 0, stage.size);
+    for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
+    {
+        //pDevice->buffer_copy(&stage, uboLights[ i ]->buffer(), 0, 0, stage.size);
+        uboLights[i]->copyTo(&stage, 0, 0, stage.size);
     }
     pDevice->destroy_buffer(&stage);
 }
@@ -115,13 +117,13 @@ void Sample1App::setup_descriptor_sets()
         uboPassData[i].descriptor.range = sizeof(PassData);
         uboPassData[i].descriptor.offset = 0;
         const VkShaderStageFlags stageBits = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-        uboLights[i].setup_descriptor();
+        uboLights[i]->setup_descriptor();
 
         descMgr.builder()
             .bind_buffer(0, &uboPassData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
             .bind_buffer(1, &drawbufInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT)
             .bind_image(2, &ssaoNoise.descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
-            .bind_buffer(3, &uboLights[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT)
+            .bind_buffer(3, &uboLights[i]->buffer()->descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .build(triangleDescriptors[i]);
 
         HDRImage[i].setup_descriptor();
@@ -1054,7 +1056,7 @@ void Sample1App::prepare()
     drawDataBufferSize = 1024 * align_size(sizeof(DrawData), minUboAlignment);
     camera.MovementSpeed = 0.003f;
     passData.vLightPos = glm::vec4(0.f, 1.5f, 0.f, 10.f);
-    passData.vLightColor = glm::vec4(0.800f, 0.453f, 0.100f, 15.f);
+    passData.vLightColor = glm::vec4(0.800f, 0.453f, 0.100f, 2300.f);
     passData.vParams[0] = 0.05f;    // global ambient scale
     postProcessData.vSunPos = { 45.0f, 0.0f, 0.0f, 0.0f };
     postProcessData.fExposure = 250.f;
@@ -1117,7 +1119,8 @@ void Sample1App::prepare()
         pDevice->set_buffer_name(&uboPostProcessData[i], "PostProcData UBO " + std::to_string(i));
 
         drawPool[i] = new UniformBufferPool(drawBuf, drawDataBufferSize, i * drawDataBufferSize, minUboAlignment);
-        pDevice->create_uniform_buffer(lights.size() * sizeof(Light), true, &uboLights[i]);
+        //pDevice->create_uniform_buffer(lights.size() * sizeof(Light), true, &uboLights[i]);
+        uboLights[i] = std::make_unique<jvk::UniformBuffer>(pDevice, lights.size() * sizeof(Light), true);
     }
 
     world = std::make_unique<World>();
@@ -1229,14 +1232,17 @@ void Sample1App::prepare()
     setup_objects();
 
     const size_t size = drawDataBufferSize * MAX_CONCURRENT_FRAMES;
-    pDevice->create_uniform_buffer(size, false, &uboDrawData);
-    pDevice->set_buffer_name(&uboDrawData, "DrawData UBO");
+    //pDevice->create_uniform_buffer(size, false, &uboDrawData);
+    uboDrawData = std::make_unique<jvk::UniformBuffer>(pDevice, size, false);
+    uboDrawData->set_name("DrawData UBO");
+    
     jvk::Buffer stage;
     pDevice->create_staging_buffer(size, &stage);
     stage.copyTo(0, drawData.size(), drawData.data());
     for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
     {
-        pDevice->buffer_copy(&stage, &uboDrawData, 0, i * drawDataBufferSize, drawData.size());
+        //pDevice->buffer_copy(&stage, &uboDrawData, 0, i * drawDataBufferSize, drawData.size());
+        uboDrawData->copyTo(&stage, 0, i * drawDataBufferSize, drawData.size());
     }
     pDevice->destroy_buffer(&stage);
 
@@ -1386,8 +1392,7 @@ void Sample1App::create_material_texture(const std::string& filename)
                 VkExtent3D{ kTexture->baseWidth,kTexture->baseHeight,kTexture->baseDepth },
                 &newImage);
 
-            jvk::Buffer stagebuf;
-            pDevice->create_staging_buffer(ktxTexture_GetDataSize(kTexture), &stagebuf);
+            jvk::StagingBuffer stagebuf(pDevice, ktxTexture_GetDataSize(kTexture));
             stagebuf.copyTo(0, ktxTexture_GetDataSize(kTexture), ktxTexture_GetData(kTexture));
 
             pDevice->execute_commands([&](VkCommandBuffer cmd)
@@ -1408,7 +1413,7 @@ void Sample1App::create_material_texture(const std::string& filename)
                             inf->extent = { w,h,1 };
                             inf->offset = offset;
 
-                        }, &stagebuf);
+                        }, stagebuf.buffer());
 
                     newImage.record_layout_change(cmd,
                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -1420,7 +1425,6 @@ void Sample1App::create_material_texture(const std::string& filename)
 
             //newImage.change_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
             ktxTexture_Destroy(kTexture);
-            pDevice->destroy_buffer(&stagebuf);
         }
         else if (!load_texture2d(fn, &newImage, true, w, h, nc))
         {

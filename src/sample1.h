@@ -34,7 +34,7 @@ struct UniformBufferPool {
     {
         const uint32_t alignedSize = static_cast<uint32_t>(align_size(sizeof(T), offsetAligment));
         const uint32_t size = count * alignedSize;
-        const uint32_t offset = bytesAlloced.fetch_add(size);
+        const uint32_t offset = bytesAlloced.fetch_add(size, std::memory_order_relaxed);
 
 
         assert((internalOffset + offset + size) < buffer->size);
@@ -102,12 +102,13 @@ private:
 
     std::array<jvk::Buffer, MAX_CONCURRENT_FRAMES> uboPassData;
     std::array<jvk::Buffer, MAX_CONCURRENT_FRAMES> uboPostProcessData;
-    std::array<jvk::Buffer, MAX_CONCURRENT_FRAMES> uboLights;
+    std::array<std::unique_ptr<jvk::UniformBuffer>, MAX_CONCURRENT_FRAMES> uboLights;
+
     std::array<jsr::Light, 16> lights;
 
     size_t drawDataBufferSize = 0;
 
-    jvk::Buffer uboDrawData;
+    std::unique_ptr<jvk::UniformBuffer> uboDrawData;
 
     size_t dynamicAlignment = 0;
 
@@ -232,8 +233,8 @@ public:
         ImGui::Text("maxZ: %.2f, minZ: %.2f", maxZ, minZ);
         //ImGui::DragFloat3("Light pos", &passData.vLightPos[0], 0.05f, -20.0f, 20.0f);
         //ImGui::ColorPicker3("LightColor", &passData.vLightColor[0]);
-        ImGui::DragFloat("L luminous power", &passData.vLightColor.w, 1.0f, 0.0f, 100000.0f);
-        ImGui::DragFloat("L range", &range, 0.05f, 0.0f, 100.0f);
+        ImGui::DragFloat("L intensity (lumen)", &passData.vLightColor.w, 1.0f, 0.0f, 100000.0f);
+        ImGui::DragFloat("L range (m)", &range, 0.05f, 0.0f, 100.0f);
         ImGui::DragFloat("L falloff", &falloff, 1.0f, -1.0f, 50.0f);
         ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.1f, 0.0f, 100.0f);
         ImGui::Checkbox("Init lights", &initLights);

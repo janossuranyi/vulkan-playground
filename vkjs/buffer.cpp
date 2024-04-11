@@ -50,4 +50,65 @@ namespace jvk {
 		descriptor.range = size;
 	}
 
+	BufferObject::~BufferObject()
+	{
+		assert(m_buffer.buffer != VK_NULL_HANDLE);
+
+		m_buffer.device_->destroy_buffer(&m_buffer);
+		m_buffer = {};
+	}
+
+	UniformBuffer::UniformBuffer(Device* pDevice, VkDeviceSize size, bool deviceLocal)
+	{
+		auto result = pDevice->create_uniform_buffer(size, deviceLocal, &m_buffer);
+		if (result != VK_SUCCESS)
+		{
+			throw std::runtime_error("Cannot create uniform buffer; VkResult: " + std::to_string(result));
+		}
+	}
+
+	BufferUsage UniformBuffer::usage() const
+	{
+		return BufferUsage::UBO;
+	}
+
+	void BufferObject::copyTo(VkDeviceSize offset, VkDeviceSize size, const void* data)
+	{
+		m_buffer.copyTo(offset, size, data);
+	}
+
+	void BufferObject::copyTo(const Buffer* data, VkDeviceSize srcOffset, VkDeviceSize dstOffset, VkDeviceSize size)
+	{
+		m_buffer.device_->buffer_copy(data, &m_buffer, srcOffset, dstOffset, size);
+	}
+
+	void BufferObject::fill(VkDeviceSize offset, VkDeviceSize size, uint32_t data)
+	{
+		m_buffer.fill(offset, size, data);
+	}
+
+	void BufferObject::setup_descriptor()
+	{
+		m_buffer.setup_descriptor();
+	}
+
+	void BufferObject::set_name(const char* name)
+	{
+		m_buffer.device_->set_buffer_name(&m_buffer, name);
+	}
+
+	StagingBuffer::StagingBuffer(Device* pDevice, VkDeviceSize size)
+	{
+		auto result = pDevice->create_staging_buffer(size, &m_buffer);
+		if (result != VK_SUCCESS)
+		{
+			throw std::runtime_error("Cannot create staging buffer; VkResult: " + std::to_string(result));
+		}
+	}
+
+	BufferUsage StagingBuffer::usage() const
+	{
+		return BufferUsage::Staging;
+	}
+
 }

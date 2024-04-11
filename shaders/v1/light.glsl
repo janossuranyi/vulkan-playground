@@ -49,13 +49,14 @@ float getRangeAttenuation(in float range, in float distance, in float falloff)
     {
         s *= s;
         s *= s;
-        return max(min(1.0 - s, 1.0), 0.0) / distanceSqr;
+        //return max(min(1 - s, 1.0), 0.0) / distanceSqr;
+        return clamp(1 - s, 0.0, 1.0) / distanceSqr;
     }
     // https://lisyarus.github.io/blog/graphics/2022/07/30/point-light-attenuation.html
-    if ( s >= 1.0 ) return 0.0;
+    // if ( s >= 1.0 ) return 0.0;
 
-    float s2 = sqr( s );
-    return sqr(1 - s2) / (1 + falloff * s2);
+    s *= s;
+    return sqr(clamp(1 - s, 0.0,1.0)) / (1 + falloff * s);
 }
 
 // https://github.com/KhronosGroup/glTF/blob/master/extensions/2.0/Khronos/KHR_lights_punctual/README.md#inner-and-outer-cone-angles

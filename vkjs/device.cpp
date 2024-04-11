@@ -670,16 +670,22 @@ namespace jvk {
 		*i = {};
 	}
 
+
 	void Device::buffer_copy(const Buffer* src, const Buffer* dst, VkDeviceSize srcOffset, VkDeviceSize dstOffset, VkDeviceSize size)
 	{
 		execute_commands([&](VkCommandBuffer cmd)
 			{
-				VkBufferCopy copy;
-				copy.srcOffset = srcOffset;
-				copy.dstOffset = dstOffset;
-				copy.size = size;
-				vkCmdCopyBuffer(cmd, src->buffer, dst->buffer, 1u, &copy);
+				record_buffer_copy(cmd, src, dst, srcOffset, dstOffset, size);
 			});
+	}
+
+	void Device::record_buffer_copy(VkCommandBuffer cmd, const Buffer* src, const Buffer* dst, VkDeviceSize srcOffset, VkDeviceSize dstOffset, VkDeviceSize size)
+	{
+		VkBufferCopy copy;
+		copy.srcOffset = srcOffset;
+		copy.dstOffset = dstOffset;
+		copy.size = size;
+		vkCmdCopyBuffer(cmd, src->buffer, dst->buffer, 1u, &copy);
 	}
 
 	void Device::flush_command_buffer(VkCommandBuffer commandBuffer, VkQueue queue, VkCommandPool pool, bool free)

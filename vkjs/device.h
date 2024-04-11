@@ -81,6 +81,7 @@ namespace jvk {
 		void destroy_buffer(Buffer* b);
 		void destroy_image(Image* i);
 		void buffer_copy(const Buffer* src, const Buffer* dst, VkDeviceSize srcOffset, VkDeviceSize dstOffset, VkDeviceSize size);
+		static void record_buffer_copy(VkCommandBuffer cmd, const Buffer* src, const Buffer* dst, VkDeviceSize srcOffset, VkDeviceSize dstOffset, VkDeviceSize size);
 
 		void init_command_pools();
 		void init_command_buffers();
