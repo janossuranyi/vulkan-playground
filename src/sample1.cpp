@@ -30,6 +30,7 @@
 namespace fs = std::filesystem;
 using namespace glm;
 using namespace jsr;
+using namespace jvk;
 
 inline static size_t align_size(size_t size, size_t alignment) {
     return (size + alignment - 1) & ~(alignment - 1);
@@ -65,12 +66,12 @@ void Sample1App::init_lights()
         //glm::vec3 col{ 1.0f };
         lights[i].set_position(pos);
         lights[i].set_color(col);
-        lights[i].intensity = /*Watt2Lumen*/(passData.vLightColor.w)*4*M_PI;
+        lights[i].intensity = /*Watt2Lumen*/(passData.vLightColor.w);
         lights[i].type = LightType_Point;
 
-        float a = lights[i].intensity / 683.0f;
+        float a = lights[i].intensity * Rec4PI();
         float b = a / AttThreshold;
-        lights[i].range = range;// std::sqrtf(b);
+        lights[i].range = float(-1); // range > 0.0f ? range : sqrtf(b);
         lights[i].falloff = falloff;
     }
     pDevice->create_staging_buffer(lights.size() * sizeof(lights[0]), &stage);
@@ -78,7 +79,7 @@ void Sample1App::init_lights()
     for (size_t i(0); i < MAX_CONCURRENT_FRAMES; ++i)
     {
         //pDevice->buffer_copy(&stage, uboLights[ i ]->buffer(), 0, 0, stage.size);
-        uboLights[i]->copyTo(&stage, 0, 0, stage.size);
+        uboLights[i]->CopyTo(&stage, 0, 0, stage.size);
     }
     pDevice->destroy_buffer(&stage);
 }
@@ -114,16 +115,16 @@ void Sample1App::setup_descriptor_sets()
         VkDescriptorBufferInfo drawbufInfo = drawPool[i]->descriptor;
         drawbufInfo.range = sizeof(DrawData);
 
-        uboPassData[i].descriptor.range = sizeof(PassData);
-        uboPassData[i].descriptor.offset = 0;
+        uboPassData[i]->GetBuffer()->descriptor.range = sizeof(PassData);
+        uboPassData[i]->GetBuffer()->descriptor.offset = 0;
         const VkShaderStageFlags stageBits = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-        uboLights[i]->setup_descriptor();
+        uboLights[i]->SetupDescriptor();
 
         descMgr.builder()
-            .bind_buffer(0, &uboPassData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+            .bind_buffer(0, &uboPassData[i]->GetBuffer()->descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
             .bind_buffer(1, &drawbufInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT)
             .bind_image(2, &ssaoNoise.descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
-            .bind_buffer(3, &uboLights[i]->buffer()->descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT)
+            .bind_buffer(3, &uboLights[i]->GetBuffer()->descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .build(triangleDescriptors[i]);
 
         HDRImage[i].setup_descriptor();
@@ -135,13 +136,13 @@ void Sample1App::setup_descriptor_sets()
         zinf.imageView = (settings.msaaSamples > VK_SAMPLE_COUNT_1_BIT) ? depthResolvedView[i] : deptOnlyView;
         zinf.sampler = sampNearestClampBorder;
 
-        uboPostProcessData[i].setup_descriptor();
-        uboPostProcessData[i].descriptor.range = sizeof(PostProcessData);
+        uboPostProcessData[i]->SetupDescriptor();
+        uboPostProcessData[i]->GetBuffer()->descriptor.range = sizeof(PostProcessData);
 
         descMgr.builder()
             .bind_image(0, &HDRImage[i].descriptor, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .bind_image(1, &zinf, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
-            .bind_buffer(2, &uboPostProcessData[i].descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT)
+            .bind_buffer(2, &uboPostProcessData[i]->GetBuffer()->descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT)
             .build(HDRDescriptor[i]);
 
         pDevice->set_descriptor_set_name(HDRDescriptor[i], "Tonemap DSET " + std::to_string(i));
@@ -1110,17 +1111,17 @@ void Sample1App::prepare()
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
             1ULL * 1024 * 1024, &transientVtxBuf[i]));
 
-        pDevice->create_uniform_buffer(8 * 1024, false, &uboPassData[i]);
-        uboPassData[i].map();
-        pDevice->set_buffer_name(&uboPassData[i], "PerPass UBO " + std::to_string(i));
+        uboPassData[i] = UniformBuffer::CreateShared(pDevice, 8 * 1024, false);
+        uboPassData[i]->Map();
+        uboPassData[i]->SetName("PerPass UBO " + std::to_string(i));
 
-        pDevice->create_uniform_buffer(sizeof(PostProcessData), false, &uboPostProcessData[i]);
-        uboPostProcessData[i].map();
-        pDevice->set_buffer_name(&uboPostProcessData[i], "PostProcData UBO " + std::to_string(i));
+        uboPostProcessData[i] = UniformBuffer::CreateShared(pDevice, sizeof(PostProcessData), false);
+        uboPostProcessData[i]->Map();
+        uboPostProcessData[i]->SetName("PostProcData UBO " + std::to_string(i));
 
         drawPool[i] = new UniformBufferPool(drawBuf, drawDataBufferSize, i * drawDataBufferSize, minUboAlignment);
         //pDevice->create_uniform_buffer(lights.size() * sizeof(Light), true, &uboLights[i]);
-        uboLights[i] = std::make_unique<jvk::UniformBuffer>(pDevice, lights.size() * sizeof(Light), true);
+        uboLights[i] = UniformBuffer::CreateShared(pDevice, lights.size() * sizeof(Light), true);
     }
 
     world = std::make_unique<World>();
@@ -1234,7 +1235,7 @@ void Sample1App::prepare()
     const size_t size = drawDataBufferSize * MAX_CONCURRENT_FRAMES;
     //pDevice->create_uniform_buffer(size, false, &uboDrawData);
     uboDrawData = std::make_unique<jvk::UniformBuffer>(pDevice, size, false);
-    uboDrawData->set_name("DrawData UBO");
+    uboDrawData->SetName("DrawData UBO");
     
     jvk::Buffer stage;
     pDevice->create_staging_buffer(size, &stage);
@@ -1242,7 +1243,7 @@ void Sample1App::prepare()
     for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
     {
         //pDevice->buffer_copy(&stage, &uboDrawData, 0, i * drawDataBufferSize, drawData.size());
-        uboDrawData->copyTo(&stage, 0, i * drawDataBufferSize, drawData.size());
+        uboDrawData->CopyTo(&stage, 0, i * drawDataBufferSize, drawData.size());
     }
     pDevice->destroy_buffer(&stage);
 
@@ -1393,7 +1394,7 @@ void Sample1App::create_material_texture(const std::string& filename)
                 &newImage);
 
             jvk::StagingBuffer stagebuf(pDevice, ktxTexture_GetDataSize(kTexture));
-            stagebuf.copyTo(0, ktxTexture_GetDataSize(kTexture), ktxTexture_GetData(kTexture));
+            stagebuf.CopyTo(0, ktxTexture_GetDataSize(kTexture), ktxTexture_GetData(kTexture));
 
             pDevice->execute_commands([&](VkCommandBuffer cmd)
                 {
@@ -1413,7 +1414,7 @@ void Sample1App::create_material_texture(const std::string& filename)
                             inf->extent = { w,h,1 };
                             inf->offset = offset;
 
-                        }, stagebuf.buffer());
+                        }, stagebuf.GetBuffer());
 
                     newImage.record_layout_change(cmd,
                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -1458,15 +1459,16 @@ bool Sample1App::load_texture2d(std::string filename, jvk::Image* dest, bool aut
     pDevice->create_staging_buffer(size, &stage);
     stage.copyTo(0, size, data);
     stbi_image_free(data);
+    const VkExtent3D extent = { (uint32_t)w,(uint32_t)h,1 };
 
     if (autoMipmap) {
-        pDevice->create_texture2d_with_mips(VK_FORMAT_R8G8B8A8_UNORM, { (uint32_t)w,(uint32_t)h,1 }, dest);
+        pDevice->create_texture2d_with_mips(VK_FORMAT_R8G8B8A8_UNORM, extent, dest);
     }
     else {
-        pDevice->create_texture2d(VK_FORMAT_R8G8B8A8_UNORM, { (uint32_t)w,(uint32_t)h,1 }, dest);
+        pDevice->create_texture2d(VK_FORMAT_R8G8B8A8_UNORM, extent, dest);
     }
 
-    dest->upload({ (uint32_t)w,(uint32_t)h,1 }, 0, 0, 0, 0ull, &stage);
+    dest->upload(extent, 0, 0, 0, 0ull, &stage);
     if (autoMipmap) {
         dest->generate_mipmaps();
     }

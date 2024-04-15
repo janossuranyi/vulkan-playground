@@ -29,7 +29,7 @@ layout(set = 0, binding = 0) uniform stc_ubo_PassData {
 };
 
 layout(set = 0, binding = 3) uniform stc_ubo_LightData {
-    S_LIGHT lightdata[16];
+    S_LIGHT lightdata[8];
 };
 
 layout(set = 0, binding = 2) uniform sampler2D samp0;

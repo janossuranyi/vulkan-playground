@@ -35,32 +35,47 @@ namespace jvk {
 	class BufferObject 
 	{
 	public:
+		using UniquePtr = std::unique_ptr<BufferObject>;
+		using SharedPtr = std::shared_ptr<BufferObject>;
+
 		BufferObject() : m_buffer() {}
 		BufferObject(const BufferObject&) = delete;
 		BufferObject(BufferObject&&) = delete;
 		BufferObject& operator=(const BufferObject&) = delete;
 		BufferObject& operator=(BufferObject&&) = delete;
-		inline Buffer* buffer() { return &m_buffer; }
-		inline const Buffer* buffer() const { return &m_buffer; }
+		inline Buffer* GetBuffer() { return &m_buffer; }
+		inline const Buffer* GetBuffer() const { return &m_buffer; }
 		inline operator Buffer* () { return &m_buffer; }
 		inline operator const Buffer* () const { return &m_buffer; }
-		void copyTo(VkDeviceSize offset, VkDeviceSize size, const void* data);
-		void copyTo(const Buffer* data, VkDeviceSize srcOffset, VkDeviceSize dstOffset, VkDeviceSize size);
-		void fill(VkDeviceSize offset, VkDeviceSize size, uint32_t data);
-		void setup_descriptor();
-		void set_name(const char* name);
-		virtual BufferUsage usage() const = 0;
+		void CopyTo(VkDeviceSize offset, VkDeviceSize size, const void* data);
+		void CopyTo(const Buffer* data, VkDeviceSize srcOffset, VkDeviceSize dstOffset, VkDeviceSize size);
+		void Fill(VkDeviceSize offset, VkDeviceSize size, uint32_t data);
+		void SetupDescriptor();
+		void SetName(const std::string& name);
+		bool Map();
+		virtual BufferUsage GetUsage() const = 0;
 		virtual ~BufferObject();
 	protected:
 		Buffer	m_buffer;
+		static struct stat_t {
+			std::atomic<int> allocCount;
+			std::atomic<int> allocBytes;
+		} statistics;
+
+	private:
+		virtual void _Destroy();
 	};
 
 	class UniformBuffer : public BufferObject
 	{
 	public:
+
 		UniformBuffer(Device* pDevice, VkDeviceSize size, bool deviceLocal);
 		UniformBuffer() = delete;
-		virtual BufferUsage usage() const override;
+		virtual BufferUsage GetUsage() const override;
+		static SharedPtr CreateShared(Device* pDevice, VkDeviceSize size, bool deviceLocal);
+		static UniquePtr Create(Device* pDevice, VkDeviceSize size, bool deviceLocal);
+
 	};
 
 	class StagingBuffer : public BufferObject
@@ -68,7 +83,9 @@ namespace jvk {
 	public:
 		StagingBuffer() = delete;
 		StagingBuffer(Device* pDevice, VkDeviceSize size);
-		virtual BufferUsage usage() const override;
+		static SharedPtr CreateShared(Device* pDevice, VkDeviceSize size);
+		static UniquePtr Create(Device* pDevice, VkDeviceSize size);
+		virtual BufferUsage GetUsage() const override;
 	};
 }
 #endif // !VKJS_BUFFER_H_

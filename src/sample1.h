@@ -58,7 +58,6 @@ struct UniformBufferPool {
     void reset() { bytesAlloced = 0; }
 };
 
-
 class Sample1App : public jvk::AppBase {
 private:
     //const VkFormat HDR_FMT = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
@@ -100,11 +99,11 @@ private:
     jvk::Buffer vtxStagingBuffer;
     std::array<jvk::Buffer, MAX_CONCURRENT_FRAMES> transientVtxBuf;
 
-    std::array<jvk::Buffer, MAX_CONCURRENT_FRAMES> uboPassData;
-    std::array<jvk::Buffer, MAX_CONCURRENT_FRAMES> uboPostProcessData;
-    std::array<std::unique_ptr<jvk::UniformBuffer>, MAX_CONCURRENT_FRAMES> uboLights;
+    std::array<jvk::BufferObject::SharedPtr, MAX_CONCURRENT_FRAMES> uboPassData;
+    std::array<jvk::BufferObject::SharedPtr, MAX_CONCURRENT_FRAMES> uboPostProcessData;
+    std::array<jvk::BufferObject::SharedPtr, MAX_CONCURRENT_FRAMES> uboLights;
 
-    std::array<jsr::Light, 16> lights;
+    std::array<jsr::Light, 8> lights;
 
     size_t drawDataBufferSize = 0;
 
@@ -307,8 +306,8 @@ public:
 
     void update_uniforms() {
 
-        uboPassData[currentFrame].copyTo(0, sizeof(passData), &passData);
-        uboPostProcessData[currentFrame].copyTo(0, sizeof(PostProcessData), &postProcessData);
+        uboPassData[currentFrame]->CopyTo(0, sizeof(passData), &passData);
+        uboPostProcessData[currentFrame]->CopyTo(0, sizeof(PostProcessData), &postProcessData);
         if (initLights)
         {
             initLights = false;

@@ -1,7 +1,9 @@
 #include "buffer.h"
 
 namespace jvk {
-	
+
+	BufferObject::stat_t BufferObject::statistics = {};
+
 	Buffer::Buffer(Device* device) : device_(device)
 	{
 	}
@@ -52,6 +54,11 @@ namespace jvk {
 
 	BufferObject::~BufferObject()
 	{
+		_Destroy();
+	}
+
+	void BufferObject::_Destroy()
+	{
 		assert(m_buffer.buffer != VK_NULL_HANDLE);
 
 		m_buffer.device_->destroy_buffer(&m_buffer);
@@ -65,36 +72,53 @@ namespace jvk {
 		{
 			throw std::runtime_error("Cannot create uniform buffer; VkResult: " + std::to_string(result));
 		}
+		statistics.allocCount.fetch_add(1, std::memory_order_relaxed);
+		statistics.allocBytes.fetch_add(size, std::memory_order_relaxed);
 	}
 
-	BufferUsage UniformBuffer::usage() const
+	BufferUsage UniformBuffer::GetUsage() const
 	{
 		return BufferUsage::UBO;
 	}
 
-	void BufferObject::copyTo(VkDeviceSize offset, VkDeviceSize size, const void* data)
+	BufferObject::SharedPtr UniformBuffer::CreateShared(Device* pDevice, VkDeviceSize size, bool deviceLocal)
+	{
+		return SharedPtr(new UniformBuffer(pDevice, size, deviceLocal));
+	}
+
+	BufferObject::UniquePtr UniformBuffer::Create(Device* pDevice, VkDeviceSize size, bool deviceLocal)
+	{
+		return UniquePtr(new UniformBuffer(pDevice, size, deviceLocal));
+	}
+
+	void BufferObject::CopyTo(VkDeviceSize offset, VkDeviceSize size, const void* data)
 	{
 		m_buffer.copyTo(offset, size, data);
 	}
 
-	void BufferObject::copyTo(const Buffer* data, VkDeviceSize srcOffset, VkDeviceSize dstOffset, VkDeviceSize size)
+	void BufferObject::CopyTo(const Buffer* data, VkDeviceSize srcOffset, VkDeviceSize dstOffset, VkDeviceSize size)
 	{
 		m_buffer.device_->buffer_copy(data, &m_buffer, srcOffset, dstOffset, size);
 	}
 
-	void BufferObject::fill(VkDeviceSize offset, VkDeviceSize size, uint32_t data)
+	void BufferObject::Fill(VkDeviceSize offset, VkDeviceSize size, uint32_t data)
 	{
 		m_buffer.fill(offset, size, data);
 	}
 
-	void BufferObject::setup_descriptor()
+	void BufferObject::SetupDescriptor()
 	{
 		m_buffer.setup_descriptor();
 	}
 
-	void BufferObject::set_name(const char* name)
+	void BufferObject::SetName(const std::string& name)
 	{
 		m_buffer.device_->set_buffer_name(&m_buffer, name);
+	}
+
+	bool BufferObject::Map()
+	{
+		return m_buffer.map();
 	}
 
 	StagingBuffer::StagingBuffer(Device* pDevice, VkDeviceSize size)
@@ -104,9 +128,21 @@ namespace jvk {
 		{
 			throw std::runtime_error("Cannot create staging buffer; VkResult: " + std::to_string(result));
 		}
+		statistics.allocCount.fetch_add(1, std::memory_order_relaxed);
+		statistics.allocBytes.fetch_add(size, std::memory_order_relaxed);
 	}
 
-	BufferUsage StagingBuffer::usage() const
+	BufferObject::SharedPtr StagingBuffer::CreateShared(Device* pDevice, VkDeviceSize size)
+	{
+		return SharedPtr(new StagingBuffer(pDevice, size));
+	}
+
+	BufferObject::UniquePtr StagingBuffer::Create(Device* pDevice, VkDeviceSize size)
+	{
+		return UniquePtr(new StagingBuffer(pDevice,size));
+	}
+
+	BufferUsage StagingBuffer::GetUsage() const
 	{
 		return BufferUsage::Staging;
 	}
