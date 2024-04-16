@@ -29,7 +29,7 @@ layout(set = 0, binding = 0) uniform stc_ubo_PassData {
 };
 
 layout(set = 0, binding = 3) uniform stc_ubo_LightData {
-    S_LIGHT lightdata[8];
+    S_LIGHT lightdata[16];
 };
 
 layout(set = 0, binding = 2) uniform sampler2D samp0;
@@ -203,7 +203,7 @@ void main() {
 
     vec3 ambientColor = passdata.vParams.x * baseColor.rgb;
     float reflectionMask = smoothstep(0.8, 1.0, 1.0 - r);
-    out_Color0 = vec4(F_LuminanceToEnergy(finalColor) + ambientColor, reflectionMask);
+    out_Color0 = vec4((finalColor) + ambientColor, reflectionMask);
     out_Normal = NormalOctEncode(N,false);
 //    outColor0.rgb = mix(checkerColor.rgb, outColor0.rgb, 0.98);
 }

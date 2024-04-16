@@ -72,6 +72,7 @@ private:
     bool smaaChanged = false;
     bool firstRun = true;
     bool initLights = false;
+    float fExposure = 1.0f;
 
     jvk::Image uvChecker;
     jvk::Image ssaoNoise;
@@ -103,7 +104,7 @@ private:
     std::array<jvk::BufferObject::SharedPtr, MAX_CONCURRENT_FRAMES> uboPostProcessData;
     std::array<jvk::BufferObject::SharedPtr, MAX_CONCURRENT_FRAMES> uboLights;
 
-    std::array<jsr::Light, 8> lights;
+    std::array<jsr::Light, 16> lights;
 
     size_t drawDataBufferSize = 0;
 
@@ -235,7 +236,7 @@ public:
         ImGui::DragFloat("L intensity (lumen)", &passData.vLightColor.w, 1.0f, 0.0f, 100000.0f);
         ImGui::DragFloat("L range (m)", &range, 0.05f, 0.0f, 100.0f);
         ImGui::DragFloat("L falloff", &falloff, 1.0f, -1.0f, 50.0f);
-        ImGui::DragFloat("Exposure", &postProcessData.fExposure, 0.1f, 0.0f, 100.0f);
+        ImGui::DragFloat("Max luminance", &fExposure, 0.01f, 0.0f, 500.0f);
         ImGui::Checkbox("Init lights", &initLights);
         ImGui::Checkbox("Fog On/Off", &fogEnabled);
         ImGui::Checkbox("HDR On/Off", (bool*)(&postProcessData.bHDR));
