@@ -72,7 +72,9 @@ private:
     bool smaaChanged = false;
     bool firstRun = true;
     bool initLights = false;
+    bool autoExposure = false;
     float fExposure = 1.0f;
+    float aperture = 1.4f, shutterTime = 1.0f/15.0f, ISO = 100.0f;
 
     jvk::Image uvChecker;
     jvk::Image ssaoNoise;
@@ -237,8 +239,14 @@ public:
         ImGui::DragFloat("L range (m)", &range, 0.05f, 0.0f, 100.0f);
         ImGui::DragFloat("L falloff", &falloff, 1.0f, -1.0f, 50.0f);
         ImGui::DragFloat("Max luminance", &fExposure, 0.01f, 0.0f, 500.0f);
+        ImGui::DragFloat("Aperture", &aperture, 0.2f, 1.4f, 22.0f);
+        ImGui::DragFloat("Shutter time", &shutterTime, 0.01f, 0.01f, 100.0f);
+        ImGui::DragFloat("ISO", &ISO, 50.0f, 50.0f, 800.0f);
+
+
         ImGui::Checkbox("Init lights", &initLights);
         ImGui::Checkbox("Fog On/Off", &fogEnabled);
+        ImGui::Checkbox("Auto exposure On/Off", &autoExposure);
         ImGui::Checkbox("HDR On/Off", (bool*)(&postProcessData.bHDR));
         
         ImGui::DragFloat("Max Luminance", &postProcessData.tonemapper_P, 0.5f, 0.0f, 1000.0f, "%.1f");

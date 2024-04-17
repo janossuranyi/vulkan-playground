@@ -50,7 +50,7 @@ float computeEV100(float aperture, float shutterTime, float ISO)
     // EV_100 + log2 (S /100) = log2 (N^2 / t)
     // EV_100 = log2 (N^2 / t) - log2 (S /100)
     // EV_100 = log2 (N^2 / t . 100 / S)
-    return log2((aperture*aperture) / shutterTime * 100.0 / ISO);
+    return log2f( ( aperture * aperture ) / shutterTime * 100.0f / ISO);
 }
 
 static float computeEV100FromAvgLuminance(float avgLuminance)
@@ -61,7 +61,7 @@ static float computeEV100FromAvgLuminance(float avgLuminance)
     // which is fixed at 12.5 for matching standard camera
     // constructor settings (i.e. calibration constant K = 12.5)
     // Reference : http://en.wikipedia.org/wiki/Film_speed
-    return log2(avgLuminance * 100.0 / 12.5);
+    return log2f( avgLuminance * 100.0f / 12.5f );
 }
 
 static float convertEV100ToExposure(float EV100)
@@ -72,14 +72,14 @@ static float convertEV100ToExposure(float EV100)
     // = 78 / (100 * 0.65) * 2^ EV_100
     // = 1.2 * 2^ EV
     // Reference: http://en.wikipedia.org/wiki/Film_speed
-    float maxLuminance = 1.2 * pow(2.0, EV100);
-    return 1.0 / maxLuminance;
+    float maxLuminance = 1.2f * powf(2.0f, EV100);
+    return 1.0f / maxLuminance;
 }
 
 void Sample1App::init_lights()
 {
     std::random_device rdev;
-    std::uniform_real_distribution<float> randomFloats(0.0, 1.0); // random floats between [0.0, 1.0]
+    std::uniform_real_distribution<float> randomFloats(0.0f, 1.0f); // random floats between [0.0, 1.0]
     std::default_random_engine generator(rdev());
     jvk::Buffer stage;
 
@@ -322,7 +322,7 @@ void Sample1App::build_command_buffers()
     pDevice->begin_debug_marker_region(cmd, &col1.r, "Forward Pass");
     VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
     VkClearValue clearVal[3];
-    glm::vec4 sky = glm::vec4{ 0.5f, 0.6f, 0.7f, 1.0f };
+    glm::vec4 sky = glm::vec4{ 0.2f, 0.3f, 0.4f, 0.0f };
 
     clearVal[0].color = { sky.r,sky.g,sky.b,sky.a };
     clearVal[1].color = { 0.0f,0.0f,0.0f,0.0f };
@@ -510,6 +510,11 @@ void Sample1App::render()
         smaaChanged = false;
     }
 
+    // usage with auto settings
+    float EV100     = computeEV100(aperture, shutterTime, ISO);
+    float AutoEV100 = computeEV100FromAvgLuminance(fExposure);
+    float exposure  = convertEV100ToExposure(autoExposure ? AutoEV100 : EV100);
+
     const float zFar = 60000.0f;
     const float zNear = 0.1f;
     camera.MovementSpeed = .002f;
@@ -519,10 +524,7 @@ void Sample1App::render()
     passData.vScaleBias.y = 1.0f / swapchain.extent().height;
     passData.vScaleBias.z = 0.f;
     passData.vScaleBias.w = 0.f;
-
-    // usage with auto settings
-    float AutoEV100 = computeEV100FromAvgLuminance(fExposure);
-    float exposure = convertEV100ToExposure(AutoEV100);
+    passData.vParams.y = exposure;
 
     postProcessData.fExposure = exposure;
     postProcessData.mtxInvProj = inverse(passData.mtxProjection * passData.mtxView);
@@ -1099,6 +1101,7 @@ void Sample1App::prepare()
     passData.vLightPos = glm::vec4(0.f, 1.5f, 0.f, 10.f);
     passData.vLightColor = glm::vec4(0.800f, 0.453f, 0.100f, 2300.f);
     passData.vParams[0] = 0.05f;    // global ambient scale
+    passData.vParams[1] = 1.0f;    // exposure
     postProcessData.vSunPos = { 45.0f, 0.0f, 0.0f, 0.0f };
     postProcessData.fExposure = 250.f;
     postProcessData.bHDR = settings.hdr;

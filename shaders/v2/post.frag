@@ -179,7 +179,7 @@ void main() {
   
 
     inColor.rgb = mix(inColor.rgb, fogColor, bvec3(ppdata.vFogParams.z > 0.0) );
-    inColor.rgb *= ppdata.fExposure;
+//    inColor.rgb *= ppdata.fExposure;
 
 //    inColor.rgb = ACESFitted( mix( ppdata.sFogParams.color, ppdata.fExposure * inColor.rgb, fogFactor ) );
 

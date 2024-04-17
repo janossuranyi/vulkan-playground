@@ -202,8 +202,8 @@ void main() {
     }
 
     vec3 ambientColor = passdata.vParams.x * baseColor.rgb;
-    float reflectionMask = smoothstep(0.8, 1.0, 1.0 - r);
-    out_Color0 = vec4((finalColor) + ambientColor, reflectionMask);
+    float reflectionMask = metalness; //smoothstep(0.8, 1.0, 1.0 - r);
+    out_Color0 = vec4((finalColor + ambientColor) * passdata.vParams.yyy, reflectionMask);
     out_Normal = NormalOctEncode(N,false);
 //    outColor0.rgb = mix(checkerColor.rgb, outColor0.rgb, 0.98);
 }
