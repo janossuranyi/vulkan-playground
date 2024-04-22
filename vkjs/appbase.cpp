@@ -16,6 +16,10 @@
 #define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2  ((DPI_AWARENESS_CONTEXT)-4)
 #endif
 
+#define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
+#include "vulkan/vulkan.hpp"
+
+VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 /** 
  ** https://handmade.network/p/58/seabird/blog/p/2460-be_aware_of_high_dpi 
@@ -619,11 +623,15 @@ namespace jvk
 
 		pDevice = new Device(physicalDevice, instance);
 		queue = pDevice->get_graphics_queue();
-		
-/*
-		auto procAddr = vkGetInstanceProcAddr(instance, "vkGetInstanceProcAddr");
-		VULKAN_HPP_DEFAULT_DISPATCHER.init(procAddr);
-*/
+	
+		VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
+
+		vk::Instance instance(instance);
+		VULKAN_HPP_DEFAULT_DISPATCHER.init(instance);
+
+		vk::Device vkdev(pDevice->logicalDevice);
+		VULKAN_HPP_DEFAULT_DISPATCHER.init(vkdev);
+
 		return true;
 	}
 

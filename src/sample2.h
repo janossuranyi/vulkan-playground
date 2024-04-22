@@ -12,13 +12,13 @@
 #include <memory>
 #include <filesystem>
 
-//#include "nvrhi/nvrhi.h"
-//#include "nvrhi/vulkan.h"
+#include "nvrhi/nvrhi.h"
+#include "nvrhi/vulkan.h"
 
 class Sample2App : public jvk::AppBase
 {
 private:
-//	nvrhi::DeviceHandle m_nvrhiDevice;
+	nvrhi::DeviceHandle m_nvrhiDevice;
 	
 	glm::vec4 hdrColor = { 0.0f,0.0f,0.0f,1.0f };
 	VkRenderPass pass = {};
@@ -55,5 +55,5 @@ public:
 
 	virtual void render() override;
 	virtual void get_enabled_extensions() override;
-
+	virtual void get_enabled_features() override;
 };

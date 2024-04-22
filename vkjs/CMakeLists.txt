@@ -3,6 +3,7 @@ add_library(vkjs STATIC)
 add_compile_definitions(
    VKJS_USE_VOLK
    NOMINMAX
+#   VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1
 )
 
 target_sources(vkjs PRIVATE

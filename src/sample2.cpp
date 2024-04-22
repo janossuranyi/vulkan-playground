@@ -4,6 +4,7 @@
 #include "vkjs/pipeline.h"
 #include "vkjs/shader_module.h"
 
+
 namespace fs = std::filesystem;
 
 const glm::mat3 from709to2020 = glm::mat3(
@@ -144,7 +145,6 @@ void Sample2App::prepare()
 
 	basePath = fs::path("../..");
 
-/*
 	nvrhi::vulkan::DeviceDesc vkDesc = {};
 	vkDesc.graphicsQueue = pDevice->graphics_queue;
 	vkDesc.device = pDevice->logicalDevice;
@@ -154,8 +154,17 @@ void Sample2App::prepare()
 	vkDesc.deviceExtensions = enabled_device_extensions.data();
 	vkDesc.numInstanceExtensions = enabled_instance_extensions.size();
 	vkDesc.instanceExtensions = enabled_instance_extensions.data();
+	vkDesc.instance = instance;
+
+	if (pDevice->has_dedicated_compute_queue()) {
+		vkDesc.computeQueueIndex = pDevice->queue_family_indices.compute;
+		vkDesc.computeQueue = pDevice->get_compute_queue();
+	}
+	if (pDevice->has_dedicated_transfer_queue()) {
+		vkDesc.transferQueueIndex = pDevice->queue_family_indices.transfer;
+		vkDesc.transferQueue = pDevice->get_transfer_queue();
+	}
 	m_nvrhiDevice = nvrhi::vulkan::createDevice(vkDesc);
-*/	
 
 	VkAttachmentDescription color = {};
 	color.format = swapchain.vkb_swapchain.image_format;
@@ -201,7 +210,7 @@ void Sample2App::prepare()
 	parms.parms[0] = { 1.0f,0.0f,0.0f,1.0f };
 	parms.parms[1] = { 0.0f,1.0f,0.0f,1.0f };
 	parms.parms[2] = { 0.0f,0.0f,1.0f,1.0f };
-	pc.data.x = 10.0f;
+	pc.data.x = 1.0f;
 	pc.data.y = 1.0f;
 	pc.data.z = 400.0f;
 	pc.data.w = 0.0f;
@@ -256,6 +265,11 @@ void Sample2App::render()
 void Sample2App::get_enabled_extensions()
 {
 	enabled_instance_extensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
+}
+
+void Sample2App::get_enabled_features()
+{
+	enabled_features12.timelineSemaphore = true;
 }
 
 void Sample2App::on_window_resized()
