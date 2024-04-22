@@ -96,7 +96,7 @@ vec3 specBRDF(vec3 f0, vec3 l, vec3 v, vec3 n, float perceptualRoughness)
     
     float D = D_GGX(NoH, roughness);
     vec3  F = F_Schlick(f0, LoH);
-    float V = V_SmithGGXCorrelated(NoV, NoL, roughness);
+    float V = V_SmithGGXCorrelatedFast(NoV, NoL, roughness);
 
     // specular BRDF
     vec3 Fr = (D * V) * F;
@@ -197,7 +197,7 @@ void main() {
         float m = max3(lightColor);
         if (m <= (5.0/255.0)) continue;
 
-        vec3 Fr = specBRDF_DOOM(F0, L,V,N, r);
+        vec3 Fr = specBRDF(F0, L,V,N, r);
         finalColor += (Fr + Fd) * lightColor * saturate(dot(N, L));
     }
 
