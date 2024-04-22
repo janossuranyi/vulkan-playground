@@ -235,11 +235,11 @@ void Sample1App::setup_objects()
         }
     }
 
-    drawData.resize(drawDataStruct.size() * dynamicAlignment);
+    drawDataBufferAligned.resize(drawDataStruct.size() * dynamicAlignment);
 
     size_t offset = 0;
     for (size_t i(0); i < drawDataStruct.size(); ++i) {
-        memcpy(&drawData[offset], &drawDataStruct[i], sizeof(DrawData));
+        memcpy(&drawDataBufferAligned[offset], &drawDataStruct[i], sizeof(DrawData));
         offset += dynamicAlignment;
     }
 
@@ -1282,11 +1282,11 @@ void Sample1App::prepare()
     
     jvk::Buffer stage;
     pDevice->create_staging_buffer(size, &stage);
-    stage.copyTo(0, drawData.size(), drawData.data());
+    stage.copyTo(0, drawDataBufferAligned.size(), drawDataBufferAligned.data());
     for (size_t i = 0; i < MAX_CONCURRENT_FRAMES; ++i)
     {
         //pDevice->buffer_copy(&stage, &uboDrawData, 0, i * drawDataBufferSize, drawData.size());
-        uboDrawData->CopyTo(&stage, 0, i * drawDataBufferSize, drawData.size());
+        uboDrawData->CopyTo(&stage, 0, i * drawDataBufferSize, drawDataBufferAligned.size());
     }
     pDevice->destroy_buffer(&stage);
 

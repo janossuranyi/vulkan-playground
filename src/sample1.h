@@ -141,7 +141,7 @@ private:
 
     std::vector<MeshBinary> meshes;
     std::vector<Object> objects;
-    std::vector<uint8_t> drawData;
+    std::vector<uint8_t> drawDataBufferAligned;
     std::vector<DrawData> drawDataStruct;
 
     struct PassData {
