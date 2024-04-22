@@ -50,6 +50,7 @@ include_directories(
     third_party/dds_image/include
     third_party/stb_image
     third_party/stb_dxt
+    thitd_party/nvrhi/include
     .
 )
 

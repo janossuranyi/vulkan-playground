@@ -99,3 +99,5 @@ target_sources(imgui PRIVATE
     imgui/backends/imgui_impl_vulkan.h
     imgui/backends/imgui_impl_vulkan.cpp
 )
+
+add_subdirectory(nvrhi)

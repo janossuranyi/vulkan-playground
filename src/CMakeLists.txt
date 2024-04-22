@@ -52,4 +52,5 @@ target_link_libraries(demo
     ktx2
 #    Vulkan::Vulkan
     volk
+    nvrhi
 )
