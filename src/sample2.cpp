@@ -1,9 +1,8 @@
 #include "sample2.h"
+
 #include "vkjs/vkcheck.h"
 #include "vkjs/pipeline.h"
 #include "vkjs/shader_module.h"
-#include "glm/glm.hpp"
-#include <filesystem>
 
 namespace fs = std::filesystem;
 
@@ -144,6 +143,19 @@ void Sample2App::prepare()
 	jvk::AppBase::prepare();
 
 	basePath = fs::path("../..");
+
+/*
+	nvrhi::vulkan::DeviceDesc vkDesc = {};
+	vkDesc.graphicsQueue = pDevice->graphics_queue;
+	vkDesc.device = pDevice->logicalDevice;
+	vkDesc.graphicsQueueIndex = pDevice->queue_family_indices.graphics;
+	vkDesc.physicalDevice = pDevice->vkbPhysicalDevice.physical_device;
+	vkDesc.numDeviceExtensions = enabled_device_extensions.size();
+	vkDesc.deviceExtensions = enabled_device_extensions.data();
+	vkDesc.numInstanceExtensions = enabled_instance_extensions.size();
+	vkDesc.instanceExtensions = enabled_instance_extensions.data();
+	m_nvrhiDevice = nvrhi::vulkan::createDevice(vkDesc);
+*/	
 
 	VkAttachmentDescription color = {};
 	color.format = swapchain.vkb_swapchain.image_format;

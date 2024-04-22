@@ -16,6 +16,7 @@
 #define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2  ((DPI_AWARENESS_CONTEXT)-4)
 #endif
 
+
 /** 
  ** https://handmade.network/p/58/seabird/blog/p/2460-be_aware_of_high_dpi 
  */
@@ -619,6 +620,10 @@ namespace jvk
 		pDevice = new Device(physicalDevice, instance);
 		queue = pDevice->get_graphics_queue();
 		
+/*
+		auto procAddr = vkGetInstanceProcAddr(instance, "vkGetInstanceProcAddr");
+		VULKAN_HPP_DEFAULT_DISPATCHER.init(procAddr);
+*/
 		return true;
 	}
 

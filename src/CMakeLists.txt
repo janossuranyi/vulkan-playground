@@ -36,6 +36,7 @@ add_compile_definitions(
    DDS_USE_STD_FILESYSTEM
    VKJS_USE_VOLK
    TINYGLTF_NO_EXTERNAL_IMAGE
+   NOMINMAX
 )
 
 #    Vulkan::Vulkan
@@ -53,4 +54,5 @@ target_link_libraries(demo
 #    Vulkan::Vulkan
     volk
     nvrhi
+    nvrhi_vk
 )

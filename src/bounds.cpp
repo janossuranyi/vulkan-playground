@@ -91,7 +91,7 @@ namespace jsr {
 	bool Sphere::Intersect(const Bounds& box) const
 	{
 		// get box closest point to sphere center by clamping
-		vec3  const v = glm::max(box.min(), glm::min(center, box.max()));
+		vec3  const v = glm::max(box.Min(), glm::min(center, box.Max()));
 		float const d = dot(v, v);
 
 		return d < radius2;
@@ -112,8 +112,8 @@ namespace jsr {
 
 	Bounds& Bounds::Extend(const Bounds& other)
 	{
-		b[0] = glm::min(b[0], other.min());
-		b[1] = glm::max(b[1], other.max());
+		b[0] = glm::min(b[0], other.Min());
+		b[1] = glm::max(b[1], other.Max());
 
 		return *this;
 	}
@@ -220,7 +220,7 @@ namespace jsr {
 		Bounds b{};
 		auto corners = GetHomogenousCorners();
 		b.b[0] = vec3(trans * corners[0]);
-		b.b[1] = b.min();
+		b.b[1] = b.Min();
 		for (auto i = 1; i < 8; ++i)
 		{
 			b << vec3(trans * corners[i]);
@@ -243,11 +243,11 @@ namespace jsr {
 		assert(index < 2);
 		return b[index];
 	}
-	glm::vec3& Bounds::min()
+	glm::vec3& Bounds::Min()
 	{
 		return b[0];
 	}
-	glm::vec3& Bounds::max()
+	glm::vec3& Bounds::Max()
 	{
 		return b[1];
 	}
@@ -276,17 +276,17 @@ namespace jsr {
 
 		return { center,radius };
 	}
-	const glm::vec3& Bounds::min() const
+	const glm::vec3& Bounds::Min() const
 	{
 		return b[0];
 	}
-	const glm::vec3& Bounds::max() const
+	const glm::vec3& Bounds::Max() const
 	{
 		return b[1];
 	}
 	bool Bounds::operator==(const Bounds& other) const
 	{
-		return b[0] == other.min() && b[1] == other.max();
+		return b[0] == other.Min() && b[1] == other.Max();
 	}
 	bool Bounds::operator!=(const Bounds& other) const
 	{
@@ -295,8 +295,8 @@ namespace jsr {
 	Bounds Bounds::operator+(const Bounds& other) const
 	{
 		Bounds result{};
-		result.b[0] = glm::min(min(), other.min());
-		result.b[1] = glm::max(max(), other.max());
+		result.b[0] = glm::min(Min(), other.Min());
+		result.b[1] = glm::max(Max(), other.Max());
 
 		return result;
 	}

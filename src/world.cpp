@@ -214,8 +214,8 @@ namespace jsr {
 	void World::UdateNodeBounds(uint32_t nodeIdx)
 	{
 		BVHNode& node = bvhNode[nodeIdx];
-		node.aabb.min() = glm::vec3(std::numeric_limits<float>::max());
-		node.aabb.max() = glm::vec3(std::numeric_limits<float>::lowest());
+		node.aabb.Min() = glm::vec3(std::numeric_limits<float>::max());
+		node.aabb.Max() = glm::vec3(std::numeric_limits<float>::lowest());
 		size_t i;
 		for (size_t first = node.leftFirst, i = 0; i < node.primCount; ++i)
 		{
@@ -365,8 +365,8 @@ namespace jsr {
 
 		for (int a = 0; a < 3; a++)
 		{
-			float boundsMin = node.aabb.min()[a];
-			float boundsMax = node.aabb.max()[a];
+			float boundsMin = node.aabb.Min()[a];
+			float boundsMax = node.aabb.Max()[a];
 
 			if (boundsMin == boundsMax) continue;
 
@@ -425,8 +425,8 @@ namespace jsr {
 			}
 			BVHNode& leftChild = bvhNode[node.leftFirst];
 			BVHNode& rightChild = bvhNode[node.leftFirst + 1];
-			node.aabb.min() = glm::min(leftChild.aabb.min(), rightChild.aabb.min());
-			node.aabb.max() = glm::max(leftChild.aabb.max(), rightChild.aabb.max());
+			node.aabb.Min() = glm::min(leftChild.aabb.Min(), rightChild.aabb.Min());
+			node.aabb.Max() = glm::max(leftChild.aabb.Max(), rightChild.aabb.Max());
 		}
 	}
 }

@@ -2,6 +2,7 @@ add_library(vkjs STATIC)
 
 add_compile_definitions(
    VKJS_USE_VOLK
+   NOMINMAX
 )
 
 target_sources(vkjs PRIVATE
@@ -41,7 +42,7 @@ target_link_libraries(vkjs
     vma
     stb_image
     imgui
-    #    Vulkan::Vulkan
+    #Vulkan::Vulkan
     volk
     spirv-reflect
 )
