@@ -41,13 +41,17 @@ void Sample2App::init_pipelines()
 	VK_CHECK(vert_module.create(vert_spirv_filename));
 	VK_CHECK(frag_module.create(frag_spirv_filename));
 
+	nvrhi::ShaderDesc shaderDesc(nvrhi::ShaderType::Vertex);
+	shaderDesc.debugName = "Vertex Shader";
 	m_vertexShader = m_nvrhiDevice->createShader(
-		nvrhi::ShaderDesc(nvrhi::ShaderType::Vertex),
+		shaderDesc,
 		vert_module.data(),
 		vert_module.size());
 
+	shaderDesc.debugName = "Fragment Shader";
+	shaderDesc.shaderType = nvrhi::ShaderType::Pixel;
 	m_fragmentShader = m_nvrhiDevice->createShader(
-		nvrhi::ShaderDesc(nvrhi::ShaderType::Pixel),
+		shaderDesc,
 		frag_module.data(),
 		frag_module.size());
 
@@ -82,15 +86,14 @@ void Sample2App::init_pipelines()
 void Sample2App::on_update_gui()
 {
 	if (settings.overlay == false) return;
-	ImGui::DragFloat3("ClearColor", &hdrColor[0], 1.0f/1024.0f, 0.0f, 1.0f);
-	ImGui::DragFloat("Color Scale", &pc.data.x, 0.01f, 0.0f, 2000.0f, "%.2f");
-	ImGui::DragFloat("Exposure", &pc.data.y, 0.01f, 0.0f, 300.0f);
-	ImGui::DragFloat("Max Lum.", &pc.data.z, 1.0f, 100.0f, 2000.0f);
-	ImGui::DragFloat("White level.", &pc.data.w, 1.0f, 00.0f, 200.0f);
+	ImGui::DragFloat3("Color Bias", &globals.rpColorBias[0], 0.01f, 0.0f, 1.0f);
+	ImGui::DragFloat3("Color Scale", &globals.rpColorMultiplier[0], 0.01f, 0.0f, 2000.0f, "%.2f");
+	ImGui::DragFloat3("Vertex scale", &globals.rpScale[0], 0.01f, 0.0f, 300.0f);
 }
 
 Sample2App::~Sample2App()
 {
+	m_nvrhiDevice->waitForIdle();
 }
 
 void Sample2App::create_framebuffers()
@@ -153,30 +156,34 @@ void Sample2App::prepare()
 
 void Sample2App::build_command_buffers()
 {
+	using namespace glm;
+	using namespace nvrhi;
 
-	nvrhi::IFramebuffer* currentFramebuffer = m_fbs[currentBuffer];
-	nvrhi::ITexture* image = m_swapchainImages[currentBuffer];
-	nvrhi::TextureSubresourceSet imgSub = {};
+	IFramebuffer* currentFramebuffer = m_fbs[currentBuffer];
+	ITexture* image = m_swapchainImages[currentBuffer];
+	TextureSubresourceSet imgSub = {};
 
 	m_commandList->open();
-	m_commandList->beginTrackingTextureState(image, imgSub, nvrhi::ResourceStates::Unknown);
+	m_commandList->beginTrackingTextureState(image, imgSub, ResourceStates::Unknown);
 
 	nvrhi::utils::ClearColorAttachment(m_commandList, currentFramebuffer, 0, nvrhi::Color(0.f));
 	m_commandList->writeBuffer(m_constantBuffer, &globals, sizeof(globals), 0);
 
-	auto graphicsState = nvrhi::GraphicsState()
+	auto graphicsState = GraphicsState()
 		.setPipeline(m_graphicsPipeline)
 		.setFramebuffer(currentFramebuffer)
-		.setViewport(nvrhi::ViewportState().addViewportAndScissorRect(nvrhi::Viewport(width, height)))
+		.setViewport(ViewportState().addViewportAndScissorRect(Viewport(width, height)))
 		.addBindingSet(m_bindingSet);
 
 	m_commandList->setGraphicsState(graphicsState);
 
-	auto drawArguments = nvrhi::DrawArguments()
+	auto drawArguments = DrawArguments()
 		.setVertexCount(3);
 
 	m_commandList->draw(drawArguments);
-	m_commandList->setTextureState(image, imgSub, nvrhi::ResourceStates::RenderTarget);
+	m_commandList->setTextureState(image, imgSub, ResourceStates::RenderTarget);
+	m_commandList->commitBarriers();
+
 	m_commandList->close();
 	m_nvrhiDevice->executeCommandList(m_commandList);
 	m_nvrhiDevice->runGarbageCollection();

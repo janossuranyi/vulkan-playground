@@ -513,6 +513,8 @@ namespace jvk
 	}
 	AppBase::~AppBase() noexcept
 	{
+		jsrlib::Info("AppBase dtor called");
+
 		if (!pDevice || !pDevice->logicalDevice || !prepared) return;
 
 		vkDeviceWaitIdle(*pDevice);
@@ -587,6 +589,8 @@ namespace jvk
 			.set_required_features_12(enabled_features12)
 			.add_required_extension_features(shader_draw_parameters_features)
 			.add_desired_extension(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
+			
+
 
 		for (const auto* extension_name : enabled_device_extensions) {
 			selector.add_required_extension(extension_name);
@@ -603,7 +607,16 @@ namespace jvk
 			return false;
 		}
 
+
 		vkb::PhysicalDevice physicalDevice = selector_result.value();
+
+		auto devexts = physicalDevice.get_extensions();
+		auto query = std::find(devexts.begin(), devexts.end(), VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
+		if (query != devexts.end())
+		{
+			enabled_device_extensions.push_back(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
+			jsrlib::Info("%s enabled", VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
+		}
 
 		std::string gpuType;
 		switch (physicalDevice.properties.deviceType) {
@@ -769,6 +782,7 @@ namespace jvk
 		builder
 			.set_app_name("VKJS_Engine")
 			.set_app_version(VK_MAKE_VERSION(1, 0, 0))
+			.enable_extension(VK_EXT_DEBUG_REPORT_EXTENSION_NAME)
 			.require_api_version(1, 2, 0);
 
 
