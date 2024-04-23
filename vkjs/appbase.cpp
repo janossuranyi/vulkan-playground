@@ -141,11 +141,11 @@ namespace jvk
 
 		VK_CHECK(vkResetCommandBuffer(cmd, 0));
 		pDevice->begin_command_buffer(cmd);
-		
-		render();
-
-		on_update_gui();
-		render_imgui();
+		{
+			render();
+			on_update_gui();
+			render_imgui();
+		}
 		VK_CHECK(vkEndCommandBuffer(cmd));
 
 		VkPipelineStageFlags stageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -754,7 +754,7 @@ namespace jvk
 
 	VkViewport AppBase::get_viewport() const
 	{
-		return VkViewport{ 0.0f,0.0f,float(width),float(height),0.0f,1.0f };
+		return VkViewport{ float(0),float(0),float(width),float(height),float(0),float(1) };
 	}
 
 	VkResult AppBase::create_instance(bool enable_validation)
