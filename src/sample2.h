@@ -19,16 +19,24 @@ class Sample2App : public jvk::AppBase
 {
 private:
 	nvrhi::DeviceHandle m_nvrhiDevice;
-	
+	std::vector<nvrhi::TextureHandle> m_swapchainImages;
+	std::vector<nvrhi::FramebufferHandle> m_fbs;
+	nvrhi::ShaderHandle m_vertexShader;
+	nvrhi::ShaderHandle m_fragmentShader;
+	nvrhi::GraphicsPipelineHandle m_graphicsPipeline;
+	nvrhi::BufferHandle m_constantBuffer;
+	nvrhi::CommandListHandle m_commandList;
+	nvrhi::BindingSetHandle m_bindingSet;
+
+	nvrhi::BindingLayoutHandle m_bindingLayout = {};
+
 	glm::vec4 hdrColor = { 0.0f,0.0f,0.0f,1.0f };
-	VkRenderPass pass = {};
-	std::unique_ptr<VkFramebuffer[]> fb;
-	std::unique_ptr<jvk::GraphicsPipeline> pipeline;
-	std::unique_ptr<vkutil::DescriptorManager> descriptorMgr;
-	jvk::Buffer ubo;
-	struct ubo_t {
-		glm::vec4 parms[8];
-	} parms{};
+
+	struct globals_t {
+		glm::vec4 rpColorMultiplier = glm::vec4(1.0f);
+		glm::vec4 rpColorBias = glm::vec4(0.0f);
+		glm::vec4 rpScale = glm::vec4(1.0f);
+	} globals;
 
 	void init_pipelines();
 	void create_framebuffers();

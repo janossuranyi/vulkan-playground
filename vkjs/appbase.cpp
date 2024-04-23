@@ -221,7 +221,7 @@ namespace jvk
 			}
 #endif
 #if 1
-			if (!settings.hdr && (it.format == VK_FORMAT_B8G8R8A8_UNORM || it.format == VK_FORMAT_R8G8B8A8_UNORM)) {
+			if (!settings.hdr && (it.format == VK_FORMAT_B8G8R8A8_UNORM /* || it.format == VK_FORMAT_R8G8B8A8_UNORM */)) {
 				format = it;
 				break;
 			}

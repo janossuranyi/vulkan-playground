@@ -4,6 +4,7 @@
 #include "vkjs/pipeline.h"
 #include "vkjs/shader_module.h"
 
+#include "nvrhi/utils.h"
 
 namespace fs = std::filesystem;
 
@@ -39,54 +40,43 @@ void Sample2App::init_pipelines()
 	const fs::path frag_spirv_filename = basePath / "shaders/bin/debug.frag.spv";
 	VK_CHECK(vert_module.create(vert_spirv_filename));
 	VK_CHECK(frag_module.create(frag_spirv_filename));
-	jvk::GraphicsShaderInfo shaders{};
-	shaders.vert = &vert_module;
-	shaders.frag = &frag_module;
 
-	struct spec_t {
-		float VSCALE = -1.0f;
-		int PARM_COUNT = 1;
-	} specData;
+	m_vertexShader = m_nvrhiDevice->createShader(
+		nvrhi::ShaderDesc(nvrhi::ShaderType::Vertex),
+		vert_module.data(),
+		vert_module.size());
 
-	int specIdx = 0;
-	VkSpecializationMapEntry specent[2];
-	specent[specIdx].constantID = 1;
-	specent[specIdx].offset = offsetof(spec_t, VSCALE);
-	specent[specIdx].size = sizeof(specData.VSCALE);
-	++specIdx;
-	specent[specIdx].constantID = 2;
-	specent[specIdx].offset = offsetof(spec_t, PARM_COUNT);
-	specent[specIdx].size = sizeof(specData.PARM_COUNT);
+	m_fragmentShader = m_nvrhiDevice->createShader(
+		nvrhi::ShaderDesc(nvrhi::ShaderType::Pixel),
+		frag_module.data(),
+		frag_module.size());
 
-	VkSpecializationInfo specinf = {};
-	specinf.dataSize = sizeof(specData);
-	specinf.mapEntryCount = 2;
-	specinf.pMapEntries = &specent[0];
-	specinf.pData = &specData;
+	auto layoutDesc = nvrhi::BindingLayoutDesc()
+		.setVisibility(nvrhi::ShaderType::Vertex)
+		.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));
+	m_bindingLayout = m_nvrhiDevice->createBindingLayout(layoutDesc);
 
-	VkPushConstantRange pc[2];
-	pc[1].offset = 0;
-	pc[1].size = sizeof(pc);
-	pc[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	nvrhi::RenderState renderState = {};
+	renderState.depthStencilState.depthTestEnable = false;
+	renderState.rasterState.cullMode = nvrhi::RasterCullMode::None;
 
-	pipeline.reset(new jvk::GraphicsPipeline(pDevice, shaders, descriptorMgr.get()));
+	auto pipelineDesc = nvrhi::GraphicsPipelineDesc()
+		.setVertexShader(m_vertexShader)
+		.setPixelShader(m_fragmentShader)
+		.setRenderState(renderState)
+		.addBindingLayout(m_bindingLayout);
 
-	pipeline->set_specialization_info(VK_SHADER_STAGE_VERTEX_BIT, &specinf);
-	pipeline->set_cull_mode(VK_CULL_MODE_NONE)
-		.add_push_constant_range(pc[1])
-		.set_depth_func(VK_COMPARE_OP_ALWAYS)
-		.set_depth_mask(false)
-		.set_depth_test(false)
-		.set_draw_mode(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-		.set_sample_count(VK_SAMPLE_COUNT_1_BIT)
-		.set_polygon_mode(VK_POLYGON_MODE_FILL)
-		.set_render_pass(pass)
-		.add_dynamic_state(VK_DYNAMIC_STATE_VIEWPORT)
-		.add_dynamic_state(VK_DYNAMIC_STATE_SCISSOR)
-		.add_attachment_blend_state(vks::initializers::pipelineColorBlendAttachmentState(0xf,false))
-		.set_name("debug");
+	m_graphicsPipeline = m_nvrhiDevice->createGraphicsPipeline(pipelineDesc, m_fbs[0]);
 
-	VK_CHECK(pipeline->build_pipeline());
+
+	auto constantBufferDesc = nvrhi::BufferDesc()
+		.setByteSize(sizeof(globals)) // stores one matrix
+		.setIsConstantBuffer(true)
+		.setIsVolatile(true)
+		.setMaxVersions(16); // number of automatic versions, only necessary on Vulkan
+
+	m_constantBuffer = m_nvrhiDevice->createBuffer(constantBufferDesc);
+
 }
 
 void Sample2App::on_update_gui()
@@ -101,44 +91,25 @@ void Sample2App::on_update_gui()
 
 Sample2App::~Sample2App()
 {
-	vkDeviceWaitIdle(*pDevice);
-	for (size_t i(0); i < swapchain.images.size(); ++i)
-	{
-		if (fb[i]) vkDestroyFramebuffer(*pDevice, fb[i], nullptr);
-	}
-
-	if (pass) {
-		vkDestroyRenderPass(*pDevice, pass, nullptr);
-	}
 }
 
 void Sample2App::create_framebuffers()
 {
-	if (fb) {
-		for (size_t i(0); i < swapchain.images.size(); ++i)
-		{
-			if (fb[i]) {
-				vkDestroyFramebuffer(*pDevice, fb[i], nullptr);
-				fb[i] = VK_NULL_HANDLE;
-			}
-		}
+	if ( ! m_fbs.empty() ) {
+		m_fbs.clear();
 	}
 	
-	fb = std::make_unique<VkFramebuffer[]>(swapchain.images.size());
-	
-	auto fbci = vks::initializers::framebufferCreateInfo();
-	fbci.renderPass = pass;
-	fbci.layers = 1;
-	fbci.attachmentCount = 1;
-	fbci.width = width;
-	fbci.height = height;
-	auto& views = swapchain.views;
+	auto& views = swapchain.images;
 
 	for (int i(0); i < views.size(); ++i) {
-		fbci.pAttachments = &views[i];
-		VK_CHECK(vkCreateFramebuffer(*pDevice, &fbci, 0, &fb[i]));
+		auto framebufferDesc = nvrhi::FramebufferDesc()
+			.addColorAttachment(m_swapchainImages[i]); // you can specify a particular subresource if necessary
+
+		nvrhi::FramebufferHandle framebuffer = m_nvrhiDevice->createFramebuffer(framebufferDesc);
+		m_fbs.push_back(framebuffer);
 	}
 }
+
 void Sample2App::prepare()
 {
 	jvk::AppBase::prepare();
@@ -166,92 +137,49 @@ void Sample2App::prepare()
 	}
 	m_nvrhiDevice = nvrhi::vulkan::createDevice(vkDesc);
 
-	VkAttachmentDescription color = {};
-	color.format = swapchain.vkb_swapchain.image_format;
-	color.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	color.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	color.samples = VK_SAMPLE_COUNT_1_BIT;
-
-	VkAttachmentReference colorRef = {};
-	colorRef.attachment = 0;
-	colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	VkSubpassDependency colorDep = {};
-	colorDep.srcSubpass = VK_SUBPASS_EXTERNAL;
-	colorDep.dstSubpass = 0;
-	colorDep.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	colorDep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	colorDep.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	colorDep.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-	VkSubpassDescription subpass0 = {};
-	subpass0.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpass0.colorAttachmentCount = 1;
-	subpass0.pColorAttachments = &colorRef;
-
-	VkRenderPassCreateInfo ci = vks::initializers::renderPassCreateInfo();
-	ci.attachmentCount = 1;
-	ci.dependencyCount = 1;
-	ci.pAttachments = &color;
-	ci.subpassCount = 1;
-	ci.pSubpasses = &subpass0;
-	ci.pDependencies = &colorDep;
-
-	VK_CHECK(vkCreateRenderPass(*pDevice, &ci, nullptr, &pass));
-	create_framebuffers();
-
-	descriptorMgr.reset(new vkutil::DescriptorManager());
-	descriptorMgr->init(pDevice);
+	on_window_resized();
 
 	init_pipelines();
 
-	pDevice->create_uniform_buffer(sizeof(ubo_t), false, &ubo);
-	parms.parms[0] = { 1.0f,0.0f,0.0f,1.0f };
-	parms.parms[1] = { 0.0f,1.0f,0.0f,1.0f };
-	parms.parms[2] = { 0.0f,0.0f,1.0f,1.0f };
-	pc.data.x = 1.0f;
-	pc.data.y = 1.0f;
-	pc.data.z = 400.0f;
-	pc.data.w = 0.0f;
+	m_commandList = m_nvrhiDevice->createCommandList();
 
-	ubo.map();
-	ubo.copyTo(0, sizeof(ubo_t), &parms);
+	auto bindingSetDesc = nvrhi::BindingSetDesc()
+		.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_constantBuffer));
 
-	descriptorMgr->builder()
-		.bind_buffer(0, &ubo.descriptor, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
-		.build(ubo_set);
+	m_bindingSet = m_nvrhiDevice->createBindingSet(bindingSetDesc, m_bindingLayout);
 
 	prepared = true;
 }
 
 void Sample2App::build_command_buffers()
 {
-	VkCommandBuffer cmd = drawCmdBuffers[currentFrame];
-	VkRenderPassBeginInfo beginPass = vks::initializers::renderPassBeginInfo();
-	VkClearValue clearVal;
 
-	VkRect2D scissor = get_scissor();
-	VkViewport viewport = get_viewport();
-	
-	glm::vec3 hdr10 = PQinverseEOTF( (hdrColor * from709to2020) * (400.0f) );
-	
-	clearVal.color = { hdr10.r, hdr10.g, hdr10.b, 1.0f };
-	beginPass.clearValueCount = 1;
-	beginPass.pClearValues = &clearVal;
-	beginPass.renderPass = pass;
-	beginPass.framebuffer = fb[currentBuffer];
-	beginPass.renderArea.extent = swapchain.vkb_swapchain.extent;
-	beginPass.renderArea.offset = { 0,0 };
-	vkCmdBeginRenderPass(cmd, &beginPass, VK_SUBPASS_CONTENTS_INLINE);
-	vkCmdSetViewport(cmd, 0, 1, &viewport);
-	vkCmdSetScissor(cmd, 0, 1, &scissor);
-	pipeline->bind(cmd);
-	pipeline->bind_descriptor_sets(cmd, 1, &ubo_set);
-	vkCmdPushConstants(cmd, pipeline->pipeline_layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
-	vkCmdDraw(cmd, 3, 1, 0, 0);
+	nvrhi::IFramebuffer* currentFramebuffer = m_fbs[currentBuffer];
+	nvrhi::ITexture* image = m_swapchainImages[currentBuffer];
+	nvrhi::TextureSubresourceSet imgSub = {};
 
-	vkCmdEndRenderPass(cmd);
+	m_commandList->open();
+	m_commandList->beginTrackingTextureState(image, imgSub, nvrhi::ResourceStates::Unknown);
+
+	nvrhi::utils::ClearColorAttachment(m_commandList, currentFramebuffer, 0, nvrhi::Color(0.f));
+	m_commandList->writeBuffer(m_constantBuffer, &globals, sizeof(globals), 0);
+
+	auto graphicsState = nvrhi::GraphicsState()
+		.setPipeline(m_graphicsPipeline)
+		.setFramebuffer(currentFramebuffer)
+		.setViewport(nvrhi::ViewportState().addViewportAndScissorRect(nvrhi::Viewport(width, height)))
+		.addBindingSet(m_bindingSet);
+
+	m_commandList->setGraphicsState(graphicsState);
+
+	auto drawArguments = nvrhi::DrawArguments()
+		.setVertexCount(3);
+
+	m_commandList->draw(drawArguments);
+	m_commandList->setTextureState(image, imgSub, nvrhi::ResourceStates::RenderTarget);
+	m_commandList->close();
+	m_nvrhiDevice->executeCommandList(m_commandList);
+	m_nvrhiDevice->runGarbageCollection();
 
 }
 
@@ -265,15 +193,41 @@ void Sample2App::render()
 void Sample2App::get_enabled_extensions()
 {
 	enabled_instance_extensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
+	enabled_device_extensions.push_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
 }
 
 void Sample2App::get_enabled_features()
 {
 	enabled_features12.timelineSemaphore = true;
+	VkPhysicalDeviceSynchronization2Features sync2 = {};
+	sync2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
+	sync2.synchronization2 = true;
+
+	required_generic_features.push_back(jvk::GenericFeature(sync2));
 }
 
 void Sample2App::on_window_resized()
 {
+	nvrhi::Format fmt = nvrhi::Format::BGRA8_UNORM;
+
+	m_swapchainImages.clear();
 	//pDevice->wait_idle();
+	if (swapchain.vkb_swapchain.image_format == VK_FORMAT_A2B10G10R10_UNORM_PACK32) {
+		fmt = nvrhi::Format::R10G10B10A2_UNORM;
+	}
+	for (size_t it = 0; it < swapchain_images.size(); ++it) {
+		auto textureDesc = nvrhi::TextureDesc()
+			.setDimension(nvrhi::TextureDimension::Texture2D)
+			.setFormat(fmt)
+			.setWidth(width)
+			.setHeight(height)
+			.setIsRenderTarget(true)
+			.setDebugName("Swap Chain Image");
+
+		// In this line, <type> depends on the GAPI and should be one of: D3D11_Resource, D3D12_Resource, VK_Image.
+		nvrhi::TextureHandle swapChainTexture = m_nvrhiDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::VK_Image, swapchain_images[it].image, textureDesc);
+
+		m_swapchainImages.push_back(swapChainTexture);
+	}
 	create_framebuffers();
 }
