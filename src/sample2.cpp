@@ -98,7 +98,6 @@ void Sample2App::prepare()
 {
 	jvk::AppBase::prepare();
 
-	jsrlib::Info("itt");
 
 	basePath = fs::path("../..");
 
@@ -126,6 +125,7 @@ void Sample2App::prepare()
 	on_window_resized();
 
 	init_pipelines();
+	jsrlib::Info("itt");
 
 	m_commandList = m_nvrhiDevice->createCommandList();
 
@@ -274,6 +274,7 @@ void Sample2App::init_images()
 		auto cmd = m_nvrhiDevice->createCommandList();
 		cmd->open();
 		cmd->beginTrackingTextureState(m_tex0, subset, ResourceStates::Unknown);
+		cmd->setTextureState(m_tex0, subset, ResourceStates::CopyDest);
 
 		for (int layer = 0; layer < 1; layer++)
 		{
@@ -285,11 +286,11 @@ void Sample2App::init_images()
 					size_t offset{};
 					ktxResult res = ktxTexture_GetImageOffset(kTexture, level, layer, face, &offset);
 					assert(res == KTX_SUCCESS);
-					cmd->writeTexture(m_tex0, layer, level, (data + offset), 0);
+					const size_t rowpitch = ktxTexture_GetRowPitch(kTexture, level);
+					cmd->writeTexture(m_tex0, layer, level, (data + offset), rowpitch);
 				}
 			}
 		}
-		cmd->setTextureState(m_tex0, subset, ResourceStates::CopyDest);
 		cmd->close();
 		m_nvrhiDevice->executeCommandList(cmd);
 	}
