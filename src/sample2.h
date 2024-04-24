@@ -27,6 +27,7 @@ private:
 	nvrhi::BufferHandle m_constantBuffer;
 	nvrhi::CommandListHandle m_commandList;
 	nvrhi::BindingSetHandle m_bindingSet;
+	nvrhi::TextureHandle m_tex0;
 
 	nvrhi::BindingLayoutHandle m_bindingLayout = {};
 
@@ -40,6 +41,8 @@ private:
 
 	void init_pipelines();
 	void create_framebuffers();
+	void init_images();
+
 	std::filesystem::path basePath;
 	VkDescriptorSet ubo_set{};
 

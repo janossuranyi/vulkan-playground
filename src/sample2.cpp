@@ -3,34 +3,15 @@
 #include "vkjs/vkcheck.h"
 #include "vkjs/pipeline.h"
 #include "vkjs/shader_module.h"
+#include "jsrlib/jsr_logger.h"
 
 #include "nvrhi/utils.h"
+#include "ktx.h"
+#include "ktxvulkan.h"
 
 namespace fs = std::filesystem;
-
-const glm::mat3 from709to2020 = glm::mat3(
-	glm::vec3(0.6274040, 0.3292820, 0.0433136),
-	glm::vec3(0.0690970, 0.9195400, 0.0113612),
-	glm::vec3(0.0163916, 0.0880132, 0.8955950)
-);
-
-/* Fd is the displayed luminance in cd/m2 */
-float PQinverseEOTF(float Fd)
-{
-	const float Y = Fd / 10000.0f;
-	const float m1 = pow(Y, 0.1593017578125f);
-	float res = (0.8359375f + (18.8515625f * m1)) / (1.0f + (18.6875f * m1));
-	res = pow(res, 78.84375f);
-	return res;
-}
-
-glm::vec3 PQinverseEOTF(glm::vec3 c)
-{
-	return glm::vec3(
-		PQinverseEOTF(c.x),
-		PQinverseEOTF(c.y),
-		PQinverseEOTF(c.z));
-}
+using namespace glm;
+using namespace nvrhi;
 
 void Sample2App::init_pipelines()
 {
@@ -41,7 +22,7 @@ void Sample2App::init_pipelines()
 	VK_CHECK(vert_module.create(vert_spirv_filename));
 	VK_CHECK(frag_module.create(frag_spirv_filename));
 
-	nvrhi::ShaderDesc shaderDesc(nvrhi::ShaderType::Vertex);
+	ShaderDesc shaderDesc(ShaderType::Vertex);
 	shaderDesc.debugName = "Vertex Shader";
 	m_vertexShader = m_nvrhiDevice->createShader(
 		shaderDesc,
@@ -49,22 +30,22 @@ void Sample2App::init_pipelines()
 		vert_module.size());
 
 	shaderDesc.debugName = "Fragment Shader";
-	shaderDesc.shaderType = nvrhi::ShaderType::Pixel;
+	shaderDesc.shaderType = ShaderType::Pixel;
 	m_fragmentShader = m_nvrhiDevice->createShader(
 		shaderDesc,
 		frag_module.data(),
 		frag_module.size());
 
-	auto layoutDesc = nvrhi::BindingLayoutDesc()
-		.setVisibility(nvrhi::ShaderType::Vertex)
-		.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));
+	auto layoutDesc = BindingLayoutDesc()
+		.setVisibility(ShaderType::Vertex)
+		.addItem(BindingLayoutItem::VolatileConstantBuffer(0));
 	m_bindingLayout = m_nvrhiDevice->createBindingLayout(layoutDesc);
 
-	nvrhi::RenderState renderState = {};
+	RenderState renderState = {};
 	renderState.depthStencilState.depthTestEnable = false;
-	renderState.rasterState.cullMode = nvrhi::RasterCullMode::None;
+	renderState.rasterState.cullMode = RasterCullMode::None;
 
-	auto pipelineDesc = nvrhi::GraphicsPipelineDesc()
+	auto pipelineDesc = GraphicsPipelineDesc()
 		.setVertexShader(m_vertexShader)
 		.setPixelShader(m_fragmentShader)
 		.setRenderState(renderState)
@@ -73,7 +54,7 @@ void Sample2App::init_pipelines()
 	m_graphicsPipeline = m_nvrhiDevice->createGraphicsPipeline(pipelineDesc, m_fbs[0]);
 
 
-	auto constantBufferDesc = nvrhi::BufferDesc()
+	auto constantBufferDesc = BufferDesc()
 		.setByteSize(sizeof(globals)) // stores one matrix
 		.setIsConstantBuffer(true)
 		.setIsVolatile(true)
@@ -105,10 +86,10 @@ void Sample2App::create_framebuffers()
 	auto& views = swapchain.images;
 
 	for (int i(0); i < views.size(); ++i) {
-		auto framebufferDesc = nvrhi::FramebufferDesc()
+		auto framebufferDesc = FramebufferDesc()
 			.addColorAttachment(m_swapchainImages[i]); // you can specify a particular subresource if necessary
 
-		nvrhi::FramebufferHandle framebuffer = m_nvrhiDevice->createFramebuffer(framebufferDesc);
+		FramebufferHandle framebuffer = m_nvrhiDevice->createFramebuffer(framebufferDesc);
 		m_fbs.push_back(framebuffer);
 	}
 }
@@ -117,9 +98,11 @@ void Sample2App::prepare()
 {
 	jvk::AppBase::prepare();
 
+	jsrlib::Info("itt");
+
 	basePath = fs::path("../..");
 
-	nvrhi::vulkan::DeviceDesc vkDesc = {};
+	vulkan::DeviceDesc vkDesc = {};
 	vkDesc.graphicsQueue = pDevice->graphics_queue;
 	vkDesc.device = pDevice->logicalDevice;
 	vkDesc.graphicsQueueIndex = pDevice->queue_family_indices.graphics;
@@ -130,15 +113,15 @@ void Sample2App::prepare()
 	vkDesc.instanceExtensions = enabled_instance_extensions.data();
 	vkDesc.instance = instance;
 
-	if (pDevice->has_dedicated_compute_queue()) {
+	if (pDevice->vkbPhysicalDevice.has_separate_compute_queue()) {
 		vkDesc.computeQueueIndex = pDevice->queue_family_indices.compute;
 		vkDesc.computeQueue = pDevice->get_compute_queue();
 	}
-	if (pDevice->has_dedicated_transfer_queue()) {
+	if (pDevice->vkbPhysicalDevice.has_separate_transfer_queue()) {
 		vkDesc.transferQueueIndex = pDevice->queue_family_indices.transfer;
 		vkDesc.transferQueue = pDevice->get_transfer_queue();
 	}
-	m_nvrhiDevice = nvrhi::vulkan::createDevice(vkDesc);
+	m_nvrhiDevice = vulkan::createDevice(vkDesc);
 
 	on_window_resized();
 
@@ -150,6 +133,8 @@ void Sample2App::prepare()
 		.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_constantBuffer));
 
 	m_bindingSet = m_nvrhiDevice->createBindingSet(bindingSetDesc, m_bindingLayout);
+
+	init_images();
 
 	prepared = true;
 }
@@ -166,7 +151,7 @@ void Sample2App::build_command_buffers()
 	m_commandList->open();
 	m_commandList->beginTrackingTextureState(image, imgSub, ResourceStates::Unknown);
 
-	nvrhi::utils::ClearColorAttachment(m_commandList, currentFramebuffer, 0, nvrhi::Color(0.f));
+	utils::ClearColorAttachment(m_commandList, currentFramebuffer, 0, Color(0.f));
 	m_commandList->writeBuffer(m_constantBuffer, &globals, sizeof(globals), 0);
 
 	auto graphicsState = GraphicsState()
@@ -182,19 +167,19 @@ void Sample2App::build_command_buffers()
 
 	m_commandList->draw(drawArguments);
 	m_commandList->setTextureState(image, imgSub, ResourceStates::RenderTarget);
-	m_commandList->commitBarriers();
+//	m_commandList->commitBarriers();
 
 	m_commandList->close();
 	m_nvrhiDevice->executeCommandList(m_commandList);
-	m_nvrhiDevice->runGarbageCollection();
 
 }
 
 void Sample2App::render()
 {
+	m_nvrhiDevice->runGarbageCollection();
+
 	build_command_buffers();
 	//swapchain_images[currentBuffer].layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
 }
 
 void Sample2App::get_enabled_extensions()
@@ -205,22 +190,119 @@ void Sample2App::get_enabled_extensions()
 
 void Sample2App::get_enabled_features()
 {
-	enabled_features12.timelineSemaphore = true;
+	enabled_features.textureCompressionBC = VK_TRUE;
+	enabled_features12.timelineSemaphore = VK_TRUE;
+
 	VkPhysicalDeviceSynchronization2Features sync2 = {};
 	sync2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
-	sync2.synchronization2 = true;
-
+	sync2.synchronization2 = VK_TRUE;
 	required_generic_features.push_back(jvk::GenericFeature(sync2));
+}
+
+void Sample2App::init_images()
+{
+	ktxTexture* kTexture;
+	KTX_error_code result;
+	auto ktx = basePath / "resources/models/sponza/ktx/6772804448157695701.ktx2";
+
+	result = ktxTexture_CreateFromNamedFile(ktx.u8string().c_str(),
+		KTX_TEXTURE_CREATE_NO_FLAGS,
+		&kTexture);
+
+	if (result == KTX_SUCCESS)
+	{
+		if (ktxTexture2_NeedsTranscoding((ktxTexture2*)kTexture)) {
+			ktx_texture_transcode_fmt_e tf;
+
+			// Using VkGetPhysicalDeviceFeatures or GL_COMPRESSED_TEXTURE_FORMATS or
+			// extension queries, determine what compressed texture formats are
+			// supported and pick a format. For example
+			VkPhysicalDeviceFeatures deviceFeatures = pDevice->vkbPhysicalDevice.features;
+			khr_df_model_e colorModel = ktxTexture2_GetColorModel_e((ktxTexture2*)kTexture);
+			if (colorModel == KHR_DF_MODEL_UASTC
+				&& deviceFeatures.textureCompressionASTC_LDR) {
+				tf = KTX_TTF_ASTC_4x4_RGBA;
+			}
+			else if (colorModel == KHR_DF_MODEL_ETC1S
+				&& deviceFeatures.textureCompressionETC2) {
+				tf = KTX_TTF_ETC;
+			}
+			else if (deviceFeatures.textureCompressionASTC_LDR) {
+				tf = KTX_TTF_ASTC_4x4_RGBA;
+			}
+			else if (deviceFeatures.textureCompressionETC2)
+				tf = KTX_TTF_ETC2_RGBA;
+			else if (deviceFeatures.textureCompressionBC)
+				tf = KTX_TTF_BC7_RGBA;
+			else {
+				const std::string message = "Vulkan implementation does not support any available transcode target.";
+				throw std::runtime_error(message.c_str());
+			}
+
+			result = ktxTexture2_TranscodeBasis((ktxTexture2*)kTexture, tf, 0);
+			if (result != KTX_SUCCESS) {
+				jsrlib::Info("Texture load error");
+				return;
+			}
+			// Then use VkUpload or GLUpload to create a texture object on the GPU.
+		}
+
+		// Retrieve information about the texture from fields in the ktxTexture
+		// such as:
+		ktx_uint32_t numLevels = kTexture->numLevels;
+		ktx_uint32_t baseWidth = kTexture->baseWidth;
+		ktx_uint32_t baseHeight = kTexture->baseHeight;
+		ktx_uint32_t numFaces = kTexture->numFaces;
+		ktx_bool_t isArray = kTexture->isArray;
+
+		TextureDesc td = TextureDesc()
+			.setArraySize(kTexture->numLayers)
+			.setDebugName("Texture0")
+			.setDimension(TextureDimension::Texture2D)
+			.setWidth(baseWidth)
+			.setHeight(baseHeight)
+			.setInitialState(ResourceStates::Unknown)
+			.setFormat(Format::BC7_UNORM)
+			.setMipLevels(numLevels);
+
+		m_tex0 = m_nvrhiDevice->createTexture(td);
+		TextureSubresourceSet subset = {};
+		subset.numMipLevels = numLevels;
+
+		const char* data = (const char*)ktxTexture_GetData(kTexture);
+
+		auto cmd = m_nvrhiDevice->createCommandList();
+		cmd->open();
+		cmd->beginTrackingTextureState(m_tex0, subset, ResourceStates::Unknown);
+
+		for (int layer = 0; layer < 1; layer++)
+		{
+			for (int face = 0; face < numFaces; face++)
+			{
+				for (int level = 0; level < numLevels; level++)
+				{
+					const uint32_t layer_index(layer * numFaces + face);
+					size_t offset{};
+					ktxResult res = ktxTexture_GetImageOffset(kTexture, level, layer, face, &offset);
+					assert(res == KTX_SUCCESS);
+					cmd->writeTexture(m_tex0, layer, level, (data + offset), 0);
+				}
+			}
+		}
+		cmd->setTextureState(m_tex0, subset, ResourceStates::CopyDest);
+		cmd->close();
+		m_nvrhiDevice->executeCommandList(cmd);
+	}
 }
 
 void Sample2App::on_window_resized()
 {
-	nvrhi::Format fmt = nvrhi::Format::BGRA8_UNORM;
+	auto fmt = Format::BGRA8_UNORM;
 
 	m_swapchainImages.clear();
 	//pDevice->wait_idle();
 	if (swapchain.vkb_swapchain.image_format == VK_FORMAT_A2B10G10R10_UNORM_PACK32) {
-		fmt = nvrhi::Format::R10G10B10A2_UNORM;
+		fmt = Format::R10G10B10A2_UNORM;
 	}
 	for (size_t it = 0; it < swapchain_images.size(); ++it) {
 		auto textureDesc = nvrhi::TextureDesc()
