@@ -75,6 +75,7 @@ void Sample2App::on_update_gui()
 	ImGui::DragFloat3("Color Bias", &globals.rpColorBias[0], 0.01f, 0.0f, 1.0f);
 	ImGui::DragFloat3("Color Scale", &globals.rpColorMultiplier[0], 0.01f, 0.0f, 2000.0f, "%.2f");
 	ImGui::DragFloat3("Vertex scale", &globals.rpScale[0], 0.01f, 0.0f, 300.0f);
+	ImGui::DragFloat3("Vertex Bias", &globals.rpBias[0], 0.01f, -3.0f, 3.0f);
 }
 
 Sample2App::~Sample2App()
@@ -207,7 +208,10 @@ void Sample2App::render()
 void Sample2App::get_enabled_extensions()
 {
 	enabled_instance_extensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
+	enabled_instance_extensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
 	enabled_device_extensions.push_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+	//desired_device_extensions.push_back(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
+	
 }
 
 void Sample2App::get_enabled_features()
@@ -231,6 +235,8 @@ void Sample2App::init_images()
 		KTX_TEXTURE_CREATE_NO_FLAGS,
 		&kTexture);
 
+	auto fmt = Format::BC7_UNORM;
+
 	if (result == KTX_SUCCESS)
 	{
 		if (ktxTexture2_NeedsTranscoding((ktxTexture2*)kTexture)) {
@@ -241,20 +247,7 @@ void Sample2App::init_images()
 			// supported and pick a format. For example
 			VkPhysicalDeviceFeatures deviceFeatures = pDevice->vkbPhysicalDevice.features;
 			khr_df_model_e colorModel = ktxTexture2_GetColorModel_e((ktxTexture2*)kTexture);
-			if (colorModel == KHR_DF_MODEL_UASTC
-				&& deviceFeatures.textureCompressionASTC_LDR) {
-				tf = KTX_TTF_ASTC_4x4_RGBA;
-			}
-			else if (colorModel == KHR_DF_MODEL_ETC1S
-				&& deviceFeatures.textureCompressionETC2) {
-				tf = KTX_TTF_ETC;
-			}
-			else if (deviceFeatures.textureCompressionASTC_LDR) {
-				tf = KTX_TTF_ASTC_4x4_RGBA;
-			}
-			else if (deviceFeatures.textureCompressionETC2)
-				tf = KTX_TTF_ETC2_RGBA;
-			else if (deviceFeatures.textureCompressionBC)
+			if (deviceFeatures.textureCompressionBC)
 				tf = KTX_TTF_BC7_RGBA;
 			else {
 				const std::string message = "Vulkan implementation does not support any available transcode target.";
@@ -267,6 +260,31 @@ void Sample2App::init_images()
 				return;
 			}
 			// Then use VkUpload or GLUpload to create a texture object on the GPU.
+		}
+		else {
+			auto format = ktxTexture_GetVkFormat(kTexture);
+			switch (format)
+			{
+			case VK_FORMAT_BC1_RGB_SRGB_BLOCK:
+			case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
+				fmt = Format::BC1_UNORM_SRGB;
+				break;
+			case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
+			case VK_FORMAT_BC1_RGB_UNORM_BLOCK:
+				fmt = Format::BC1_UNORM;
+				break;
+			case VK_FORMAT_BC3_SRGB_BLOCK:
+				fmt = Format::BC3_UNORM_SRGB;
+				break;
+			case VK_FORMAT_BC3_UNORM_BLOCK:
+				fmt = Format::BC3_UNORM;
+				break;
+			case VK_FORMAT_R8G8B8A8_UNORM:
+				fmt = Format::RGBA8_UNORM;
+				break;
+			default:
+				throw std::runtime_error("Invalid format");
+			}
 		}
 
 		// Retrieve information about the texture from fields in the ktxTexture
@@ -284,7 +302,7 @@ void Sample2App::init_images()
 			.setWidth(baseWidth)
 			.setHeight(baseHeight)
 			.setInitialState(ResourceStates::ShaderResource)
-			.setFormat(Format::BC7_UNORM)
+			.setFormat(fmt)
 			.setMipLevels(numLevels);
 
 		m_tex0 = m_nvrhiDevice->createTexture(td);
@@ -339,7 +357,7 @@ void Sample2App::on_window_resized()
 			.setWidth(width)
 			.setHeight(height)
 			.setIsRenderTarget(true)
-			.setDebugName("Swap Chain Image");
+			.setDebugName("Swap Chain Image #" + std::to_string(it));
 
 		// In this line, <type> depends on the GAPI and should be one of: D3D11_Resource, D3D12_Resource, VK_Image.
 		nvrhi::TextureHandle swapChainTexture = 

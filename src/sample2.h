@@ -38,6 +38,7 @@ private:
 		glm::vec4 rpColorMultiplier = glm::vec4(1.0f);
 		glm::vec4 rpColorBias = glm::vec4(0.0f);
 		glm::vec4 rpScale = glm::vec4(1.0f);
+		glm::vec4 rpBias = glm::vec4(0.0f);
 	} globals;
 
 	void init_pipelines();

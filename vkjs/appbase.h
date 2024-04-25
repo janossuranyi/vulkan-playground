@@ -88,6 +88,7 @@ namespace jvk {
 
 		/** @brief Set of device extensions to be enabled for this example (must be set in the derived constructor) */
 		std::vector<const char*> enabled_device_extensions;
+		std::vector<const char*> desired_device_extensions;
 		std::vector<const char*> enabled_instance_extensions;
 
 		/** @brief Optional pNext structure for passing extension structures to device creation */

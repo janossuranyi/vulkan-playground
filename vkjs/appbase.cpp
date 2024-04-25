@@ -587,15 +587,16 @@ namespace jvk
 			.set_surface(surface)
 			.set_required_features(enabled_features)
 			.set_required_features_12(enabled_features12)
-			.add_required_extension_features(shader_draw_parameters_features)
-			.add_desired_extension(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
-			
+			//.add_desired_extension(VK_EXT_DEBUG_MARKER_EXTENSION_NAME)
+			.add_required_extension_features(shader_draw_parameters_features);
 
 
 		for (const auto* extension_name : enabled_device_extensions) {
 			selector.add_required_extension(extension_name);
 		}
-		
+		for (const auto* extension_name : desired_device_extensions) {
+			selector.add_desired_extension(extension_name);
+		}
 		for (const auto& it : required_generic_features) {
 			selector.add_required_extension_features(it);
 		}
@@ -782,7 +783,6 @@ namespace jvk
 		builder
 			.set_app_name("VKJS_Engine")
 			.set_app_version(VK_MAKE_VERSION(1, 0, 0))
-			.enable_extension(VK_EXT_DEBUG_REPORT_EXTENSION_NAME)
 			.require_api_version(1, 2, 0);
 
 
