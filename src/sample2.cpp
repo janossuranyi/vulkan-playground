@@ -171,6 +171,7 @@ void Sample2App::build_command_buffers()
 
 	m_commandList->open();
 	m_commandList->beginTrackingTextureState(image, imgSub, ResourceStates::Unknown);
+	m_commandList->setPermanentTextureState(m_tex0, ResourceStates::ShaderResource);
 
 	utils::ClearColorAttachment(m_commandList, currentFramebuffer, 0, Color(0.f));
 	m_commandList->writeBuffer(m_constantBuffer, &globals, sizeof(globals), 0);
@@ -282,11 +283,12 @@ void Sample2App::init_images()
 			.setDimension(TextureDimension::Texture2D)
 			.setWidth(baseWidth)
 			.setHeight(baseHeight)
-			.setInitialState(ResourceStates::Unknown)
+			.setInitialState(ResourceStates::ShaderResource)
 			.setFormat(Format::BC7_UNORM)
 			.setMipLevels(numLevels);
 
 		m_tex0 = m_nvrhiDevice->createTexture(td);
+		
 		TextureSubresourceSet subset = {};
 		subset.numMipLevels = numLevels;
 
@@ -296,6 +298,7 @@ void Sample2App::init_images()
 		cmd->open();
 		cmd->beginTrackingTextureState(m_tex0, subset, ResourceStates::Unknown);
 		cmd->setTextureState(m_tex0, subset, ResourceStates::CopyDest);
+
 
 		for (int layer = 0; layer < 1; layer++)
 		{
