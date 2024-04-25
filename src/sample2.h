@@ -28,6 +28,7 @@ private:
 	nvrhi::CommandListHandle m_commandList;
 	nvrhi::BindingSetHandle m_bindingSet;
 	nvrhi::TextureHandle m_tex0;
+	nvrhi::SamplerHandle m_sampColor;
 
 	nvrhi::BindingLayoutHandle m_bindingLayout = {};
 

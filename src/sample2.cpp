@@ -5,7 +5,9 @@
 #include "vkjs/shader_module.h"
 #include "jsrlib/jsr_logger.h"
 
-#include "nvrhi/utils.h"
+#include <nvrhi/utils.h>
+#include <nvrhi/validation.h>
+
 #include "ktx.h"
 #include "ktxvulkan.h"
 
@@ -37,8 +39,11 @@ void Sample2App::init_pipelines()
 		frag_module.size());
 
 	auto layoutDesc = BindingLayoutDesc()
-		.setVisibility(ShaderType::Vertex)
-		.addItem(BindingLayoutItem::VolatileConstantBuffer(0));
+		.setVisibility(ShaderType::AllGraphics)
+		.addItem(BindingLayoutItem::VolatileConstantBuffer(0))
+		.addItem(BindingLayoutItem::Texture_SRV(0))
+		.addItem(BindingLayoutItem::Sampler(0));
+
 	m_bindingLayout = m_nvrhiDevice->createBindingLayout(layoutDesc);
 
 	RenderState renderState = {};
@@ -84,12 +89,18 @@ void Sample2App::create_framebuffers()
 	}
 	
 	auto& views = swapchain.images;
+	jsrlib::Info("itt1");
 
-	for (int i(0); i < views.size(); ++i) {
+	for (int i(0); i < m_swapchainImages.size(); ++i) {
 		auto framebufferDesc = FramebufferDesc()
 			.addColorAttachment(m_swapchainImages[i]); // you can specify a particular subresource if necessary
 
+		jsrlib::Info("itt2");
 		FramebufferHandle framebuffer = m_nvrhiDevice->createFramebuffer(framebufferDesc);
+		if (!framebuffer) { jsrlib::Error("Create framebuffer failed !!!"); }
+
+		jsrlib::Info("itt3");
+
 		m_fbs.push_back(framebuffer);
 	}
 }
@@ -122,19 +133,29 @@ void Sample2App::prepare()
 	}
 	m_nvrhiDevice = vulkan::createDevice(vkDesc);
 
+	nvrhi::DeviceHandle nvrhiValidationLayer = nvrhi::validation::createValidationLayer(m_nvrhiDevice);
+	m_nvrhiDevice = nvrhiValidationLayer; // make the rest of the application go through the validation layer
+
 	on_window_resized();
 
 	init_pipelines();
-	jsrlib::Info("itt");
+
+	auto sd = SamplerDesc()
+		.setAllAddressModes(SamplerAddressMode::Repeat);
+
+	m_sampColor = m_nvrhiDevice->createSampler(sd);
 
 	m_commandList = m_nvrhiDevice->createCommandList();
+	init_images();
 
 	auto bindingSetDesc = nvrhi::BindingSetDesc()
-		.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_constantBuffer));
+		.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_constantBuffer))
+		.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_tex0))
+		.addItem(nvrhi::BindingSetItem::Sampler(0, m_sampColor));
+
 
 	m_bindingSet = m_nvrhiDevice->createBindingSet(bindingSetDesc, m_bindingLayout);
 
-	init_images();
 
 	prepared = true;
 }
@@ -300,6 +321,9 @@ void Sample2App::on_window_resized()
 {
 	auto fmt = Format::BGRA8_UNORM;
 
+	//m_nvrhiDevice->waitForIdle();
+
+
 	m_swapchainImages.clear();
 	//pDevice->wait_idle();
 	if (swapchain.vkb_swapchain.image_format == VK_FORMAT_A2B10G10R10_UNORM_PACK32) {
@@ -315,9 +339,13 @@ void Sample2App::on_window_resized()
 			.setDebugName("Swap Chain Image");
 
 		// In this line, <type> depends on the GAPI and should be one of: D3D11_Resource, D3D12_Resource, VK_Image.
-		nvrhi::TextureHandle swapChainTexture = m_nvrhiDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::VK_Image, swapchain_images[it].image, textureDesc);
+		nvrhi::TextureHandle swapChainTexture = 
+			m_nvrhiDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::VK_Image, swapchain_images[it].image, textureDesc);
+
+		if (!swapChainTexture) { jsrlib::Error("Cannot create swapchain texture !!!"); }
 
 		m_swapchainImages.push_back(swapChainTexture);
+
 	}
 	create_framebuffers();
 }

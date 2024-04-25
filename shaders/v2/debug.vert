@@ -10,10 +10,12 @@ layout(set = 0, binding = 256) uniform globals {
 };
 
 layout(location = 0) out vec3 out_Color0;
+layout(location = 1) out vec2 out_Texcoord0;
 
 void main()
 {
 	gl_Position = vec4(rpScale.xy * vertices[gl_VertexIndex],0,1);
 
 	out_Color0 = rpColorMultiplier.rgb * colors[gl_VertexIndex] + rpColorBias.rgb;
+	out_Texcoord0 = vec2(vertices[gl_VertexIndex]) * 2.0 - 1.0;
 }
