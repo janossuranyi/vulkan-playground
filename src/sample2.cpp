@@ -171,7 +171,8 @@ void Sample2App::build_command_buffers()
 	TextureSubresourceSet imgSub = {};
 
 	m_commandList->open();
-	m_commandList->beginTrackingTextureState(image, imgSub, ResourceStates::Unknown);
+	m_commandList->beginMarker("Main render pass");
+//	m_commandList->beginTrackingTextureState(image, imgSub, ResourceStates::Unknown);
 	m_commandList->setPermanentTextureState(m_tex0, ResourceStates::ShaderResource);
 
 	utils::ClearColorAttachment(m_commandList, currentFramebuffer, 0, Color(0.f));
@@ -191,7 +192,7 @@ void Sample2App::build_command_buffers()
 	m_commandList->draw(drawArguments);
 	m_commandList->setTextureState(image, imgSub, ResourceStates::RenderTarget);
 //	m_commandList->commitBarriers();
-
+	m_commandList->endMarker();
 	m_commandList->close();
 	m_nvrhiDevice->executeCommandList(m_commandList);
 
@@ -199,7 +200,9 @@ void Sample2App::build_command_buffers()
 
 void Sample2App::render()
 {
-	m_nvrhiDevice->runGarbageCollection();
+	if (currentFrame == 1) {
+		m_nvrhiDevice->runGarbageCollection();
+	}
 
 	build_command_buffers();
 	//swapchain_images[currentBuffer].layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -209,8 +212,9 @@ void Sample2App::get_enabled_extensions()
 {
 	enabled_instance_extensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
 	enabled_instance_extensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+	/**/
 	enabled_device_extensions.push_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
-	//desired_device_extensions.push_back(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
+	desired_device_extensions.push_back(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
 	
 }
 
@@ -314,7 +318,7 @@ void Sample2App::init_images()
 
 		auto cmd = m_nvrhiDevice->createCommandList();
 		cmd->open();
-		cmd->beginTrackingTextureState(m_tex0, subset, ResourceStates::Unknown);
+		//cmd->beginTrackingTextureState(m_tex0, subset, ResourceStates::Unknown);
 		cmd->setTextureState(m_tex0, subset, ResourceStates::CopyDest);
 
 
